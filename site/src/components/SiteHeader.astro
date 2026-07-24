@@ -1,9 +1,12 @@
 ---
+import { href, stripBase } from "../lib/paths";
+
 interface Props {
   currentPath: string;
 }
 
 const { currentPath } = Astro.props;
+const path = stripBase(currentPath);
 
 const docPaths = [
   "/docs",
@@ -16,46 +19,56 @@ const docPaths = [
   "/faq",
 ];
 
-function current(path: string): boolean {
-  if (path === "/") {
-    return currentPath === "/" || currentPath === "";
+function current(route: string): boolean {
+  if (route === "/") {
+    return path === "/" || path === "";
   }
-  return currentPath === path || currentPath.startsWith(`${path}/`);
+  return path === route || path.startsWith(`${route}/`);
 }
 
-const inDocs = docPaths.some((path) => current(path));
+const inDocs = docPaths.some((route) => current(route));
 ---
 
 <header class="site-header">
   <div class="site-header-inner">
-    <a class="brand" href="/">gojo</a>
+    <a class="brand" href={href("/")}>gojo</a>
     <nav class="nav" aria-label="Primary">
-      <a href="/" aria-current={current("/") ? "page" : undefined}>Product</a>
-      <a href="/getting-started" aria-current={current("/getting-started") ? "page" : undefined}
+      <a href={href("/")} aria-current={current("/") ? "page" : undefined}>Product</a>
+      <a
+        href={href("/getting-started")}
+        aria-current={current("/getting-started") ? "page" : undefined}
         >Getting started</a
       >
-      <a href="/first-agent" aria-current={current("/first-agent") ? "page" : undefined}
+      <a href={href("/first-agent")} aria-current={current("/first-agent") ? "page" : undefined}
         >First agent</a
       >
       <details class="nav-help">
         <summary class:list={{ "nav-docs-active": inDocs }}>Documentation</summary>
         <div class="nav-help-menu">
-          <a href="/docs" aria-current={current("/docs") ? "page" : undefined}>Overview</a>
-          <a href="/advanced-agent" aria-current={current("/advanced-agent") ? "page" : undefined}
+          <a href={href("/docs")} aria-current={current("/docs") ? "page" : undefined}>Overview</a>
+          <a
+            href={href("/advanced-agent")}
+            aria-current={current("/advanced-agent") ? "page" : undefined}
             >Advanced agent</a
           >
-          <a href="/advanced-usage" aria-current={current("/advanced-usage") ? "page" : undefined}
+          <a
+            href={href("/advanced-usage")}
+            aria-current={current("/advanced-usage") ? "page" : undefined}
             >Advanced usage</a
           >
-          <a href="/settings" aria-current={current("/settings") ? "page" : undefined}>Settings</a>
+          <a href={href("/settings")} aria-current={current("/settings") ? "page" : undefined}
+            >Settings</a
+          >
           <a
-            href="/notifications"
+            href={href("/notifications")}
             aria-current={current("/notifications") ? "page" : undefined}
             >Notifications</a
           >
-          <a href="/concepts" aria-current={current("/concepts") ? "page" : undefined}>Concepts</a>
-          <a href="/cli" aria-current={current("/cli") ? "page" : undefined}>CLI</a>
-          <a href="/faq" aria-current={current("/faq") ? "page" : undefined}>FAQ</a>
+          <a href={href("/concepts")} aria-current={current("/concepts") ? "page" : undefined}
+            >Concepts</a
+          >
+          <a href={href("/cli")} aria-current={current("/cli") ? "page" : undefined}>CLI</a>
+          <a href={href("/faq")} aria-current={current("/faq") ? "page" : undefined}>FAQ</a>
         </div>
       </details>
     </nav>

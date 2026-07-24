@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { href } from "../lib/paths";
 
 const agentPrompt = `You are setting up gojo for the Git repository that is your current working directory.
 
@@ -223,9 +224,9 @@ When done, report: gojo home path used, admin username chosen (not the password)
         worktrees, real validation, and merges the platform owns.
       </p>
       <div class="hero-cta">
-        <a class="btn btn-primary" href="/getting-started">Get started</a>
-        <a class="btn btn-ghost" href="/first-agent">Your first agent</a>
-        <a class="btn btn-ghost" href="/advanced-agent">Advanced agent</a>
+        <a class="btn btn-primary" href={href("/getting-started")}>Get started</a>
+        <a class="btn btn-ghost" href={href("/first-agent")}>Your first agent</a>
+        <a class="btn btn-ghost" href={href("/advanced-agent")}>Advanced agent</a>
       </div>
     </div>
   </section>
@@ -288,8 +289,8 @@ When done, report: gojo home path used, admin username chosen (not the password)
       </div>
 
       <div class="hero-cta hero-cta-follow">
-        <a class="btn btn-ghost" href="/getting-started">Getting started</a>
-        <a class="btn btn-ghost" href="/first-agent">Your first agent</a>
+        <a class="btn btn-ghost" href={href("/getting-started")}>Getting started</a>
+        <a class="btn btn-ghost" href={href("/first-agent")}>Your first agent</a>
       </div>
     </div>
   </section>
@@ -362,8 +363,8 @@ When done, report: gojo home path used, admin username chosen (not the password)
       </article>
     </div>
     <div class="hero-cta hero-cta-follow">
-      <a class="btn btn-primary" href="/getting-started">Install gojo</a>
-      <a class="btn btn-ghost" href="/docs">Documentation</a>
+      <a class="btn btn-primary" href={href("/getting-started")}>Install gojo</a>
+      <a class="btn btn-ghost" href={href("/docs")}>Documentation</a>
     </div>
   </section>
 

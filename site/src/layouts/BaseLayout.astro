@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import SiteHeader from "../components/SiteHeader.astro";
+import { href } from "../lib/paths";
 
 interface Props {
   title: string;
@@ -44,11 +45,11 @@ const pageTitle = title === "gojo" ? "gojo" : `${title} · gojo`;
           <p class="footer-blurb">Self-hosted agent operations for Git repositories.</p>
         </div>
         <div>
-          <a href="/getting-started">Getting started</a>
+          <a href={href("/getting-started")}>Getting started</a>
           ·
-          <a href="/first-agent">First agent</a>
+          <a href={href("/first-agent")}>First agent</a>
           ·
-          <a href="/docs">Documentation</a>
+          <a href={href("/docs")}>Documentation</a>
         </div>
       </div>
     </footer>

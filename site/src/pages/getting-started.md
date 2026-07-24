@@ -4,7 +4,7 @@ title: Getting started
 description: Install gojo, create an admin account, add your first Git project, and run a task.
 ---
 
-Prefer an agent? Use the install prompt on the [home page](/#ask-your-agent).
+Prefer an agent? Use the install prompt on the [home page](/#ask-your-agent). Source: [github.com/detroitpro/gojo](https://github.com/detroitpro/gojo).
 
 ## What you’ll need
 
@@ -18,7 +18,7 @@ Optional later: Cursor Agent or Claude Code CLIs on your `PATH`.
 ## Install from source
 
 ```bash
-git clone <repo-url> gojo
+git clone https://github.com/detroitpro/gojo.git
 cd gojo
 bun install
 ```
