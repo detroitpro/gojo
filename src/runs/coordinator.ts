@@ -131,6 +131,9 @@ export class RunCoordinator {
     }
 
     try {
+      if (run.state === RunState.Scheduled) {
+        run = await this.transitionRun(run, RunState.Queued);
+      }
       run = await this.transitionRun(run, RunState.Preparing);
       if (!run.startedAt) {
         run =

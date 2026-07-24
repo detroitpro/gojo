@@ -119,6 +119,26 @@ describe('integration/run-coordinator', () => {
     expect(handoff.status).toBe('completed');
   });
 
+  test('scheduled run transitions Scheduled -> Queued -> Preparing before executing', async () => {
+    const { coordinator, repos, project, task } = await setup();
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      taskId: task.id,
+      trigger: 'schedule',
+      idempotencyKey: 'schedule-fire',
+    });
+
+    expect(run.state).toBe(RunState.Scheduled);
+
+    const finished = await coordinator.executeRun(run.id);
+    expect(finished.state).toBe(RunState.Succeeded);
+
+    const attempts = repos.attempts.listByRun(run.id);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.state).toBe('succeeded');
+  });
+
   test('validation failure writes artifact and rich errorMessage', async () => {
     const { coordinator, repos, paths, project } = await setup();
 
