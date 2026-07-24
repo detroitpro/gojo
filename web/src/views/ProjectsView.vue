@@ -171,37 +171,42 @@ onMounted(load);
         <tbody>
           <tr v-for="project in projects" :key="project.id">
             <td>
-              <RouterLink :to="`/projects#${project.id}`">{{ project.name }}</RouterLink>
+              <RouterLink :to="`/projects#${project.id}`" class="entity-name">{{
+                project.name
+              }}</RouterLink>
+              <div class="mono muted text-sm">{{ project.id.slice(0, 10) }}…</div>
             </td>
             <td class="mono muted">{{ project.repoPath }}</td>
             <td class="mono">{{ project.defaultBranch }}</td>
             <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
             <td>
-              <RouterLink :to="`/projects#${project.id}`" class="btn btn-sm">Inspect</RouterLink>
-              <button
-                class="btn btn-sm"
-                type="button"
-                :disabled="busyId === project.id"
-                @click="sync(project.id)"
-              >
-                Sync
-              </button>
-              <button
-                class="btn btn-sm"
-                type="button"
-                :disabled="busyId === project.id"
-                @click="doctor(project)"
-              >
-                Doctor
-              </button>
-              <button
-                class="btn btn-sm btn-danger"
-                type="button"
-                :disabled="busyId === project.id"
-                @click="remove(project)"
-              >
-                Remove
-              </button>
+              <div class="toolbar">
+                <RouterLink :to="`/projects#${project.id}`" class="btn btn-sm">Inspect</RouterLink>
+                <button
+                  class="btn btn-sm"
+                  type="button"
+                  :disabled="busyId === project.id"
+                  @click="sync(project.id)"
+                >
+                  Sync
+                </button>
+                <button
+                  class="btn btn-sm"
+                  type="button"
+                  :disabled="busyId === project.id"
+                  @click="doctor(project)"
+                >
+                  Doctor
+                </button>
+                <button
+                  class="btn btn-sm btn-danger"
+                  type="button"
+                  :disabled="busyId === project.id"
+                  @click="remove(project)"
+                >
+                  Remove
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>

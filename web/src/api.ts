@@ -325,7 +325,19 @@ export function subscribeRunEvents(
 
   source.onmessage = (message) => {
     try {
-      onEvent(JSON.parse(message.data) as RunEvent);
+      const raw = JSON.parse(message.data) as Record<string, unknown>;
+      // Normalize legacy { timestamp, payload } if a mixed client ever appears.
+      const event: RunEvent = {
+        type: String(raw.type ?? ""),
+        runId: String(raw.runId ?? runId),
+        at: String(raw.at ?? raw.timestamp ?? ""),
+        ...(raw.data !== undefined
+          ? { data: raw.data }
+          : raw.payload !== undefined
+            ? { data: raw.payload }
+            : {}),
+      };
+      onEvent(event);
     } catch {
       /* ignore malformed events */
     }

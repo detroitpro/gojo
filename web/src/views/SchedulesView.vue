@@ -66,6 +66,8 @@ onMounted(load);
         <thead>
           <tr>
             <th>Name</th>
+            <th>Task</th>
+            <th>Project</th>
             <th>Cron</th>
             <th>TZ</th>
             <th>Status</th>
@@ -76,7 +78,15 @@ onMounted(load);
         </thead>
         <tbody>
           <tr v-for="schedule in schedules" :key="schedule.id">
-            <td>{{ schedule.name }}</td>
+            <td>
+              <div class="entity-name">{{ schedule.name }}</div>
+              <div class="mono muted text-sm">{{ schedule.id.slice(0, 10) }}…</div>
+            </td>
+            <td>
+              <div>{{ schedule.taskName || "—" }}</div>
+              <div class="mono muted text-sm">{{ schedule.taskId.slice(0, 10) }}…</div>
+            </td>
+            <td>{{ schedule.projectName || "—" }}</td>
             <td class="mono">{{ schedule.cronExpr }}</td>
             <td class="mono muted">{{ schedule.timezone }}</td>
             <td>

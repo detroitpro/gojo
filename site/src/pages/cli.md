@@ -55,7 +55,9 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | Command | Purpose |
 | --- | --- |
 | `gojo run list\|inspect\|logs\|diff` | Observe |
-| `gojo run approve\|reject\|artifacts` | Govern |
+| `gojo run approve\|reject\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
+
+Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 
 ## Backup
 

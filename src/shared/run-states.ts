@@ -68,6 +68,7 @@ const VALID_TRANSITIONS: Readonly<Record<RunState, readonly RunState[]>> = {
   ],
   [RunState.Running]: [
     RunState.Validating,
+    RunState.Preparing, // retry another attempt under the same run
     RunState.Failed,
     RunState.Canceled,
     RunState.TimedOut,
@@ -78,6 +79,7 @@ const VALID_TRANSITIONS: Readonly<Record<RunState, readonly RunState[]>> = {
     RunState.AwaitingApproval,
     RunState.Integrating,
     RunState.Reporting,
+    RunState.Preparing, // retry another attempt under the same run
     RunState.Failed,
     RunState.Canceled,
     RunState.TimedOut,

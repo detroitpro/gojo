@@ -3,6 +3,8 @@ import type {
   AgentExecuteContext,
   AgentExecuteResult,
 } from '@/agents/adapter/types';
+import { readHandoffIfPresent } from '@/agents/handoff-file';
+import { parseClaudeUsage } from '@/agents/usage';
 import { runProcess } from '@/process/supervisor';
 
 const CLI_COMMAND = 'claude';
@@ -20,8 +22,8 @@ async function whichClaude(): Promise<boolean> {
 /**
  * Claude Code adapter.
  *
- * Assumes Claude Code CLI supports non-interactive `-p` prompts and JSON output via
- * `--output-format json`, matching documented headless usage patterns.
+ * Uses `--output-format json` for usage/cost, and reads `.gojo/handoff.json`
+ * for the platform handoff report (not the CLI envelope).
  */
 export class ClaudeAgentAdapter implements AgentAdapter {
   readonly name = 'claude-code';
@@ -85,23 +87,36 @@ export class ClaudeAgentAdapter implements AgentAdapter {
         : {}),
     });
 
-    let handoff: unknown;
+    let usage = undefined;
+    let resultText = result.stdout;
     if (result.stdout.trim().length > 0) {
       try {
-        handoff = JSON.parse(result.stdout) as unknown;
+        const payload = JSON.parse(result.stdout) as Record<string, unknown>;
+        usage = parseClaudeUsage(payload);
+        if (typeof payload['result'] === 'string') {
+          resultText = payload['result'];
+        } else if (typeof payload['content'] === 'string') {
+          resultText = payload['content'];
+        }
+        if (typeof payload['model'] === 'string') {
+          ctx.onAgentEvent?.({ type: 'model', model: payload['model'] });
+        }
       } catch {
-        // Leave handoff undefined when stdout is not JSON.
+        // Leave usage undefined when stdout is not JSON.
       }
     }
 
+    const handoff = readHandoffIfPresent(ctx.workspacePath);
+
     return {
       exitCode: result.exitCode ?? 1,
-      stdout: result.stdout,
+      stdout: resultText,
       stderr: result.stderr,
       timedOut: result.timedOut,
       canceled: result.canceled,
       ...(this.version ? { version: this.version } : {}),
       ...(handoff !== undefined ? { handoff } : {}),
+      ...(usage ? { usage } : {}),
     };
   }
 }

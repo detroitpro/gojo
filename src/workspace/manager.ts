@@ -5,6 +5,8 @@ import {
   addWorktree,
   createBranch,
   execGit,
+  fetchAndFastForwardBranch,
+  hasRemote,
   removeWorktree,
   deleteBranch,
 } from '@/git/git';
@@ -14,6 +16,10 @@ export interface PrepareAttemptInput {
   baseBranch: string;
   runId: string;
   taskName: string;
+  /** Distinguishes multi-attempt branches under the same run. */
+  attemptNumber?: number;
+  /** When true, fetch + fast-forward baseBranch from origin before branching. */
+  syncBeforeRun?: boolean;
 }
 
 export interface PrepareAttemptResult {
@@ -57,9 +63,16 @@ export class WorkspaceManager {
     mkdirSync(rootDir, { recursive: true });
   }
 
-  buildBranchName(taskName: string, runId: string, date = new Date()): string {
+  buildBranchName(
+    taskName: string,
+    runId: string,
+    date = new Date(),
+    attemptNumber = 1,
+  ): string {
     const safeTask = sanitizeTaskName(taskName);
-    return `gojo/${safeTask}/${formatDate(date)}/run-${shortRunId(runId)}`;
+    // Flat attempt suffix — nested refs like run-xxx/a2 fail when run-xxx already exists.
+    const attemptSuffix = attemptNumber > 1 ? `-a${attemptNumber}` : '';
+    return `gojo/${safeTask}/${formatDate(date)}/run-${shortRunId(runId)}${attemptSuffix}`;
   }
 
   buildWorktreePath(branchName: string): string {
@@ -67,8 +80,25 @@ export class WorkspaceManager {
     return join(this.rootDir, safePath);
   }
 
+  async syncBaseBranch(repoPath: string, baseBranch: string): Promise<void> {
+    if (!(await hasRemote(repoPath))) {
+      return;
+    }
+    await fetchAndFastForwardBranch(repoPath, baseBranch);
+  }
+
   async prepareAttempt(input: PrepareAttemptInput): Promise<PrepareAttemptResult> {
-    const branchName = this.buildBranchName(input.taskName, input.runId);
+    if (input.syncBeforeRun) {
+      await this.syncBaseBranch(input.repoPath, input.baseBranch);
+    }
+
+    const attemptNumber = input.attemptNumber ?? 1;
+    const branchName = this.buildBranchName(
+      input.taskName,
+      input.runId,
+      new Date(),
+      attemptNumber,
+    );
     const worktreePath = this.buildWorktreePath(branchName);
 
     const baseRef = await execGit(input.repoPath, ['rev-parse', input.baseBranch]);

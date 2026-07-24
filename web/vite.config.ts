@@ -18,7 +18,8 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8080",
+        // Match gojo DEFAULT_BIND_PORT (src/config/instance.ts).
+        target: "http://127.0.0.1:7430",
         changeOrigin: true,
       },
     },

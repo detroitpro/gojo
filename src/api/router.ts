@@ -55,6 +55,9 @@ interface ScheduleRow {
   next_run_at: string | null;
   last_run_at: string | null;
   created_at: string;
+  task_name?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
 }
 
 interface RunRow {
@@ -69,9 +72,33 @@ interface RunRow {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  project_name?: string | null;
+  task_name?: string | null;
 }
 
-function mapScheduleRow(row: ScheduleRow): Schedule {
+type ScheduleListItem = Schedule & {
+  taskName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+};
+
+type RunListItem = {
+  id: string;
+  projectId: string;
+  taskId: string;
+  scheduleId: string | null;
+  state: string;
+  idempotencyKey: string;
+  trigger: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  projectName: string | null;
+  taskName: string | null;
+};
+
+function mapScheduleRow(row: ScheduleRow): ScheduleListItem {
   return {
     id: row.id,
     taskId: row.task_id,
@@ -87,27 +114,14 @@ function mapScheduleRow(row: ScheduleRow): Schedule {
     nextRunAt: row.next_run_at,
     lastRunAt: row.last_run_at,
     createdAt: row.created_at,
+    taskName: row.task_name ?? null,
+    projectId: row.project_id ?? null,
+    projectName: row.project_name ?? null,
   };
 }
 
-function listAllSchedules(ctx: AppContext): Schedule[] {
-  const rows = ctx.db
-    .connection()
-    .query<ScheduleRow, []>("SELECT * FROM schedules ORDER BY created_at")
-    .all();
-  return rows.map(mapScheduleRow);
-}
-
-function listRuns(ctx: AppContext, projectId?: string | null) {
-  const sqlite = ctx.db.connection();
-  const rows =
-    projectId && projectId.length > 0
-      ? sqlite
-          .query<RunRow, [string]>("SELECT * FROM runs WHERE project_id = ? ORDER BY created_at DESC")
-          .all(projectId)
-      : sqlite.query<RunRow, []>("SELECT * FROM runs ORDER BY created_at DESC").all();
-
-  return rows.map((row) => ({
+function mapRunRow(row: RunRow): RunListItem {
+  return {
     id: row.id,
     projectId: row.project_id,
     taskId: row.task_id,
@@ -119,7 +133,61 @@ function listRuns(ctx: AppContext, projectId?: string | null) {
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     errorMessage: row.error_message,
-  }));
+    projectName: row.project_name ?? null,
+    taskName: row.task_name ?? null,
+  };
+}
+
+function enrichRun(ctx: AppContext, run: {
+  id: string;
+  projectId: string;
+  taskId: string;
+  scheduleId: string | null;
+  state: string;
+  idempotencyKey: string;
+  trigger: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  errorMessage: string | null;
+}): RunListItem {
+  const project = ctx.repos.projects.findById(run.projectId);
+  const task = ctx.repos.tasks.findById(run.taskId);
+  return {
+    ...run,
+    projectName: project?.name ?? null,
+    taskName: task?.name ?? null,
+  };
+}
+
+function listAllSchedules(ctx: AppContext): ScheduleListItem[] {
+  const rows = ctx.db
+    .connection()
+    .query<ScheduleRow, []>(
+      `SELECT s.*, t.name AS task_name, t.project_id AS project_id, p.name AS project_name
+       FROM schedules s
+       LEFT JOIN tasks t ON t.id = s.task_id
+       LEFT JOIN projects p ON p.id = t.project_id
+       ORDER BY s.created_at`,
+    )
+    .all();
+  return rows.map(mapScheduleRow);
+}
+
+function listRuns(ctx: AppContext, projectId?: string | null): RunListItem[] {
+  const sqlite = ctx.db.connection();
+  const select = `SELECT r.*, p.name AS project_name, t.name AS task_name
+       FROM runs r
+       LEFT JOIN projects p ON p.id = r.project_id
+       LEFT JOIN tasks t ON t.id = r.task_id`;
+  const rows =
+    projectId && projectId.length > 0
+      ? sqlite
+          .query<RunRow, [string]>(`${select} WHERE r.project_id = ? ORDER BY r.created_at DESC`)
+          .all(projectId)
+      : sqlite.query<RunRow, []>(`${select} ORDER BY r.created_at DESC`).all();
+
+  return rows.map(mapRunRow);
 }
 
 function publicUser(user: { id: string; username: string; role: string }) {
@@ -434,7 +502,18 @@ export async function handleApiRequest(
     if (!projectId) {
       return failure("validation_error", "projectId query parameter is required", 400);
     }
-    return success({ tasks: ctx.repos.tasks.listByProject(projectId) });
+    const project = ctx.repos.projects.findById(projectId);
+    const tasks = ctx.repos.tasks.listByProject(projectId).map((task) => {
+      const agent = task.agentProfileId
+        ? ctx.repos.agentProfiles.findById(task.agentProfileId)
+        : null;
+      return {
+        ...task,
+        projectName: project?.name ?? null,
+        agentProfileName: agent?.name ?? null,
+      };
+    });
+    return success({ tasks });
   }
 
   if (method === "POST" && pathname === "/api/v1/tasks") {
@@ -607,7 +686,7 @@ export async function handleApiRequest(
       return failure("not_found", "Run not found", 404);
     }
     const attempts = ctx.repos.attempts.listByRun(runId);
-    return success({ run, attempts });
+    return success({ run: enrichRun(ctx, run), attempts });
   }
 
   if (method === "POST" && runActionMatch) {

@@ -1,6 +1,6 @@
 import { Database as SQLiteDatabase } from "bun:sqlite";
 
-import { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
+import { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_MIGRATIONS, SCHEMA_VERSION } from "./schema";
 
 export class Database {
   private readonly sqlite: SQLiteDatabase;
@@ -19,15 +19,51 @@ export class Database {
   migrate(): void {
     this.sqlite.exec(SCHEMA_DDL);
 
-    const row = this.sqlite
-      .query<{ version: number }, [number]>("SELECT version FROM schema_migrations WHERE version = ?")
-      .get(SCHEMA_VERSION);
+    const current = this.currentSchemaVersion();
+    const now = new Date().toISOString();
 
-    if (row === null) {
-      const now = new Date().toISOString();
+    if (current === 0) {
+      // Fresh DB: SCHEMA_DDL already has latest columns; record current version.
       this.sqlite
         .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
         .run(SCHEMA_VERSION, now);
+      return;
+    }
+
+    for (const migration of SCHEMA_MIGRATIONS) {
+      if (migration.version <= current) {
+        continue;
+      }
+      this.applyMigrationSql(migration.sql);
+      this.sqlite
+        .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+        .run(migration.version, now);
+    }
+  }
+
+  private currentSchemaVersion(): number {
+    const row = this.sqlite
+      .query<{ version: number }, []>(
+        "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations",
+      )
+      .get();
+    return row?.version ?? 0;
+  }
+
+  private applyMigrationSql(sql: string): void {
+    for (const statement of sql
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)) {
+      try {
+        this.sqlite.exec(`${statement};`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // Idempotent for re-runs / partial upgrades.
+        if (!/duplicate column name/i.test(message)) {
+          throw error;
+        }
+      }
     }
   }
 

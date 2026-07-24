@@ -12,7 +12,19 @@ import {
   retryRun,
   subscribeRunEvents,
 } from "@/api";
+import RunActivityFeed from "@/components/RunActivityFeed.vue";
+import RunAgentConsole from "@/components/RunAgentConsole.vue";
+import RunTimelineChart from "@/components/RunTimelineChart.vue";
 import StateBadge from "@/components/StateBadge.vue";
+import {
+  durationBetween,
+  fmtCost,
+  fmtDuration,
+  fmtTime,
+  fmtTokens,
+  shortSha,
+} from "@/lib/format";
+import type { PhaseKey } from "@/lib/run-phases";
 import type { Attempt, Run, RunArtifactsResult, RunEvent } from "@/types";
 
 const route = useRoute();
@@ -28,6 +40,8 @@ const rejectReason = ref("");
 const diffFiles = ref<string[] | null>(null);
 const artifacts = ref<RunArtifactsResult | null>(null);
 const inspectBusy = ref(false);
+const selectedPhase = ref<PhaseKey | null>(null);
+const highlightActivityId = ref<string | null>(null);
 
 let unsubscribe: (() => void) | null = null;
 
@@ -56,9 +70,93 @@ const artifactsHandoffText = computed(() => {
   }
 });
 
+const artifactsValidationText = computed(() => {
+  if (!artifacts.value?.validation) {
+    return null;
+  }
+  try {
+    return JSON.stringify(artifacts.value.validation, null, 2);
+  } catch {
+    return String(artifacts.value.validation);
+  }
+});
+
+const runDurationMs = computed(() =>
+  durationBetween(run.value?.startedAt ?? run.value?.createdAt, run.value?.finishedAt),
+);
+
+const costSummary = computed(() => {
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let cost = 0;
+  let hasCost = false;
+  let source: string | null = null;
+  let model: string | null = null;
+
+  for (const attempt of attempts.value) {
+    input += attempt.inputTokens ?? 0;
+    output += attempt.outputTokens ?? 0;
+    cacheRead += attempt.cacheReadTokens ?? 0;
+    cacheWrite += attempt.cacheWriteTokens ?? 0;
+    if (attempt.totalCostUsd != null) {
+      cost += attempt.totalCostUsd;
+      hasCost = true;
+      source = attempt.costSource ?? source;
+    }
+    if (attempt.model) {
+      model = attempt.model;
+    }
+  }
+
+  // Live fallback from agent.finished events before attempts reload.
+  if (!hasCost) {
+    for (const event of events.value) {
+      if (event.type !== "run.agent.finished" || !event.data || typeof event.data !== "object") {
+        continue;
+      }
+      const usage = (event.data as { usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+        totalCostUsd?: number | null;
+        costSource?: string;
+        model?: string;
+      } | null }).usage;
+      if (!usage) {
+        continue;
+      }
+      input = usage.inputTokens ?? input;
+      output = usage.outputTokens ?? output;
+      cacheRead = usage.cacheReadTokens ?? cacheRead;
+      cacheWrite = usage.cacheWriteTokens ?? cacheWrite;
+      if (usage.totalCostUsd != null) {
+        cost = usage.totalCostUsd;
+        hasCost = true;
+        source = usage.costSource ?? source;
+      }
+      if (usage.model) {
+        model = usage.model;
+      }
+    }
+  }
+
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    cost: hasCost ? cost : null,
+    source,
+    model,
+  };
+});
+
 const canCancel = computed(() =>
   run.value
-    ? !["Succeeded", "Failed", "Canceled", "TimedOut"].includes(run.value.state)
+    ? !["Succeeded", "Failed", "Canceled", "TimedOut", "Abandoned"].includes(run.value.state)
     : false,
 );
 
@@ -106,12 +204,23 @@ function startEvents() {
   unsubscribe?.();
   unsubscribe = subscribeRunEvents(runId.value, (event) => {
     events.value = [...events.value, event];
-    if (event.type === "run.state_changed" && run.value && typeof event.payload === "object") {
-      const payload = event.payload as { state?: string };
-      if (payload.state) {
-        run.value = { ...run.value, state: payload.state as Run["state"] };
+
+    if (event.type === "run.state_changed" && run.value && event.data && typeof event.data === "object") {
+      const data = event.data as { to?: string };
+      if (data.to) {
+        run.value = { ...run.value, state: data.to as Run["state"] };
       }
     }
+
+    if (event.type === "run.failed" && run.value && event.data && typeof event.data === "object") {
+      const data = event.data as { error?: string };
+      run.value = {
+        ...run.value,
+        state: "Failed",
+        errorMessage: data.error ?? run.value.errorMessage,
+      };
+    }
+
     if (event.type === "run.finished") {
       void load();
       void loadInspect();
@@ -166,11 +275,8 @@ async function doRetry() {
   }
 }
 
-function fmtTime(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  return new Date(value).toLocaleString();
+function attemptDuration(attempt: Attempt): string {
+  return fmtDuration(durationBetween(attempt.startedAt, attempt.finishedAt));
 }
 
 onMounted(async () => {
@@ -188,10 +294,19 @@ onUnmounted(() => {
   <div>
     <header class="page-header">
       <div>
-        <h1>Run {{ runId.slice(0, 14) }}…</h1>
-        <div v-if="run" class="subtitle">
+        <h1>{{ run?.taskName || `Run ${runId.slice(0, 14)}…` }}</h1>
+        <div v-if="run" class="subtitle run-meta">
           <StateBadge :state="run.state" />
-          <span class="muted ml-3">{{ run.trigger }}</span>
+          <span class="muted">{{ run.projectName || "Unknown project" }}</span>
+          <span class="muted">·</span>
+          <span class="muted">{{ run.trigger }}</span>
+          <span class="muted">·</span>
+          <span class="mono muted">{{ fmtDuration(runDurationMs) }}</span>
+          <span v-if="run.startedAt" class="muted">
+            · started {{ fmtTime(run.startedAt) }}
+          </span>
+          <span class="muted">·</span>
+          <span class="mono muted" :title="run.id">{{ run.id.slice(0, 12) }}…</span>
         </div>
       </div>
       <div class="toolbar">
@@ -213,6 +328,45 @@ onUnmounted(() => {
     <div v-if="loading" class="empty">Loading…</div>
 
     <template v-else-if="run">
+      <div v-if="run.errorMessage" class="alert alert-error mb-4">
+        {{ run.errorMessage }}
+      </div>
+
+      <section class="panel cost-panel">
+        <div class="panel-header">Cost &amp; usage</div>
+        <div class="panel-body cost-grid">
+          <div>
+            <div class="cost-label">Cost</div>
+            <div class="cost-value mono">
+              {{ fmtCost(costSummary.cost, costSummary.source) }}
+            </div>
+            <div class="muted cost-hint">
+              {{
+                costSummary.source === "reported"
+                  ? "Reported by agent CLI"
+                  : costSummary.source === "estimated"
+                    ? "Estimated from tokens × model rates"
+                    : "No usage reported yet"
+              }}
+            </div>
+          </div>
+          <div>
+            <div class="cost-label">Tokens</div>
+            <div class="cost-value mono">
+              {{ fmtTokens(costSummary.input) }} in · {{ fmtTokens(costSummary.output) }} out
+            </div>
+            <div class="muted cost-hint">
+              cache r/w {{ fmtTokens(costSummary.cacheRead) }} /
+              {{ fmtTokens(costSummary.cacheWrite) }}
+            </div>
+          </div>
+          <div>
+            <div class="cost-label">Model</div>
+            <div class="cost-value mono">{{ costSummary.model ?? "—" }}</div>
+          </div>
+        </div>
+      </section>
+
       <div v-if="canApprove" class="panel">
         <div class="panel-header">Approval required</div>
         <div class="panel-body">
@@ -229,18 +383,40 @@ onUnmounted(() => {
       <section class="panel">
         <div class="panel-header">Timeline</div>
         <div class="panel-body">
-          <ul v-if="events.length" class="timeline">
-            <li v-for="(event, idx) in events" :key="idx">
-              <span class="time">{{ fmtTime(event.timestamp) }}</span>
-              <span>
-                <span class="mono">{{ event.type }}</span>
-                <pre v-if="event.payload" class="pre-block mt-2">{{
-                  JSON.stringify(event.payload, null, 2)
-                }}</pre>
-              </span>
-            </li>
-          </ul>
-          <div v-else class="muted">Waiting for events… (live SSE)</div>
+          <RunTimelineChart
+            :events="events"
+            :selected-phase="selectedPhase"
+            @select-phase="selectedPhase = $event"
+            @select-activity="highlightActivityId = $event"
+          />
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          Activity
+          <button
+            v-if="selectedPhase"
+            class="btn btn-sm"
+            type="button"
+            @click="selectedPhase = null"
+          >
+            Clear phase filter
+          </button>
+        </div>
+        <div class="panel-body">
+          <RunActivityFeed
+            :events="events"
+            :phase-filter="selectedPhase"
+            :highlight-id="highlightActivityId"
+          />
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">Agent console</div>
+        <div class="panel-body panel-body-flush">
+          <RunAgentConsole :events="events" />
         </div>
       </section>
 
@@ -274,6 +450,12 @@ onUnmounted(() => {
               artifactsHandoffText
             }}</pre>
             <div v-else class="muted mt-4">No handoff.json on disk</div>
+            <pre v-if="artifactsValidationText" class="pre-block mt-4">{{
+              artifactsValidationText
+            }}</pre>
+            <div v-else-if="run?.errorMessage?.startsWith('Validation failed')" class="muted mt-4">
+              No validation.json on disk
+            </div>
           </template>
         </div>
       </section>
@@ -295,9 +477,13 @@ onUnmounted(() => {
                 <th>#</th>
                 <th>State</th>
                 <th>Exit</th>
+                <th>Duration</th>
+                <th>Cost</th>
+                <th>Tokens</th>
+                <th>Model</th>
+                <th>Start</th>
+                <th>Result</th>
                 <th>Branch</th>
-                <th>Started</th>
-                <th>Finished</th>
               </tr>
             </thead>
             <tbody>
@@ -305,19 +491,22 @@ onUnmounted(() => {
                 <td class="mono">{{ attempt.attemptNumber }}</td>
                 <td class="mono">{{ attempt.state }}</td>
                 <td class="mono">{{ attempt.exitCode ?? "—" }}</td>
+                <td class="mono muted">{{ attemptDuration(attempt) }}</td>
+                <td class="mono">{{ fmtCost(attempt.totalCostUsd, attempt.costSource) }}</td>
+                <td class="mono muted">
+                  {{ fmtTokens(attempt.inputTokens) }}/{{ fmtTokens(attempt.outputTokens) }}
+                </td>
+                <td class="mono muted">{{ attempt.model ?? "—" }}</td>
+                <td class="mono muted" :title="attempt.startingCommit ?? undefined">
+                  {{ shortSha(attempt.startingCommit) }}
+                </td>
+                <td class="mono muted" :title="attempt.resultCommit ?? undefined">
+                  {{ shortSha(attempt.resultCommit) }}
+                </td>
                 <td class="mono muted">{{ attempt.branchName ?? "—" }}</td>
-                <td class="mono muted">{{ fmtTime(attempt.startedAt) }}</td>
-                <td class="mono muted">{{ fmtTime(attempt.finishedAt) }}</td>
               </tr>
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section v-if="run.errorMessage" class="panel">
-        <div class="panel-header">Error</div>
-        <div class="panel-body">
-          <pre class="pre-block">{{ run.errorMessage }}</pre>
         </div>
       </section>
     </template>

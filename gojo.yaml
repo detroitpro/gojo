@@ -1,0 +1,80 @@
+version: 1
+
+project:
+  name: gojo
+  defaultBranch: main
+
+repository:
+  remote: origin
+  syncBeforeRun: true
+  requireCleanBase: true
+  submodules: false
+  gitLfs: false
+
+agents:
+  shell:
+    adapter: shell
+    timeout: 5m
+  cursor:
+    adapter: cursor
+    model: default
+    timeout: 45m
+
+validationProfiles:
+  self-heal:
+    steps:
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
+  typecheck:
+    steps:
+      - name: typecheck
+        command: bun run typecheck
+        timeout: 5m
+
+tasks:
+  self-heal:
+    description: Diagnose failed gojo runs and open a reviewable fix PR
+    agent: cursor
+    promptFile: .gojo/tasks/self-heal.md
+    validationProfile: self-heal
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: none
+
+  # Example platform maintenance task that can self-heal when it fails.
+  typecheck-gate:
+    description: Run daemon TypeScript check and report via handoff
+    agent: shell
+    promptFile: .gojo/tasks/typecheck-gate.sh
+    validationProfile: typecheck
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: commit-only
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+    selfHeal:
+      task: self-heal
+      afterConsecutiveFailedRuns: 1
+
+schedules:
+  self-heal-daily:
+    task: self-heal
+    cron: "0 7 * * *"
+    timezone: America/Detroit
+
+notifications: {}

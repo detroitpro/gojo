@@ -98,6 +98,7 @@ onMounted(async () => {
         <thead>
           <tr>
             <th>Name</th>
+            <th>Project</th>
             <th>Enabled</th>
             <th>Agent</th>
             <th>Created</th>
@@ -107,13 +108,23 @@ onMounted(async () => {
         <tbody>
           <tr v-for="task in tasks" :key="task.id">
             <td>
-              <div>{{ task.name }}</div>
+              <div class="entity-name">{{ task.name }}</div>
+              <div class="mono muted text-sm">{{ task.id.slice(0, 10) }}…</div>
               <div v-if="task.description" class="muted text-sm">
                 {{ task.description }}
               </div>
             </td>
+            <td>
+              <div>{{ task.projectName || "—" }}</div>
+              <div class="mono muted text-sm">{{ task.projectId.slice(0, 10) }}…</div>
+            </td>
             <td>{{ task.enabled ? "yes" : "no" }}</td>
-            <td class="mono muted">{{ task.agentProfileId ?? "—" }}</td>
+            <td>
+              <div>{{ task.agentProfileName || "—" }}</div>
+              <div v-if="task.agentProfileId" class="mono muted text-sm">
+                {{ task.agentProfileId.slice(0, 10) }}…
+              </div>
+            </td>
             <td class="mono muted">{{ new Date(task.createdAt).toLocaleString() }}</td>
             <td>
               <button

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type {
@@ -6,19 +6,8 @@ import type {
   AgentExecuteContext,
   AgentExecuteResult,
 } from '@/agents/adapter/types';
+import { readHandoffIfPresent } from '@/agents/handoff-file';
 import { runProcess } from '@/process/supervisor';
-
-const HANDOFF_RELATIVE_PATH = '.gojo/handoff.json';
-
-function readHandoffIfPresent(workspacePath: string): unknown | undefined {
-  const handoffPath = join(workspacePath, HANDOFF_RELATIVE_PATH);
-  try {
-    const raw = readFileSync(handoffPath, 'utf8');
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return undefined;
-  }
-}
 
 export class ShellAgentAdapter implements AgentAdapter {
   readonly name = 'shell';

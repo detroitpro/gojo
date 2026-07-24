@@ -119,6 +119,52 @@ describe('integration/run-coordinator', () => {
     expect(handoff.status).toBe('completed');
   });
 
+  test('validation failure writes artifact and rich errorMessage', async () => {
+    const { coordinator, repos, paths, project } = await setup();
+
+    const task = repos.tasks.create({
+      projectId: project.id,
+      name: 'always-fail-validation',
+      prompt: [
+        '#!/bin/sh',
+        'set -eu',
+        'echo ok > agent-result.txt',
+      ].join('\n'),
+      validationProfileJson: JSON.stringify({
+        steps: [
+          {
+            name: 'must-fail',
+            command: 'echo "boom validation" >&2; exit 7',
+          },
+        ],
+      }),
+      integrationJson: JSON.stringify({ mode: 'none' }),
+    });
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      taskId: task.id,
+      trigger: 'manual',
+    });
+
+    const finished = await coordinator.executeRun(run.id);
+    expect(finished.state).toBe(RunState.Failed);
+    expect(finished.errorMessage).toContain('Validation failed: must-fail');
+    expect(finished.errorMessage).toContain('exit 7');
+    expect(finished.errorMessage).toContain('boom validation');
+
+    const validationPath = join(paths.artifacts, run.id, 'validation.json');
+    expect(existsSync(validationPath)).toBe(true);
+    const validation = JSON.parse(readFileSync(validationPath, 'utf8')) as {
+      passed: boolean;
+      steps: Array<{ name: string; exitCode: number | null; status: string }>;
+    };
+    expect(validation.passed).toBe(false);
+    expect(validation.steps[0]?.name).toBe('must-fail');
+    expect(validation.steps[0]?.status).toBe('failed');
+    expect(validation.steps[0]?.exitCode).toBe(7);
+  });
+
   test('createRun is idempotent by key', async () => {
     const { coordinator, project, task } = await setup();
 

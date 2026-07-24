@@ -104,6 +104,51 @@ export async function fetch(
   await execGitOrThrow(cwd, ['fetch', remote], 'fetch');
 }
 
+/** Fast-forward a local branch to match remote/branch when possible. */
+export async function fetchAndFastForwardBranch(
+  cwd: string,
+  branch: string,
+  remote = 'origin',
+): Promise<void> {
+  await fetch(cwd, remote);
+  // Update local branch ref from remote tracking branch (ff-only).
+  const result = await execGit(cwd, [
+    'fetch',
+    remote,
+    `${branch}:${branch}`,
+  ]);
+  if (result.exitCode === 0) {
+    return;
+  }
+  // Fallback: merge --ff-only while on the branch (or update-ref when detached).
+  const remoteRef = `${remote}/${branch}`;
+  const show = await execGit(cwd, ['rev-parse', '--verify', remoteRef]);
+  if (show.exitCode !== 0) {
+    throw new GitError(
+      `Unable to resolve ${remoteRef} after fetch`,
+      show.exitCode,
+      show.stdout,
+      show.stderr,
+    );
+  }
+  const current = await execGit(cwd, ['branch', '--show-current']);
+  if (current.exitCode === 0 && current.stdout === branch) {
+    await mergeFastForward(cwd, remoteRef);
+    return;
+  }
+  // Force local branch tip to remote when not checked out (safe for gojo worktrees).
+  await execGitOrThrow(
+    cwd,
+    ['branch', '-f', branch, remoteRef],
+    'fetchAndFastForwardBranch',
+  );
+}
+
+export async function hasRemote(cwd: string, remote = 'origin'): Promise<boolean> {
+  const result = await execGit(cwd, ['remote', 'get-url', remote]);
+  return result.exitCode === 0;
+}
+
 export async function createBranch(
   cwd: string,
   branchName: string,

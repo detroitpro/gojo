@@ -1,3 +1,5 @@
+import type { AgentUsage } from '@/agents/usage';
+
 export interface AgentAdapter {
   readonly name: string;
   detect(): Promise<{
@@ -8,6 +10,10 @@ export interface AgentAdapter {
   execute(ctx: AgentExecuteContext): Promise<AgentExecuteResult>;
 }
 
+export type AgentLifecycleEvent =
+  | { type: 'model'; model: string }
+  | { type: 'tool'; phase: 'started' | 'completed'; callId: string; name: string };
+
 export interface AgentExecuteContext {
   workspacePath: string;
   prompt: string;
@@ -15,6 +21,7 @@ export interface AgentExecuteContext {
   timeoutMs: number;
   signal: AbortSignal;
   onOutput?: (stream: 'stdout' | 'stderr', chunk: string) => void;
+  onAgentEvent?: (event: AgentLifecycleEvent) => void;
 }
 
 export interface AgentExecuteResult {
@@ -25,4 +32,5 @@ export interface AgentExecuteResult {
   canceled: boolean;
   version?: string;
   handoff?: unknown;
+  usage?: AgentUsage;
 }

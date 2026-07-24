@@ -7,8 +7,11 @@ dist/
 .env
 .env.*
 !.env.example
-.gojo/
+.gojo/*
+!.gojo/tasks/
+!.gojo/tasks/**
 .gojo-test/
+
 .herenow/
 *.log
 node_modules/

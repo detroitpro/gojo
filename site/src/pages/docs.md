@@ -10,6 +10,7 @@ description: Guides and reference for operating gojo — from first shell task t
 - [Your first agent](/first-agent) — shell task end-to-end (learn the pipeline)
 - [Advanced agent](/advanced-agent) — Claude Code / Cursor dependency maintenance with PRs
 - [Advanced usage](/advanced-usage) — multi-role agents, approvals, secrets, hygiene
+- [Self-healing](/self-healing) — recover from failed tasks with in-repo healer PRs
 
 ## Reference
 

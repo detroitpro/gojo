@@ -9,7 +9,8 @@
   },
   "scripts": {
     "gojo": "bun run src/cli/index.ts",
-    "dev": "bun run src/cli/index.ts server start",
+    "dev": "bash scripts/dev.sh",
+    "dev:server": "bun --watch src/cli/index.ts server start",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",

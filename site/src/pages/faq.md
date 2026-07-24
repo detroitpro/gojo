@@ -43,6 +43,14 @@ Yes, but only with intention: change bind host, put TLS/auth in front, and treat
 
 Schedules can **auto-disable** after consecutive failures. You’ll get a notification if channels are configured. Re-enable explicitly after fixing the cause.
 
+## Can gojo fix a failed task by itself?
+
+Partially. The platform retries transient failures (`maxAttemptsPerRun`) and can enqueue a project’s **self-heal** task when you declare `selfHeal` in the manifest. The healer lives **in the project repo** and should open a PR for human review — gojo does not silently rewrite prompts in the database. Details: [Self-healing](/self-healing).
+
+## I merged a healer PR — why is the task still broken?
+
+Ensure `repository.syncBeforeRun: true` in `gojo.yaml`, and that the next run uses a daemon build that implements fetch + manifest re-sync. Without that, gojo keeps branching from a stale local `main` and an unsynced DB prompt.
+
 ## How do I stop everything quickly?
 
 Use **global pause** in Settings / API, or `gojo server stop` / service stop. Cancel individual runs from the Runs UI or CLI.
@@ -60,4 +68,5 @@ Start with [Your first agent](/first-agent) (shell) to prove validation and comm
 - [Getting started](/getting-started)
 - [Your first agent](/first-agent)
 - [Advanced agent](/advanced-agent)
+- [Self-healing](/self-healing)
 - [Documentation](/docs)

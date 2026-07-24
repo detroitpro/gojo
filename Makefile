@@ -1,8 +1,8 @@
 # gojo — common developer entrypoints
 # Prefer `make check` before opening/pushing a PR (same gate as CI).
 
-.PHONY: help check typecheck test coverage build build-web build-site install-cli \
-	dev dev-web dev-site service-install service-status service-restart
+.PHONY: help check typecheck test coverage build build-web build-site install install-cli \
+	dev dev-web dev-site service-install service-status service-start service-stop service-restart
 
 help: ## Show targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -39,14 +39,25 @@ build-site: ## Build Astro docs site
 install-cli: ## Install compiled gojo onto PATH (~/.local/bin)
 	bun run install:cli
 
+install: ## Build everything, install CLI+service, start service, print status
+	bun run install:cli
+	@GOJO_BIN="$(HOME)/.local/bin/gojo"; \
+	if [ ! -x "$$GOJO_BIN" ]; then GOJO_BIN="$(CURDIR)/bin/gojo"; fi; \
+	echo "==> Installing service ($$GOJO_BIN)"; \
+	"$$GOJO_BIN" service install; \
+	echo "==> Starting service"; \
+	"$$GOJO_BIN" service start; \
+	echo "==> Service status"; \
+	"$$GOJO_BIN" service status
+
 # ---------------------------------------------------------------------------
 # Dev
 # ---------------------------------------------------------------------------
 
-dev: ## Start gojo server from source
-	bun run gojo server start
+dev: ## Hot-reload API (bun --watch) + Vite admin UI (HMR)
+	@bash scripts/dev.sh
 
-dev-web: ## Vite admin UI dev server
+dev-web: ## Vite admin UI only (proxies /api → :7430)
 	bun run --cwd web dev
 
 dev-site: ## Astro docs site dev server
@@ -61,6 +72,12 @@ service-install: ## Write/reload user systemd|launchd unit
 
 service-status: ## Show daemon unit status
 	gojo service status
+
+service-start: ## Start background gojo service
+	gojo service start
+
+service-stop: ## Stop background gojo service
+	gojo service stop
 
 service-restart: ## Restart background gojo service
 	gojo service restart

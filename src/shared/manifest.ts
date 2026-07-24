@@ -83,6 +83,15 @@ export const TaskFailurePolicySchema = z.object({
 
 export type TaskFailurePolicy = z.infer<typeof TaskFailurePolicySchema>;
 
+export const TaskSelfHealSchema = z.object({
+  /** Name of the in-repo healer task to enqueue on failure. */
+  task: z.string().min(1),
+  /** Fire healer after this many consecutive failed runs (default 1). */
+  afterConsecutiveFailedRuns: z.number().int().positive().optional(),
+});
+
+export type TaskSelfHeal = z.infer<typeof TaskSelfHealSchema>;
+
 export const TaskConfigSchema = z.object({
   description: z.string().min(1),
   agent: z.string().min(1),
@@ -91,6 +100,7 @@ export const TaskConfigSchema = z.object({
   concurrency: TaskConcurrencySchema.optional(),
   integration: TaskIntegrationSchema.optional(),
   failurePolicy: TaskFailurePolicySchema.optional(),
+  selfHeal: TaskSelfHealSchema.optional(),
 });
 
 export type TaskConfig = z.infer<typeof TaskConfigSchema>;

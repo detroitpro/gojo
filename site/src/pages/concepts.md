@@ -24,8 +24,8 @@ This prevents two concurrent agents from racing into `main`.
 
 ## Runs and attempts
 
-- A **run** is one logical execution of a task (manual, schedule, or API).
-- An **attempt** is a single agent invocation. Retries add attempts; history is kept.
+- A **run** is one logical execution of a task (manual, schedule, API, or `heal`).
+- An **attempt** is a single agent invocation. `maxAttemptsPerRun` creates additional attempts under the same run; history is kept.
 
 Typical happy path:
 
@@ -55,4 +55,5 @@ One gojo process holds the scheduler lease for a database. CLI, HTTP API, embedd
 ## Related
 
 - [Your first agent](/first-agent) — see the lifecycle in practice
+- [Self-healing](/self-healing) — retries, heal triggers, and in-repo fix PRs
 - [Settings](/settings) — knobs that implement these rules

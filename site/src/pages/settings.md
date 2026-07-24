@@ -33,7 +33,7 @@ The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavio
 | Area | Meaning |
 | --- | --- |
 | `project.defaultBranch` | Target branch for integration |
-| `repository.syncBeforeRun` | Fetch before preparing a worktree |
+| `repository.syncBeforeRun` | Fetch + fast-forward base from origin, then re-sync the manifest before preparing a worktree (required for merged healer PRs to take effect) |
 | `repository.requireCleanBase` | Refuse dirty base clones |
 | `instructions` | Files and notices injected into agent context |
 
@@ -60,7 +60,8 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 | `validationProfile` | Ordered checks after the agent exits |
 | `concurrency` / overlap | How overlapping triggers behave |
 | `integration` | What happens to Git after validation |
-| `failurePolicy` | Retries and disable thresholds |
+| `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
+| `selfHeal` | Optional `{ task, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |
 
 ## Schedules
 

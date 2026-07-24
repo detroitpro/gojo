@@ -15,9 +15,11 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 - [Architecture overview](./architecture/overview.md)
 - [Module boundaries](./architecture/boundaries.md)
 - Modules:
-  - [runs](./modules/runs.md)
+  - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [agents](./modules/agents.md)
   - [scheduler](./modules/scheduler.md)
+
+User-facing self-healing guide (site): [`site/src/pages/self-healing.md`](../site/src/pages/self-healing.md).
 
 ## Quality gate
 

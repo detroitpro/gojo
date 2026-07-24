@@ -110,6 +110,15 @@ interface AttemptRow {
   handoff_json: string | null;
   started_at: string | null;
   finished_at: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_write_tokens: number | null;
+  total_cost_usd: number | null;
+  cost_source: string | null;
+  usage_json: string | null;
+  model: string | null;
+  agent_duration_ms: number | null;
 }
 
 interface AuditEventRow {
@@ -224,6 +233,15 @@ function mapAttempt(row: AttemptRow): Attempt {
     handoffJson: row.handoff_json,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
+    inputTokens: row.input_tokens ?? null,
+    outputTokens: row.output_tokens ?? null,
+    cacheReadTokens: row.cache_read_tokens ?? null,
+    cacheWriteTokens: row.cache_write_tokens ?? null,
+    totalCostUsd: row.total_cost_usd ?? null,
+    costSource: row.cost_source ?? null,
+    usageJson: row.usage_json ?? null,
+    model: row.model ?? null,
+    agentDurationMs: row.agent_duration_ms ?? null,
   };
 }
 
@@ -818,8 +836,11 @@ export function createRepositories(db: Database): Repositories {
           `INSERT INTO attempts (
             id, run_id, attempt_number, state, workspace_path, branch_name,
             starting_commit, result_commit, agent_version, exit_code,
-            handoff_json, started_at, finished_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL)`,
+            handoff_json, started_at, finished_at,
+            input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+            total_cost_usd, cost_source, usage_json, model, agent_duration_ms
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
         )
         .run(
           id,
@@ -845,6 +866,15 @@ export function createRepositories(db: Database): Repositories {
         handoff_json: null,
         started_at: null,
         finished_at: null,
+        input_tokens: null,
+        output_tokens: null,
+        cache_read_tokens: null,
+        cache_write_tokens: null,
+        total_cost_usd: null,
+        cost_source: null,
+        usage_json: null,
+        model: null,
+        agent_duration_ms: null,
       });
     },
 
@@ -884,6 +914,22 @@ export function createRepositories(db: Database): Repositories {
         handoffJson: input.handoffJson !== undefined ? input.handoffJson : existing.handoffJson,
         startedAt: input.startedAt !== undefined ? input.startedAt : existing.startedAt,
         finishedAt: input.finishedAt !== undefined ? input.finishedAt : existing.finishedAt,
+        inputTokens: input.inputTokens !== undefined ? input.inputTokens : existing.inputTokens,
+        outputTokens:
+          input.outputTokens !== undefined ? input.outputTokens : existing.outputTokens,
+        cacheReadTokens:
+          input.cacheReadTokens !== undefined ? input.cacheReadTokens : existing.cacheReadTokens,
+        cacheWriteTokens:
+          input.cacheWriteTokens !== undefined
+            ? input.cacheWriteTokens
+            : existing.cacheWriteTokens,
+        totalCostUsd:
+          input.totalCostUsd !== undefined ? input.totalCostUsd : existing.totalCostUsd,
+        costSource: input.costSource !== undefined ? input.costSource : existing.costSource,
+        usageJson: input.usageJson !== undefined ? input.usageJson : existing.usageJson,
+        model: input.model !== undefined ? input.model : existing.model,
+        agentDurationMs:
+          input.agentDurationMs !== undefined ? input.agentDurationMs : existing.agentDurationMs,
       };
 
       sqlite
@@ -891,7 +937,9 @@ export function createRepositories(db: Database): Repositories {
           `UPDATE attempts SET
             state = ?, workspace_path = ?, branch_name = ?, starting_commit = ?,
             result_commit = ?, agent_version = ?, exit_code = ?, handoff_json = ?,
-            started_at = ?, finished_at = ?
+            started_at = ?, finished_at = ?,
+            input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
+            total_cost_usd = ?, cost_source = ?, usage_json = ?, model = ?, agent_duration_ms = ?
           WHERE id = ?`,
         )
         .run(
@@ -905,6 +953,15 @@ export function createRepositories(db: Database): Repositories {
           next.handoffJson,
           next.startedAt,
           next.finishedAt,
+          next.inputTokens,
+          next.outputTokens,
+          next.cacheReadTokens,
+          next.cacheWriteTokens,
+          next.totalCostUsd,
+          next.costSource,
+          next.usageJson,
+          next.model,
+          next.agentDurationMs,
           id,
         );
 

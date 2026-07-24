@@ -11,6 +11,7 @@
     "test:build": "bun run build && test -f dist/index.html"
   },
   "dependencies": {
+    "uplot": "^1.6.32",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

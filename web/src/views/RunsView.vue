@@ -49,10 +49,11 @@ onMounted(load);
       <table class="data">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>Task</th>
+            <th>Project</th>
             <th>State</th>
             <th>Trigger</th>
-            <th>Project</th>
+            <th>Run ID</th>
             <th>Created</th>
             <th>Finished</th>
           </tr>
@@ -60,11 +61,20 @@ onMounted(load);
         <tbody>
           <tr v-for="run in runs" :key="run.id">
             <td>
-              <RouterLink :to="`/runs/${run.id}`" class="mono">{{ run.id.slice(0, 12) }}…</RouterLink>
+              <RouterLink :to="`/runs/${run.id}`" class="entity-name">
+                {{ run.taskName || "Unknown task" }}
+              </RouterLink>
+              <div class="mono muted text-sm">{{ run.taskId.slice(0, 10) }}…</div>
+            </td>
+            <td>
+              <div>{{ run.projectName || "Unknown project" }}</div>
+              <div class="mono muted text-sm">{{ run.projectId.slice(0, 10) }}…</div>
             </td>
             <td><StateBadge :state="run.state" /></td>
             <td class="mono">{{ run.trigger }}</td>
-            <td class="mono muted">{{ run.projectId.slice(0, 10) }}…</td>
+            <td>
+              <RouterLink :to="`/runs/${run.id}`" class="mono">{{ run.id.slice(0, 12) }}…</RouterLink>
+            </td>
             <td class="mono muted">{{ fmtTime(run.createdAt) }}</td>
             <td class="mono muted">{{ fmtTime(run.finishedAt) }}</td>
           </tr>

@@ -3,6 +3,9 @@ import type {
   AgentExecuteContext,
   AgentExecuteResult,
 } from '@/agents/adapter/types';
+import { readHandoffIfPresent } from '@/agents/handoff-file';
+import { mapCursorStreamEvent, NdjsonLineBuffer } from '@/agents/stream-json';
+import { parseCursorUsage, type AgentUsage } from '@/agents/usage';
 import { runProcess } from '@/process/supervisor';
 
 const CLI_CANDIDATES = ['agent', 'cursor-agent'] as const;
@@ -53,8 +56,8 @@ async function detectCli(): Promise<DetectedCli | null> {
 /**
  * Cursor agent adapter.
  *
- * Assumes a non-interactive CLI supporting `-p` / `--print` style prompt flags,
- * matching common Cursor Agent CLI usage: `agent -p "<prompt>"`.
+ * Uses stream-json so gojo can stream assistant text, capture tool calls,
+ * and extract token usage from the terminal result event.
  */
 export class CursorAgentAdapter implements AgentAdapter {
   readonly name = 'cursor';
@@ -94,34 +97,105 @@ export class CursorAgentAdapter implements AgentAdapter {
 
   async execute(ctx: AgentExecuteContext): Promise<AgentExecuteResult> {
     const cli = await this.requireCli();
+    const lineBuffer = new NdjsonLineBuffer();
+    let model: string | undefined;
+    let usage: AgentUsage | undefined;
+    let resultText = '';
+    const seenAssistantTexts = new Set<string>();
 
-    // Non-interactive prompt mode; cwd scopes edits to the prepared worktree.
+    const handleLine = (line: string) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line) as unknown;
+      } catch {
+        ctx.onOutput?.('stdout', `${line}\n`);
+        return;
+      }
+
+      for (const event of mapCursorStreamEvent(parsed)) {
+        if (event.kind === 'model') {
+          model = event.model;
+          ctx.onAgentEvent?.({ type: 'model', model: event.model });
+        } else if (event.kind === 'text') {
+          if (seenAssistantTexts.has(event.text)) {
+            continue;
+          }
+          seenAssistantTexts.add(event.text);
+          ctx.onOutput?.('stdout', event.text.endsWith('\n') ? event.text : `${event.text}\n`);
+        } else if (event.kind === 'tool') {
+          ctx.onAgentEvent?.({
+            type: 'tool',
+            phase: event.phase,
+            callId: event.callId,
+            name: event.name,
+          });
+          ctx.onOutput?.(
+            'stdout',
+            `[tool ${event.phase}] ${event.name} (${event.callId})\n`,
+          );
+        } else if (event.kind === 'result') {
+          resultText =
+            typeof event.payload['result'] === 'string'
+              ? event.payload['result']
+              : resultText;
+          usage = parseCursorUsage(event.payload, model);
+        }
+      }
+    };
+
     const result = await runProcess({
       command: cli.command,
-      args: ['-p', ctx.prompt],
+      args: [
+        '-p',
+        '--trust',
+        '-f',
+        '--output-format',
+        'stream-json',
+        '--stream-partial-output',
+        ctx.prompt,
+      ],
       cwd: ctx.workspacePath,
       env: ctx.env,
       timeoutMs: ctx.timeoutMs,
       signal: ctx.signal,
-      ...(ctx.onOutput
-        ? {
-            onStdout: (chunk: string) => {
-              ctx.onOutput?.('stdout', chunk);
-            },
-            onStderr: (chunk: string) => {
-              ctx.onOutput?.('stderr', chunk);
-            },
-          }
-        : {}),
+      onStdout: (chunk: string) => {
+        for (const line of lineBuffer.push(chunk)) {
+          handleLine(line);
+        }
+      },
+      onStderr: (chunk: string) => {
+        ctx.onOutput?.('stderr', chunk);
+      },
     });
+
+    for (const line of lineBuffer.flush()) {
+      handleLine(line);
+    }
+
+    // Fallback: if stream parsing missed usage, try whole stdout as JSON.
+    if (!usage && result.stdout.trim().startsWith('{')) {
+      try {
+        const payload = JSON.parse(result.stdout) as Record<string, unknown>;
+        usage = parseCursorUsage(payload, model);
+        if (typeof payload['result'] === 'string') {
+          resultText = payload['result'];
+        }
+      } catch {
+        // keep prior values
+      }
+    }
+
+    const handoff = readHandoffIfPresent(ctx.workspacePath);
 
     return {
       exitCode: result.exitCode ?? 1,
-      stdout: result.stdout,
+      stdout: resultText || result.stdout,
       stderr: result.stderr,
       timedOut: result.timedOut,
       canceled: result.canceled,
       ...(cli.version ? { version: cli.version } : {}),
+      ...(handoff !== undefined ? { handoff } : {}),
+      ...(usage ? { usage } : {}),
     };
   }
 }

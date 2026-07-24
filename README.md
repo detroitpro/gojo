@@ -151,6 +151,14 @@ Expect Preparing → Running → Validating → Integrating → **Succeeded**. W
 
 Prefer an agent to do the install? The docs landing page (`site/`, `#ask-your-agent`) has a copy-paste prompt that installs gojo, registers the current repo, and runs a first task.
 
+## Self-healing
+
+Healing **logic** belongs in each project repo (a `self-heal` task that edits `gojo.yaml` / prompts and opens a PR). Healing **plumbing** belongs in gojo (retries, API env injection, `failure.json`, heal trigger, `syncBeforeRun` propagation).
+
+Full guide: **[Self-healing](https://detroitpro.github.io/gojo/self-healing)** (source: [`site/src/pages/self-healing.md`](./site/src/pages/self-healing.md)).
+
+This repo dogfoods the pattern via [`gojo.yaml`](./gojo.yaml) — register the gojo checkout as a project and `gojo project sync <id>`.
+
 ## Background service
 
 ```bash

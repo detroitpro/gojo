@@ -18,7 +18,7 @@ export type RunState =
   | "Conflict"
   | "InfrastructureFailure";
 
-export type RunTrigger = "schedule" | "manual" | "api" | "web";
+export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal";
 
 export interface User {
   id: string;
@@ -49,6 +49,9 @@ export interface Run {
   startedAt: string | null;
   finishedAt: string | null;
   errorMessage: string | null;
+  /** Present on list/detail API responses */
+  projectName?: string | null;
+  taskName?: string | null;
 }
 
 export interface Attempt {
@@ -65,6 +68,15 @@ export interface Attempt {
   handoffJson: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  totalCostUsd: number | null;
+  costSource: string | null;
+  usageJson: string | null;
+  model: string | null;
+  agentDurationMs: number | null;
 }
 
 export interface Schedule {
@@ -82,6 +94,10 @@ export interface Schedule {
   nextRunAt: string | null;
   lastRunAt: string | null;
   createdAt: string;
+  /** Present on list API responses */
+  taskName?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
 }
 
 export interface AgentInfo {
@@ -126,6 +142,9 @@ export interface Task {
   concurrencyJson: string;
   enabled: boolean;
   createdAt: string;
+  /** Present on list API responses */
+  projectName?: string | null;
+  agentProfileName?: string | null;
 }
 
 export interface ApiTokenInfo {
@@ -170,6 +189,8 @@ export interface RunArtifactsResult {
   path: string;
   exists: boolean;
   handoff: unknown | null;
+  validation: unknown | null;
+  failure: unknown | null;
 }
 
 export interface BackupInfo {
@@ -220,8 +241,41 @@ export interface BrowseRoot {
 export interface RunEvent {
   type: string;
   runId: string;
-  timestamp: string;
-  payload?: unknown;
+  at: string;
+  data?: unknown;
+}
+
+export interface ValidationStepEventData {
+  name: string;
+  command: string;
+  exitCode: number | null;
+  status: "passed" | "failed" | "timed_out" | "canceled" | string;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+}
+
+export interface AgentOutputEventData {
+  stream: "stdout" | "stderr";
+  chunk: string;
+}
+
+export interface AgentUsageSummary {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  totalCostUsd: number | null;
+  costSource: string;
+  model?: string;
+}
+
+export interface AgentFinishedEventData {
+  exitCode: number;
+  durationMs: number;
+  stdoutBytes: number;
+  stderrBytes: number;
+  usage?: AgentUsageSummary | null;
 }
 
 export class ApiError extends Error {

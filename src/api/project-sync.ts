@@ -87,6 +87,11 @@ export function syncProjectFromManifest(
       .listByProject(project.id)
       .find((task) => task.name === name);
 
+    const failurePolicyJson = JSON.stringify({
+      ...(taskConfig.failurePolicy ?? {}),
+      ...(taskConfig.selfHeal ? { selfHeal: taskConfig.selfHeal } : {}),
+    });
+
     if (existing) {
       repos.tasks.update(existing.id, {
         description: taskConfig.description,
@@ -94,7 +99,7 @@ export function syncProjectFromManifest(
         prompt,
         validationProfileJson: JSON.stringify(validationProfile ?? { steps: [] }),
         integrationJson: JSON.stringify(taskConfig.integration ?? {}),
-        failurePolicyJson: JSON.stringify(taskConfig.failurePolicy ?? {}),
+        failurePolicyJson,
         concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
       });
       taskIds.set(name, existing.id);
@@ -107,7 +112,7 @@ export function syncProjectFromManifest(
         prompt,
         validationProfileJson: JSON.stringify(validationProfile ?? { steps: [] }),
         integrationJson: JSON.stringify(taskConfig.integration ?? {}),
-        failurePolicyJson: JSON.stringify(taskConfig.failurePolicy ?? {}),
+        failurePolicyJson,
         concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
       });
       taskIds.set(name, created.id);
@@ -123,6 +128,10 @@ export function syncProjectFromManifest(
         continue;
       }
 
+      const taskConfig = manifest.tasks[scheduleConfig.task];
+      const disableAfter =
+        taskConfig?.failurePolicy?.disableAfterConsecutiveFailedRuns ?? null;
+
       const nextRunAt = computeScheduleNextRun(scheduleConfig.cron, scheduleConfig.timezone);
       const existing = repos.schedules.listByTask(taskId).find((item) => item.name === name);
 
@@ -132,6 +141,7 @@ export function syncProjectFromManifest(
           timezone: scheduleConfig.timezone,
           enabled: true,
           nextRunAt,
+          disableAfter,
         });
       } else {
         repos.schedules.create({
@@ -141,6 +151,7 @@ export function syncProjectFromManifest(
           timezone: scheduleConfig.timezone,
           enabled: true,
           nextRunAt,
+          disableAfter,
         });
       }
       schedules += 1;

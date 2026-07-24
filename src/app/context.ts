@@ -8,6 +8,7 @@ import {
   saveInstanceConfig,
 } from "@/config/instance";
 import { ensureLayout, resolvePaths, type GojoPaths } from "@/config/paths";
+import { UserService } from "@/auth/users";
 import { NotificationDispatcher } from "@/notifications/dispatcher";
 import { wireNotificationHooks } from "@/notifications/hooks";
 import { RunCoordinator } from "@/runs/coordinator";
@@ -20,6 +21,8 @@ import { WorkspaceManager } from "@/workspace/manager";
 import { configureTelemetry } from "@/telemetry/otel";
 
 import { isInstancePaused, setInstancePaused } from "./instance-settings";
+
+const AGENT_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 
 const SESSION_SECRET_NAME = "__gojo_session_secret__";
 
@@ -86,14 +89,27 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   });
 
   const workspace = new WorkspaceManager(paths.worktrees);
+  const secrets = new SecretStore(db, paths);
+  const users = new UserService(db);
+  const apiBaseUrl = `http://${instance.bindHost}:${instance.bindPort}/api/v1`;
   const coordinator = new RunCoordinator({
     db,
     paths,
     workspace,
     eventBus,
+    apiBaseUrl,
+    issueAgentToken: () => {
+      const admin = users.findFirstAdmin();
+      if (!admin) {
+        return null;
+      }
+      const expiresAt = new Date(Date.now() + AGENT_TOKEN_TTL_MS).toISOString();
+      const { token } = users.createApiTokenForUser(admin.id, `agent-run-${ulid()}`, {
+        expiresAt,
+      });
+      return { token };
+    },
   });
-
-  const secrets = new SecretStore(db, paths);
   const notifications = new NotificationDispatcher(db);
   const leaseHolderId = ulid();
 

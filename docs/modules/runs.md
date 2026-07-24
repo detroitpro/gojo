@@ -4,9 +4,23 @@
 
 ## Responsibility
 
-Orchestrates a single run attempt end-to-end: prepare workspace, invoke agent adapter, validate, integrate, persist events/artifacts, emit notification hooks.
+Orchestrates a single run end-to-end: prepare workspace, invoke agent adapter (with retries), validate, integrate, persist events/artifacts, emit notification hooks, optionally enqueue a project healer.
 
-Primary type: run **coordinator** (`coordinator.ts`). Inspect helpers live in `inspect.ts`; event helpers in `events.ts`.
+Primary type: run **coordinator** (`coordinator.ts`). Related:
+
+| File | Role |
+|------|------|
+| `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
+| `events.ts` | In-memory run event bus |
+| `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
+| `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
+
+## Self-healing plumbing
+
+- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID` into agent env.
+- On `repository.syncBeforeRun`: fetch/fast-forward base + `syncProjectFromManifest` before prep.
+- On failure: write `failure.json`; if task policy has `selfHeal`, enqueue healer (not for heal runs / healer task itself; capped per project/hour).
+- User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).
 
 ## May call
 
@@ -15,6 +29,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Inspect helpers live in `i
 - `validation/`
 - `integration/`
 - `storage/`
+- `api/project-sync` (manifest re-sync before run)
 - `notifications/` hooks (outcomes)
 - `process/` (indirectly via agents/validation)
 
@@ -23,6 +38,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Inspect helpers live in `i
 - Own cron / schedule tick logic (`scheduler/` does that)
 - Bypass validation when policy requires it
 - Let adapters write the project default branch directly
+- Centrally rewrite another project’s prompts outside that project’s git tree
 
 ## PRD
 

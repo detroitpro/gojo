@@ -12,7 +12,7 @@ export type AttemptState =
   | "canceled"
   | "timed_out";
 
-export type RunTrigger = "schedule" | "manual" | "api" | "web";
+export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal";
 
 export interface Project {
   id: string;
@@ -169,6 +169,15 @@ export interface Attempt {
   handoffJson: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  totalCostUsd: number | null;
+  costSource: string | null;
+  usageJson: string | null;
+  model: string | null;
+  agentDurationMs: number | null;
 }
 
 export interface CreateAttemptInput {
@@ -191,6 +200,15 @@ export interface UpdateAttemptInput {
   handoffJson?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+  totalCostUsd?: number | null;
+  costSource?: string | null;
+  usageJson?: string | null;
+  model?: string | null;
+  agentDurationMs?: number | null;
 }
 
 export interface AuditEvent {

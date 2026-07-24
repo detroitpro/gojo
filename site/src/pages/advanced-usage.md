@@ -68,7 +68,13 @@ failurePolicy:
   backoff: exponential
 ```
 
+`maxAttemptsPerRun` retries agent/validation failures under the **same run** (new attempts, with optional backoff). `disableAfterConsecutiveFailedRuns` is wired onto the schedule’s auto-disable threshold on sync.
+
 Pair with notifications `onDisabled` so a broken weekly job doesn’t fail quietly forever.
+
+## Self-healing
+
+Wire `selfHeal` on flaky maintenance tasks and ship an in-repo healer that opens a reviewable PR. Full guide: **[Self-healing](/self-healing)** (platform plumbing vs. per-project brain, propagation, loop guards, templates).
 
 ## Richer validation
 
@@ -128,6 +134,7 @@ Script against `--output json` for chatops or custom dashboards; the HTTP API mi
 
 ## Related
 
+- [Self-healing](/self-healing) — heal triggers, propagation, healer templates
 - [Advanced agent](/advanced-agent) — concrete dependency-maintenance example
 - [Settings](/settings) — field-by-field reference
 - [CLI](/cli) — command map

@@ -8,6 +8,8 @@ describe('RunState', () => {
     expect(canTransition(RunState.Queued, RunState.Preparing)).toBe(true);
     expect(canTransition(RunState.Preparing, RunState.Running)).toBe(true);
     expect(canTransition(RunState.Running, RunState.Validating)).toBe(true);
+    expect(canTransition(RunState.Running, RunState.Preparing)).toBe(true);
+    expect(canTransition(RunState.Validating, RunState.Preparing)).toBe(true);
     expect(canTransition(RunState.Validating, RunState.AwaitingApproval)).toBe(true);
     expect(canTransition(RunState.Validating, RunState.Integrating)).toBe(true);
     expect(canTransition(RunState.Validating, RunState.Reporting)).toBe(true);

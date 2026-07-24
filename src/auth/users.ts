@@ -144,18 +144,33 @@ export class UserService {
     return { userId: payload.userId };
   }
 
-  createApiTokenForUser(userId: string, name: string): { record: ApiTokenRecord; token: string } {
+  findFirstAdmin(): UserRecord | null {
+    const row = this.db
+      .connection()
+      .query<UserRow, []>(
+        "SELECT * FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1",
+      )
+      .get();
+    return row ? mapUser(row) : null;
+  }
+
+  createApiTokenForUser(
+    userId: string,
+    name: string,
+    options?: { expiresAt?: string | null },
+  ): { record: ApiTokenRecord; token: string } {
     const { token, hash } = createApiToken();
     const id = ulid();
     const createdAt = nowIso();
+    const expiresAt = options?.expiresAt === undefined ? null : options.expiresAt;
 
     this.db
       .connection()
       .query(
         `INSERT INTO api_tokens (id, user_id, token_hash, name, scopes_json, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, userId, hash, name, "[]", createdAt);
+      .run(id, userId, hash, name, "[]", createdAt, expiresAt);
 
     return {
       token,
@@ -166,7 +181,7 @@ export class UserService {
         name,
         scopesJson: "[]",
         createdAt,
-        expiresAt: null,
+        expiresAt,
       },
     };
   }

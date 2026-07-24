@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -104,6 +104,15 @@ CREATE TABLE IF NOT EXISTS attempts (
   handoff_json TEXT,
   started_at TEXT,
   finished_at TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  cache_read_tokens INTEGER,
+  cache_write_tokens INTEGER,
+  total_cost_usd REAL,
+  cost_source TEXT,
+  usage_json TEXT,
+  model TEXT,
+  agent_duration_ms INTEGER,
   UNIQUE(run_id, attempt_number)
 );
 
@@ -175,6 +184,24 @@ CREATE TABLE IF NOT EXISTS scheduler_leases (
   expires_at TEXT NOT NULL
 );
 `;
+
+/** Incremental migrations applied when an older schema_migrations version is present. */
+export const SCHEMA_MIGRATIONS: Array<{ version: number; sql: string }> = [
+  {
+    version: 2,
+    sql: `
+ALTER TABLE attempts ADD COLUMN input_tokens INTEGER;
+ALTER TABLE attempts ADD COLUMN output_tokens INTEGER;
+ALTER TABLE attempts ADD COLUMN cache_read_tokens INTEGER;
+ALTER TABLE attempts ADD COLUMN cache_write_tokens INTEGER;
+ALTER TABLE attempts ADD COLUMN total_cost_usd REAL;
+ALTER TABLE attempts ADD COLUMN cost_source TEXT;
+ALTER TABLE attempts ADD COLUMN usage_json TEXT;
+ALTER TABLE attempts ADD COLUMN model TEXT;
+ALTER TABLE attempts ADD COLUMN agent_duration_ms INTEGER;
+`,
+  },
+];
 
 export const EXPECTED_TABLES = [
   "schema_migrations",

@@ -12,6 +12,7 @@ const docPaths = [
   "/docs",
   "/advanced-agent",
   "/advanced-usage",
+  "/self-healing",
   "/settings",
   "/notifications",
   "/concepts",
@@ -55,6 +56,11 @@ const inDocs = docPaths.some((route) => current(route));
             href={href("/advanced-usage")}
             aria-current={current("/advanced-usage") ? "page" : undefined}
             >Advanced usage</a
+          >
+          <a
+            href={href("/self-healing")}
+            aria-current={current("/self-healing") ? "page" : undefined}
+            >Self-healing</a
           >
           <a href={href("/settings")} aria-current={current("/settings") ? "page" : undefined}
             >Settings</a
