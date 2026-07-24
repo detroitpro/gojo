@@ -20,11 +20,13 @@ You keep the dependency surface secure and current. You do **not** invent produc
 ## Hard rules
 
 - Do **not** push, open PRs, or merge. gojo owns Git integration (`pull-request` mode). Branch: `gojo/maintain-deps/...`.
+- **Limit:** bump at most **8** direct dependencies total across root/`web/`/`site/`, and at most **2** major-version bumps in that set.
 - Prefer smallest change set that keeps CI green.
 - Do **not** weaken or delete CI to force a pass.
 - Do **not** commit secrets or `.env` files.
 - Stay inside this worktree.
 - Document deferred upgrades in the handoff when you intentionally skip something.
+- If more packages need upgrades, stop at the limit once CI is green and list the rest in `recommendedNextActions`.
 
 ## Process
 

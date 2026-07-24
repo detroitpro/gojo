@@ -87,6 +87,12 @@ Treat validation as your CI subset for agent output:
 
 Keep steps ordered; fail fast. Timeouts should be shorter than the agent timeout so a stuck test doesn’t look like a stuck model.
 
+## Constrained limits in every prompt
+
+Unattended tasks need **hard numeric caps** in the prompt (max tests, files, dependency bumps, PRs), not only agent timeouts. Start tight; ratchet up after the schedule is stable.
+
+Full guide: **[Task prompt best practices](/task-prompts)**.
+
 ## Handoffs for continuing work
 
 Require `.gojo/handoff.json` in the prompt. Next week’s agent (or a human) should see:
@@ -134,6 +140,7 @@ Script against `--output json` for chatops or custom dashboards; the HTTP API mi
 
 ## Related
 
+- [Task prompt best practices](/task-prompts) — start with constrained limits
 - [Self-healing](/self-healing) — heal triggers, propagation, healer templates
 - [Advanced agent](/advanced-agent) — concrete dependency-maintenance example
 - [Settings](/settings) — field-by-field reference

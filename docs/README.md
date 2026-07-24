@@ -14,12 +14,16 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 
 - [Architecture overview](./architecture/overview.md)
 - [Module boundaries](./architecture/boundaries.md)
+- [Task prompts](./task-prompts.md) — constrained limits for `.gojo/tasks/`
 - Modules:
   - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [agents](./modules/agents.md)
   - [scheduler](./modules/scheduler.md)
 
-User-facing self-healing guide (site): [`site/src/pages/self-healing.md`](../site/src/pages/self-healing.md).
+User-facing guides (site):
+
+- Self-healing: [`site/src/pages/self-healing.md`](../site/src/pages/self-healing.md)
+- Task prompt best practices: [`site/src/pages/task-prompts.md`](../site/src/pages/task-prompts.md)
 
 ## Quality gate
 

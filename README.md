@@ -159,6 +159,10 @@ Full guide: **[Self-healing](https://detroitpro.github.io/gojo/self-healing)** (
 
 This repo dogfoods the pattern via [`gojo.yaml`](./gojo.yaml) — register the gojo checkout as a project and `gojo project sync <id>`.
 
+## Task prompt limits
+
+Start every scheduled AI task with **numeric Hard rules** (max tests, files, deps, PRs). Timeouts stop the process; limits keep the diff reviewable. Guide: **[Task prompt best practices](https://detroitpro.github.io/gojo/task-prompts)** (source: [`site/src/pages/task-prompts.md`](./site/src/pages/task-prompts.md); engineering note: [`docs/task-prompts.md`](./docs/task-prompts.md)).
+
 ## Background service
 
 ```bash

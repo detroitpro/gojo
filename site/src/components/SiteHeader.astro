@@ -11,6 +11,7 @@ const path = stripBase(currentPath);
 const docPaths = [
   "/docs",
   "/advanced-agent",
+  "/task-prompts",
   "/advanced-usage",
   "/self-healing",
   "/settings",
@@ -51,6 +52,11 @@ const inDocs = docPaths.some((route) => current(route));
             href={href("/advanced-agent")}
             aria-current={current("/advanced-agent") ? "page" : undefined}
             >Advanced agent</a
+          >
+          <a
+            href={href("/task-prompts")}
+            aria-current={current("/task-prompts") ? "page" : undefined}
+            >Task prompts</a
           >
           <a
             href={href("/advanced-usage")}

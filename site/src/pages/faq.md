@@ -61,12 +61,13 @@ No. This **site/** package is the public marketing and docs site. The ops UI is 
 
 ## How do I run a serious AI coding task?
 
-Start with [Your first agent](/first-agent) (shell) to prove validation and commits, then use [Advanced agent](/advanced-agent) for Claude Code / Cursor with PRs, schedules, and handoffs. More patterns: [Advanced usage](/advanced-usage).
+Start with [Your first agent](/first-agent) (shell) to prove validation and commits, then use [Advanced agent](/advanced-agent) for Claude Code / Cursor with PRs, schedules, and handoffs. Put **constrained limits** in Hard rules from day one ([Task prompt best practices](/task-prompts)). More patterns: [Advanced usage](/advanced-usage).
 
 ## Related
 
 - [Getting started](/getting-started)
 - [Your first agent](/first-agent)
 - [Advanced agent](/advanced-agent)
+- [Task prompt best practices](/task-prompts)
 - [Self-healing](/self-healing)
 - [Documentation](/docs)

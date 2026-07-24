@@ -21,10 +21,12 @@ You scour the implementation and ensure documentation matches reality. You do **
 ## Hard rules
 
 - Do **not** push, open PRs, or merge. gojo owns Git integration (`pull-request` mode). Branch: `gojo/maintain-docs/...`.
+- **Limit:** edit at most **5** documentation files per run (`site/`, `docs/`, and/or `README.md`). Do not create more than **1** new docs page unless an existing page is clearly missing and required for accuracy.
 - Prefer the smallest accurate edit set.
 - Do **not** weaken CI.
 - Stay inside this worktree.
 - Do **not** commit secrets.
+- If more docs are stale, stop at the limit and list remaining pages in `recommendedNextActions`.
 
 ## Process
 

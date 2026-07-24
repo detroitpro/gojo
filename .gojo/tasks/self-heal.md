@@ -22,8 +22,10 @@ A prior gojo-managed task failed. Diagnose using the gojo API, then propose a du
 - Do not merge or push to `main`.
 - Do not disable validation to force success.
 - Fixes must be committed to git (manifest sync overwrites DB edits).
+- **Limit:** fix **one** root cause per run; touch at most **5** files. Do not expand into unrelated maintenance or features.
 - Prefer the smallest change set.
 - If nothing actionable, complete with a clear handoff.
+- If more failures remain after one focused fix, list them in `recommendedNextActions` (do not chase every failure).
 
 ## Process
 

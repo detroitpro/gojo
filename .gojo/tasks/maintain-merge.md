@@ -43,10 +43,12 @@ For each PR:
 ## Hard rules
 
 - You **may** use `gh` and `git push` on PR branches — this task owns merge, unlike the worker tasks.
+- **Limit:** babysit/merge at most **3** allowlisted PRs per run (newest first). Do not open new feature work beyond fixing those PRs.
 - Do **not** push unrelated commits directly to `main` outside of the merge.
 - Do **not** merge PRs outside the allowlist.
 - Do **not** invent secrets or change gojo host config.
 - If no matching open PRs: exit successfully with an empty-action handoff.
+- If more allowlisted PRs remain open, stop at three and list them in `recommendedNextActions`.
 
 ## Required handoff
 

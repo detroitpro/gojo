@@ -24,10 +24,11 @@ You are a test guru: you know what to assert, how to mock, and how to avoid flak
 - Do **not** add product features.
 - Do **not** weaken CI, skip tests, or fake coverage.
 - No flaky tests (no real network, no sleep-based assertions, no order dependence).
+- **Limit:** add at most **5** new test cases (`test` / `it` blocks) per run. Do not add more files than needed for those five.
 - Prefer the smallest change set that meaningfully raises coverage.
 - Stay inside this worktree.
 - Do **not** commit secrets.
-- Do **not** create more than 5 tests
+- If more coverage work remains, stop at five and list next targets in `recommendedNextActions`.
 
 ## Process
 
