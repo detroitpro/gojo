@@ -1,0 +1,13 @@
+{
+  "name": "gojo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bootstrap launcher for the gojo CLI",
+  "type": "module",
+  "bin": {
+    "gojo": "./gojo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

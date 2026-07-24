@@ -1,0 +1,135 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="gojo"
+  description="Schedule, run, and audit autonomous coding agents against your Git repositories — with validation and merge under your control."
+>
+  <section class="hero">
+    <div class="hero-inner">
+      <p class="hero-brand">gojo</p>
+      <h1>Run coding agents on a schedule you can trust.</h1>
+      <p class="hero-lead">
+        Self-hosted orchestration for Cursor, Claude Code, and shell agents — with isolated Git
+        worktrees, real validation, and merges the platform owns.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="/getting-started">Get started</a>
+        <a class="btn btn-ghost" href="/first-agent">Your first agent</a>
+        <a class="btn btn-ghost" href="/advanced-agent">Advanced agent</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Built for unattended agent work</h2>
+    <p class="section-lead">
+      gojo is the operations layer around your agents: schedule the work, isolate the repo, prove
+      the result, then integrate it — without letting the agent push straight to main.
+    </p>
+    <div class="feature-grid">
+      <article class="feature">
+        <h3>Schedule with intent</h3>
+        <p>
+          Cron and one-off runs, explicit time zones, overlap policies, retries, and automatic
+          disable after repeated failures.
+        </p>
+      </article>
+      <article class="feature">
+        <h3>Isolated Git worktrees</h3>
+        <p>
+          Every attempt gets its own branch and worktree so concurrent agents never write over each
+          other.
+        </p>
+      </article>
+      <article class="feature">
+        <h3>Adapters you already use</h3>
+        <p>
+          Shell for deterministic scripts; Cursor Agent and Claude Code for coding agents — detected
+          from your machine and versioned per run.
+        </p>
+      </article>
+      <article class="feature">
+        <h3>Platform-owned success</h3>
+        <p>
+          Agents propose work. gojo runs your validation pipeline and decides whether the run
+          actually succeeded.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="section">
+      <h2>From prompt to pull request</h2>
+      <p class="section-lead">
+        Define tasks in a repo manifest or the UI. gojo prepares the workspace, runs the agent,
+        validates, commits, and integrates according to policy.
+      </p>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Validation pipelines</h3>
+          <p>Install, lint, test, and build steps you define — outside the agent conversation.</p>
+        </article>
+        <article class="feature">
+          <h3>Merge queue</h3>
+          <p>
+            Commit-only, pull request, await approval, or auto-merge — serialized per project so
+            two green runs can’t race into the same branch.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Handoff reports</h3>
+          <p>
+            Structured summaries for the next agent or human: what changed, what failed, what to do
+            next.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Full run history</h3>
+          <p>Live logs, diffs, artifacts, and an audit trail you can inspect from CLI or web UI.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Operate locally, stay in control</h2>
+    <p class="section-lead">
+      One binary (or Bun from source), SQLite on disk, and a web UI that binds to localhost by
+      default.
+    </p>
+    <div class="feature-grid">
+      <article class="feature">
+        <h3>CLI + web UI</h3>
+        <p>
+          Install as a systemd or launchd service. Manage projects, runs, and schedules from the
+          terminal or the browser.
+        </p>
+      </article>
+      <article class="feature">
+        <h3>Notifications</h3>
+        <p>Slack and generic webhooks when runs finish, fail, or schedules disable themselves.</p>
+      </article>
+      <article class="feature">
+        <h3>Crash-safe scheduling</h3>
+        <p>
+          Leases prevent double-firing. Interrupted runs are recovered instead of silently marked
+          successful.
+        </p>
+      </article>
+      <article class="feature">
+        <h3>Secrets & backups</h3>
+        <p>
+          Encrypted local secret store, scoped access, and backup/restore for config, database, and
+          keys.
+        </p>
+      </article>
+    </div>
+    <div class="hero-cta" style="margin-top: 2rem">
+      <a class="btn btn-primary" href="/getting-started">Install gojo</a>
+      <a class="btn btn-ghost" href="/docs">Documentation</a>
+    </div>
+  </section>
+</BaseLayout>

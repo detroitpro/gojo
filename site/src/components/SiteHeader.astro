@@ -1,0 +1,57 @@
+---
+interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+
+const docPaths = [
+  "/docs",
+  "/advanced-agent",
+  "/advanced-usage",
+  "/settings",
+  "/concepts",
+  "/cli",
+  "/faq",
+];
+
+function current(path: string): boolean {
+  if (path === "/") {
+    return currentPath === "/" || currentPath === "";
+  }
+  return currentPath === path || currentPath.startsWith(`${path}/`);
+}
+
+const inDocs = docPaths.some((path) => current(path));
+---
+
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="brand" href="/">gojo</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/" aria-current={current("/") ? "page" : undefined}>Product</a>
+      <a href="/getting-started" aria-current={current("/getting-started") ? "page" : undefined}
+        >Getting started</a
+      >
+      <a href="/first-agent" aria-current={current("/first-agent") ? "page" : undefined}
+        >First agent</a
+      >
+      <details class="nav-help">
+        <summary class:list={{ "nav-docs-active": inDocs }}>Documentation</summary>
+        <div class="nav-help-menu">
+          <a href="/docs" aria-current={current("/docs") ? "page" : undefined}>Overview</a>
+          <a href="/advanced-agent" aria-current={current("/advanced-agent") ? "page" : undefined}
+            >Advanced agent</a
+          >
+          <a href="/advanced-usage" aria-current={current("/advanced-usage") ? "page" : undefined}
+            >Advanced usage</a
+          >
+          <a href="/settings" aria-current={current("/settings") ? "page" : undefined}>Settings</a>
+          <a href="/concepts" aria-current={current("/concepts") ? "page" : undefined}>Concepts</a>
+          <a href="/cli" aria-current={current("/cli") ? "page" : undefined}>CLI</a>
+          <a href="/faq" aria-current={current("/faq") ? "page" : undefined}>FAQ</a>
+        </div>
+      </details>
+    </nav>
+  </div>
+</header>
