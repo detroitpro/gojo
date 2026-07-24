@@ -4,6 +4,8 @@ title: Getting started
 description: Install gojo, create an admin account, add your first Git project, and run a task.
 ---
 
+Prefer an agent? Use the install prompt on the [home page](/#ask-your-agent).
+
 ## What you’ll need
 
 - Linux or macOS
