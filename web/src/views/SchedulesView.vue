@@ -1,17 +1,32 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 
-import { disableSchedule, enableSchedule, listProjects, listSchedules } from "@/api";
+import {
+  disableSchedule,
+  enableSchedule,
+  listProjects,
+  listSchedules,
+  listSchedulesUpcoming,
+} from "@/api";
+import SchedulesTimelineChart from "@/components/SchedulesTimelineChart.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT } from "@/lib/pagination";
-import type { Project, Schedule } from "@/types";
+import {
+  formatAbsoluteInZone,
+  formatRelativeNextRun,
+  formatTimezoneLabel,
+} from "@/lib/schedule-format";
+import type { Project, Schedule, SchedulesUpcomingResult } from "@/types";
 
 const projects = ref<Project[]>([]);
 const projectFilter = ref("");
 const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
 const query = ref("");
 const busyId = ref<string | null>(null);
+const horizonHours = ref(168);
+const upcoming = ref<SchedulesUpcomingResult | null>(null);
+const upcomingLoading = ref(false);
 
 const {
   page,
@@ -40,6 +55,22 @@ async function loadProjects() {
   projects.value = result.items;
 }
 
+async function loadUpcoming() {
+  upcomingLoading.value = true;
+  try {
+    upcoming.value = await listSchedulesUpcoming({
+      horizonHours: horizonHours.value,
+      projectId: projectFilter.value || undefined,
+      enabled: enabledFilter.value,
+      q: query.value || undefined,
+    });
+  } catch {
+    upcoming.value = null;
+  } finally {
+    upcomingLoading.value = false;
+  }
+}
+
 async function toggle(schedule: Schedule) {
   busyId.value = schedule.id;
   error.value = "";
@@ -50,6 +81,7 @@ async function toggle(schedule: Schedule) {
       await enableSchedule(schedule.id);
     }
     await load();
+    await loadUpcoming();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Update failed";
   } finally {
@@ -57,16 +89,23 @@ async function toggle(schedule: Schedule) {
   }
 }
 
-function fmtTime(value: string | null): string {
-  if (!value) {
-    return "—";
-  }
-  return new Date(value).toLocaleString();
+function cronPrimary(schedule: Schedule): string {
+  return schedule.cronDescription?.trim() || schedule.cronExpr;
 }
+
+async function refreshAll() {
+  await reload();
+  await loadUpcoming();
+}
+
+watch([projectFilter, enabledFilter, query, horizonHours], () => {
+  void loadUpcoming();
+});
 
 onMounted(() => {
   void loadProjects();
   void load();
+  void loadUpcoming();
 });
 </script>
 
@@ -77,10 +116,39 @@ onMounted(() => {
         <h1>Schedules</h1>
         <div class="subtitle">Cron triggers and enablement</div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
+      <button class="btn btn-sm" type="button" :disabled="loading" @click="refreshAll()">
+        Refresh
+      </button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
+
+    <section class="panel mb-7">
+      <div class="panel-header">
+        Future runs
+        <div class="schedules-horizon">
+          <label class="muted" for="sched-horizon">Horizon</label>
+          <select id="sched-horizon" v-model.number="horizonHours" class="select">
+            <option :value="24">24 hours</option>
+            <option :value="168">7 days</option>
+            <option :value="720">30 days</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div v-if="upcomingLoading && !upcoming" class="muted">Loading timeline…</div>
+        <SchedulesTimelineChart
+          v-else-if="upcoming"
+          :schedules="upcoming.schedules"
+          :from="upcoming.from"
+          :to="upcoming.to"
+        />
+        <div v-else class="muted">Could not load upcoming fires.</div>
+        <div class="muted text-sm mt-2">
+          Drag to pan · scroll to zoom · colors match each schedule
+        </div>
+      </div>
+    </section>
 
     <div class="inline-form mb-7 task-filters">
       <div class="field">
@@ -132,8 +200,7 @@ onMounted(() => {
               <th>Name</th>
               <th>Task</th>
               <th>Project</th>
-              <th>Cron</th>
-              <th>TZ</th>
+              <th>Schedule</th>
               <th>Status</th>
               <th>Next</th>
               <th>Failures</th>
@@ -151,13 +218,27 @@ onMounted(() => {
                 <div class="mono muted text-sm">{{ schedule.taskId.slice(0, 10) }}…</div>
               </td>
               <td>{{ schedule.projectName || "—" }}</td>
-              <td class="mono">{{ schedule.cronExpr }}</td>
-              <td class="mono muted">{{ schedule.timezone }}</td>
+              <td>
+                <div>{{ cronPrimary(schedule) }}</div>
+                <div class="mono muted text-sm">
+                  {{ schedule.cronExpr }} · {{ formatTimezoneLabel(schedule.timezone) }}
+                </div>
+              </td>
               <td>
                 <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
                 <span v-else class="badge badge-neutral">disabled</span>
               </td>
-              <td class="mono muted">{{ fmtTime(schedule.nextRunAt) }}</td>
+              <td>
+                <template v-if="schedule.enabled && schedule.nextRunAt">
+                  <div>
+                    {{ formatRelativeNextRun(schedule.nextRunAt, Date.now(), schedule.timezone) }}
+                  </div>
+                  <div class="mono muted text-sm">
+                    {{ formatAbsoluteInZone(schedule.nextRunAt, schedule.timezone) }}
+                  </div>
+                </template>
+                <span v-else class="muted">—</span>
+              </td>
               <td class="mono">{{ schedule.consecutiveFailures }}</td>
               <td>
                 <button

@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "croner": "^9.0.0",
+    "cronstrue": "3.24.0",
     "ulid": "^2.3.0",
     "yaml": "^2.7.0",
     "zod": "^3.24.2"

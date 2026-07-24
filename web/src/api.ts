@@ -20,6 +20,7 @@ import type {
   RunDiffResult,
   RunEvent,
   Schedule,
+  SchedulesUpcomingResult,
   Task,
   User,
 } from "./types";
@@ -429,6 +430,34 @@ export async function listSchedules(query: ListQuery = {}): Promise<PaginatedRes
     limit: data.limit,
     offset: data.offset,
   };
+}
+
+export async function listSchedulesUpcoming(query: {
+  horizonHours?: number;
+  projectId?: string;
+  enabled?: "all" | "enabled" | "disabled" | boolean | null;
+  q?: string;
+} = {}): Promise<SchedulesUpcomingResult> {
+  const params = new URLSearchParams();
+  if (query.horizonHours != null) {
+    params.set("horizonHours", String(query.horizonHours));
+  }
+  if (query.projectId) {
+    params.set("projectId", query.projectId);
+  }
+  if (query.enabled === "enabled" || query.enabled === true) {
+    params.set("enabled", "true");
+  } else if (query.enabled === "disabled" || query.enabled === false) {
+    params.set("enabled", "false");
+  }
+  if (query.q?.trim()) {
+    params.set("q", query.q.trim());
+  }
+  const qs = params.toString();
+  const { data } = await request<SchedulesUpcomingResult>(
+    `/schedules/upcoming${qs ? `?${qs}` : ""}`,
+  );
+  return data;
 }
 
 export async function enableSchedule(id: string): Promise<Schedule> {

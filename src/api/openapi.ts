@@ -87,6 +87,17 @@ export const openApiDocument = {
         ],
       },
     },
+    "/api/v1/schedules/upcoming": {
+      get: {
+        summary: "Upcoming schedule fire times within a horizon",
+        parameters: [
+          { name: "horizonHours", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "enabled", in: "query", schema: { type: "string" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
+    },
     "/api/v1/schedules/{id}/enable": {
       post: { summary: "Enable schedule" },
     },

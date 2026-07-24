@@ -402,6 +402,64 @@ describe("api/router", () => {
     expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunState");
     expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunCreatedAt");
   });
+
+  test("schedules list includes cronDescription and upcoming fires", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const projectRes = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "sched-demo", repoPath: tempDir ?? "/tmp/demo" }),
+    });
+    expect(projectRes.status).toBe(201);
+    const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        projectId: projectBody.data.project.id,
+        name: "nightly",
+        prompt: "run",
+      }),
+    });
+    expect(taskRes.status).toBe(201);
+    const taskBody = (await taskRes.json()) as { data: { task: { id: string } } };
+
+    ctx!.repos.schedules.create({
+      taskId: taskBody.data.task.id,
+      name: "hourly",
+      cronExpr: "0 * * * *",
+      timezone: "UTC",
+      enabled: true,
+    });
+
+    const list = await fetch(`${baseUrl}/api/v1/schedules`, { headers: auth });
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as {
+      data: { schedules: Array<{ cronDescription?: string; cronExpr: string }> };
+    };
+    expect(listBody.data.schedules.length).toBeGreaterThan(0);
+    expect(listBody.data.schedules[0]!.cronDescription?.toLowerCase()).toContain("hour");
+
+    const upcoming = await fetch(`${baseUrl}/api/v1/schedules/upcoming?horizonHours=24`, {
+      headers: auth,
+    });
+    expect(upcoming.status).toBe(200);
+    const upcomingBody = (await upcoming.json()) as {
+      data: {
+        horizonHours: number;
+        schedules: Array<{ color: string; fires: string[] }>;
+      };
+    };
+    expect(upcomingBody.data.horizonHours).toBe(24);
+    expect(upcomingBody.data.schedules[0]!.color).toMatch(/^#/);
+    expect(upcomingBody.data.schedules[0]!.fires.length).toBeGreaterThan(0);
+  });
 });
 
 

@@ -1,5 +1,6 @@
 import type { PageParams, PaginatedList } from "@shared/pagination";
 
+import { describeCron } from "@/scheduler/describe-cron";
 import type { Database } from "@/storage";
 import type { Project, Run, Schedule, Task } from "@/storage/types";
 import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
@@ -45,6 +46,7 @@ export type ScheduleListRow = Schedule & {
   taskName: string | null;
   projectId: string | null;
   projectName: string | null;
+  cronDescription: string;
 };
 
 type SqlRunRow = {
@@ -330,12 +332,16 @@ export function listSchedulesPage(
     .all(...params, input.limit, input.offset);
 
   return {
-    items: rows.map((row) => ({
-      ...mapSchedule(row),
-      taskName: row.task_name,
-      projectId: row.project_id,
-      projectName: row.project_name,
-    })),
+    items: rows.map((row) => {
+      const schedule = mapSchedule(row);
+      return {
+        ...schedule,
+        taskName: row.task_name,
+        projectId: row.project_id,
+        projectName: row.project_name,
+        cronDescription: describeCron(schedule.cronExpr),
+      };
+    }),
     total,
     limit: input.limit,
     offset: input.offset,
