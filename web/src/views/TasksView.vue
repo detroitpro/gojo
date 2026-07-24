@@ -78,7 +78,7 @@ onMounted(async () => {
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 
-    <div class="inline-form" style="margin-bottom: 16px">
+    <div class="inline-form mb-7">
       <div class="field">
         <label for="project">Project</label>
         <select id="project" v-model="projectId">
@@ -108,7 +108,7 @@ onMounted(async () => {
           <tr v-for="task in tasks" :key="task.id">
             <td>
               <div>{{ task.name }}</div>
-              <div v-if="task.description" class="muted" style="font-size: 12px">
+              <div v-if="task.description" class="muted text-sm">
                 {{ task.description }}
               </div>
             </td>

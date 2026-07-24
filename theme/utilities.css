@@ -1,0 +1,43 @@
+/**
+ * Shared layout/typography utilities — prefer these over inline styles.
+ */
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mt-6 { margin-top: var(--space-6); }
+.mt-7 { margin-top: var(--space-7); }
+.mt-8 { margin-top: var(--space-8); }
+.mt-9 { margin-top: var(--space-9); }
+.mt-10 { margin-top: var(--space-10); }
+
+.mb-0 { margin-bottom: 0; }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-5 { margin-bottom: var(--space-5); }
+.mb-6 { margin-bottom: var(--space-6); }
+.mb-7 { margin-bottom: var(--space-7); }
+
+.ml-3 { margin-left: var(--space-3); }
+
+.w-full { width: 100%; }
+
+.flex-2 { flex: 2; }
+
+.text-lg { font-size: 16px; }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }
+
+.brand-footer {
+  font-size: 1.1rem;
+}
+
+.footer-blurb {
+  margin: 0.4rem 0 0;
+}
+
+.hero-cta-follow {
+  margin-top: 2rem;
+}

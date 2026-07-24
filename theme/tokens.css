@@ -1,0 +1,89 @@
+/**
+ * Shared Gojo theme tokens — single source of truth for admin web + docs site.
+ * Palette inspired by JJK Gojo: midnight navy, Six Eyes cyan, cool silver type.
+ */
+:root {
+  /* Surfaces */
+  --bg: #0b1220;
+  --bg-elevated: #121a2b;
+  --bg-soft: #1a2438;
+  --bg-hover: #1a2438;
+  --bg-sidebar: #0a101c;
+  --bg-code: #070d18;
+  --bg-table-header: #152033;
+  --bg-deep: #08101c;
+  --bg-deeper: #060b14;
+
+  /* Lines & overlays */
+  --border: #2a3550;
+  --border-strong: #3a4a6a;
+  --overlay: rgba(6, 11, 20, 0.72);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --row-hover: rgba(255, 255, 255, 0.02);
+  --inset-highlight: rgba(255, 255, 255, 0.03);
+  --band-fill: rgba(0, 0, 0, 0.18);
+
+  /* Type */
+  --text: #f2f5fa;
+  --text-muted: #9aa6bd;
+
+  /* Brand — Six Eyes cyan */
+  --accent: #4ec4ff;
+  --accent-dim: #2a9fd4;
+  --accent-hover: #7ad4ff;
+  --accent-on: #0b1220;
+  --accent-soft: rgba(78, 196, 255, 0.14);
+  --accent-line: rgba(78, 196, 255, 0.35);
+  --accent-wash: rgba(78, 196, 255, 0.06);
+  --accent-selected: rgba(78, 196, 255, 0.12);
+
+  /* Atmosphere (docs site body / hero) */
+  --glow-primary: rgba(78, 196, 255, 0.14);
+  --glow-secondary: rgba(78, 120, 220, 0.1);
+  --hero-sheen: rgba(78, 196, 255, 0.05);
+  --hero-hatch: rgba(255, 255, 255, 0.015);
+  --header-bg: rgba(11, 18, 32, 0.82);
+
+  /* Status */
+  --green: #4caf8a;
+  --green-soft: rgba(76, 175, 138, 0.1);
+  --green-line: rgba(76, 175, 138, 0.4);
+  --red: #e05555;
+  --red-soft: rgba(224, 85, 85, 0.08);
+  --red-line: rgba(224, 85, 85, 0.4);
+  --red-text: #ffb4b4;
+  --red-border: #7a3333;
+  --blue: #5bb8f0;
+  --blue-soft: rgba(91, 184, 240, 0.1);
+  --blue-line: rgba(91, 184, 240, 0.4);
+  --amber: #c4a574;
+  --amber-soft: rgba(196, 165, 116, 0.1);
+  --amber-line: rgba(196, 165, 116, 0.4);
+  --warn: #c4a574;
+  --warn-soft: rgba(196, 165, 116, 0.1);
+  --warn-line: rgba(196, 165, 116, 0.4);
+
+  /* Typography stacks */
+  --display: "Fraunces", Georgia, serif;
+  --sans: "DM Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Layout */
+  --radius: 4px;
+  --gap: 12px;
+  --max: 1080px;
+  --doc: 720px;
+
+  /* Spacing scale (used by utilities) */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+}

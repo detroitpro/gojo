@@ -1,5 +1,6 @@
 import type { AppContext } from "@/app/context";
 import type { NotificationChannel } from "@/notifications/dispatcher";
+import { recordRunOutcome } from "@/scheduler/disable";
 import { isTerminal, RunState } from "@shared/run-states";
 import { safeParseProjectManifest } from "@shared/manifest";
 
@@ -49,6 +50,22 @@ function resolveChannel(
   };
 }
 
+async function enqueueNamedChannels(
+  ctx: AppContext,
+  runId: string,
+  names: string[],
+  channels: ChannelConfigMap,
+  payload: unknown,
+): Promise<void> {
+  for (const name of names) {
+    const channel = resolveChannel(name, channels);
+    if (!channel) {
+      continue;
+    }
+    await ctx.notifications.enqueue(runId, channel, payload);
+  }
+}
+
 export interface NotificationHookHandle {
   unsubscribe: () => void;
   drain: () => Promise<void>;
@@ -88,18 +105,9 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
         return;
       }
 
-      const success =
-        run.state === RunState.Succeeded
-          ? notifications.onSuccess
-          : notifications.onFailure;
-      const names = success ?? [];
-      if (names.length === 0) {
-        return;
-      }
-
       const channels = loadChannels(ctx);
       const task = ctx.repos.tasks.findById(run.taskId);
-      const payload = {
+      const basePayload = {
         project: project.name,
         task: task?.name ?? run.taskId,
         runId: run.id,
@@ -108,13 +116,41 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
         finishedAt: run.finishedAt,
       };
 
-      for (const name of names) {
-        const channel = resolveChannel(name, channels);
-        if (!channel) {
-          continue;
-        }
-        await ctx.notifications.enqueue(run.id, channel, payload);
+      const outcomeNames =
+        run.state === RunState.Succeeded
+          ? (notifications.onSuccess ?? [])
+          : (notifications.onFailure ?? []);
+
+      if (outcomeNames.length > 0) {
+        await enqueueNamedChannels(ctx, run.id, outcomeNames, channels, basePayload);
       }
+
+      if (!run.scheduleId) {
+        return;
+      }
+
+      const { disabled } = await recordRunOutcome(
+        ctx.db,
+        run.scheduleId,
+        run.state === RunState.Succeeded,
+      );
+
+      if (!disabled) {
+        return;
+      }
+
+      const schedule = ctx.repos.schedules.findById(run.scheduleId);
+      const disabledNames = notifications.onDisabled ?? [];
+      if (disabledNames.length === 0) {
+        return;
+      }
+
+      await enqueueNamedChannels(ctx, run.id, disabledNames, channels, {
+        ...basePayload,
+        reason: "schedule auto-disabled",
+        scheduleId: run.scheduleId,
+        consecutiveFailures: schedule?.consecutiveFailures ?? null,
+      });
     })()
       .catch((error: unknown) => {
         if (!active) {

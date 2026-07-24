@@ -1,21 +1,4 @@
-:root {
-  --bg: #12151a;
-  --bg-elevated: #1a1f27;
-  --bg-soft: #222833;
-  --border: #323845;
-  --text: #eceef2;
-  --text-muted: #9aa3b2;
-  --accent: #e8a838;
-  --accent-soft: rgba(232, 168, 56, 0.14);
-  --accent-line: rgba(232, 168, 56, 0.35);
-  --green: #4caf7a;
-  --display: "Fraunces", Georgia, serif;
-  --sans: "DM Sans", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
-  --max: 1080px;
-  --doc: 720px;
-  --radius: 4px;
-}
+@import "@theme/index.css";
 
 *,
 *::before,
@@ -35,9 +18,9 @@ body {
   font-size: 16px;
   line-height: 1.55;
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(232, 168, 56, 0.12), transparent 55%),
-    radial-gradient(900px 500px at -10% 20%, rgba(91, 159, 212, 0.08), transparent 50%),
-    linear-gradient(180deg, #10131a 0%, var(--bg) 40%, #0e1116 100%);
+    radial-gradient(1200px 600px at 80% -10%, var(--glow-primary), transparent 55%),
+    radial-gradient(900px 500px at -10% 20%, var(--glow-secondary), transparent 50%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 40%, var(--bg-deeper) 100%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
@@ -70,7 +53,7 @@ code {
 
 pre {
   overflow-x: auto;
-  background: #0c0f14;
+  background: var(--bg-code);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.1rem;
@@ -89,7 +72,7 @@ pre code {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(12px);
-  background: rgba(18, 21, 26, 0.82);
+  background: var(--header-bg);
   border-bottom: 1px solid var(--border);
 }
 
@@ -114,7 +97,7 @@ pre code {
 
 .brand:hover {
   text-decoration: none;
-  color: #f0b84f;
+  color: var(--accent-hover);
 }
 
 .nav {
@@ -166,7 +149,7 @@ pre code {
   padding: 0.4rem;
   display: grid;
   gap: 0.15rem;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-help-menu a {
@@ -221,12 +204,12 @@ pre code {
 
 .btn-primary {
   background: var(--accent);
-  color: #1a1205;
+  color: var(--accent-on);
 }
 
 .btn-primary:hover {
-  background: #f0b84f;
-  color: #1a1205;
+  background: var(--accent-hover);
+  color: var(--accent-on);
 }
 
 .btn-ghost {
@@ -255,13 +238,13 @@ pre code {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(135deg, transparent 40%, rgba(232, 168, 56, 0.05) 100%),
+    linear-gradient(135deg, transparent 40%, var(--hero-sheen) 100%),
     repeating-linear-gradient(
       -18deg,
       transparent,
       transparent 28px,
-      rgba(255, 255, 255, 0.015) 28px,
-      rgba(255, 255, 255, 0.015) 29px
+      var(--hero-hatch) 28px,
+      var(--hero-hatch) 29px
     );
   pointer-events: none;
 }
@@ -350,7 +333,7 @@ pre code {
 .feature {
   padding: 1.25rem 1.3rem;
   border-top: 1px solid var(--accent-line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%);
+  background: linear-gradient(180deg, var(--row-hover), transparent 40%);
 }
 
 .feature h3 {
@@ -367,7 +350,7 @@ pre code {
 
 .band {
   border-block: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--band-fill);
 }
 
 .doc-wrap {
@@ -426,6 +409,73 @@ pre code {
   padding-left: 1.2rem;
 }
 
+.doc-content {
+  overflow-x: clip;
+}
+
+.doc-content table {
+  width: 100%;
+  max-width: 100%;
+  display: table;
+  border-collapse: collapse;
+  margin: 1.25rem 0 1.75rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: inset 0 1px 0 var(--inset-highlight);
+}
+
+.doc-content thead {
+  background: linear-gradient(180deg, var(--accent-soft), var(--accent-wash));
+}
+
+.doc-content th {
+  color: var(--text);
+  font-weight: 650;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--accent-line);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.doc-content th:last-child {
+  border-right: 0;
+}
+
+.doc-content td {
+  color: var(--text-muted);
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.doc-content td:last-child {
+  border-right: 0;
+}
+
+.doc-content tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.doc-content tbody tr:nth-child(even) {
+  background: var(--row-hover);
+}
+
+.doc-content tbody tr:hover {
+  background: var(--accent-wash);
+}
+
+.doc-content td code {
+  font-size: 0.85em;
+}
+
 .doc-content blockquote {
   margin: 1.25rem 0;
   padding: 0.75rem 1rem;
@@ -446,7 +496,6 @@ pre code {
     padding-bottom: 3rem;
   }
 
-  .picker-footer,
   .site-footer-inner {
     flex-direction: column;
   }

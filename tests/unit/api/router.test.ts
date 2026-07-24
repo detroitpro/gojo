@@ -229,7 +229,9 @@ describe("api/router", () => {
     const channelsPut = await fetch(`${baseUrl}/api/v1/notification-channels`, {
       method: "PUT",
       headers: auth,
-      body: JSON.stringify({ slack: { webhookUrl: "https://example.invalid" } }),
+      body: JSON.stringify({
+        slack: { type: "slack", webhookUrl: "https://example.invalid/hook" },
+      }),
     });
     expect(channelsPut.status).toBe(200);
 
@@ -238,5 +240,74 @@ describe("api/router", () => {
       headers: auth,
     });
     expect(deleted.status).toBe(200);
+  });
+
+  test("notification channel validation and test send", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const invalid = await fetch(`${baseUrl}/api/v1/notification-channels`, {
+      method: "PUT",
+      headers: auth,
+      body: JSON.stringify({ slack: { webhookUrl: "https://example.invalid/hook" } }),
+    });
+    expect(invalid.status).toBe(400);
+
+    const valid = await fetch(`${baseUrl}/api/v1/notification-channels`, {
+      method: "PUT",
+      headers: auth,
+      body: JSON.stringify({
+        eng: { type: "webhook", webhookUrl: "https://example.test/hook" },
+      }),
+    });
+    expect(valid.status).toBe(200);
+
+    let received: unknown = null;
+    const webhookServer = Bun.serve({
+      port: 0,
+      fetch: async (request) => {
+        received = await request.json();
+        return new Response("ok", { status: 200 });
+      },
+    });
+
+    try {
+      const testOk = await fetch(`${baseUrl}/api/v1/notification-channels/test`, {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          type: "webhook",
+          webhookUrl: `${webhookServer.url.toString().replace(/\/$/, "")}/hook`,
+        }),
+      });
+      expect(testOk.status).toBe(200);
+      expect(received).toMatchObject({ test: true, project: "gojo-test" });
+
+      const failingWebhook = Bun.serve({
+        port: 0,
+        fetch: () => new Response("nope", { status: 500 }),
+      });
+      try {
+        const secretUrl = `${failingWebhook.url.toString().replace(/\/$/, "")}/secret-token-xyz`;
+        const testFail = await fetch(`${baseUrl}/api/v1/notification-channels/test`, {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({
+            type: "webhook",
+            webhookUrl: secretUrl,
+          }),
+        });
+        expect(testFail.status).toBe(502);
+        const failBody = (await testFail.json()) as { error: { message: string } };
+        expect(failBody.error.message).not.toContain("secret-token-xyz");
+      } finally {
+        failingWebhook.stop();
+      }
+    } finally {
+      webhookServer.stop();
+    }
   });
 });

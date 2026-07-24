@@ -191,7 +191,7 @@ onUnmounted(() => {
         <h1>Run {{ runId.slice(0, 14) }}…</h1>
         <div v-if="run" class="subtitle">
           <StateBadge :state="run.state" />
-          <span class="muted" style="margin-left: 8px">{{ run.trigger }}</span>
+          <span class="muted ml-3">{{ run.trigger }}</span>
         </div>
       </div>
       <div class="toolbar">
@@ -217,7 +217,7 @@ onUnmounted(() => {
         <div class="panel-header">Approval required</div>
         <div class="panel-body">
           <div class="inline-form">
-            <div class="field" style="flex: 2">
+            <div class="field flex-2">
               <label for="reason">Reject reason (optional)</label>
               <input id="reason" v-model="rejectReason" placeholder="Policy violation…" />
             </div>
@@ -234,7 +234,7 @@ onUnmounted(() => {
               <span class="time">{{ fmtTime(event.timestamp) }}</span>
               <span>
                 <span class="mono">{{ event.type }}</span>
-                <pre v-if="event.payload" class="pre-block" style="margin-top: 6px">{{
+                <pre v-if="event.payload" class="pre-block mt-2">{{
                   JSON.stringify(event.payload, null, 2)
                 }}</pre>
               </span>
@@ -270,10 +270,10 @@ onUnmounted(() => {
               <br />
               exists={{ artifacts.exists }}
             </div>
-            <pre v-if="artifactsHandoffText" class="pre-block" style="margin-top: 10px">{{
+            <pre v-if="artifactsHandoffText" class="pre-block mt-4">{{
               artifactsHandoffText
             }}</pre>
-            <div v-else class="muted" style="margin-top: 10px">No handoff.json on disk</div>
+            <div v-else class="muted mt-4">No handoff.json on disk</div>
           </template>
         </div>
       </section>

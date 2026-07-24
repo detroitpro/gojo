@@ -13,7 +13,8 @@ description: Guides and reference for operating gojo — from first shell task t
 
 ## Reference
 
-- [Settings](/settings) — instance, schedules, validation, integration, notifications
+- [Settings](/settings) — instance, schedules, validation, integration
+- [Notifications](/notifications) — channels, routing, delivery
 - [Concepts](/concepts) — success ownership, worktrees, runs, handoffs
 - [CLI](/cli) — command map
 - [FAQ](/faq) — common questions after adding a project

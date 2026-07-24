@@ -103,7 +103,7 @@ notifications:
     - engineering-slack
 ```
 
-Wire `engineering-slack` as a webhook/Slack channel on the instance (see [Settings](/settings) → Notifications). Secrets stay out of the repo.
+Wire `engineering-slack` as a webhook/Slack channel on the instance (see [Notifications](/notifications)). Secrets stay out of the repo.
 
 ## Prompt file (the AI brief)
 

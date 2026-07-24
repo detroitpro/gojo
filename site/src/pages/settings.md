@@ -103,9 +103,9 @@ Agents should not `git push origin main`. The **merge queue** serializes integra
 
 ## Notification channels
 
-Manifest routes name channels (`onSuccess`, `onFailure`, `onDisabled`). Channel endpoints (webhook URLs, Slack hooks) are configured on the instance (API `notification-channels` / settings), not committed to git.
+Manifest routes name channels (`onSuccess`, `onFailure`, `onDisabled`). Channel endpoints (webhook URLs, Slack hooks) are configured on the instance under **Settings → Notification channels**, not committed to git.
 
-Delivery is queued with retries so a flaky webhook doesn’t rewrite a successful code run into a failure.
+See [Notifications](/notifications) for the guided setup, provider webhook URLs, test sends, delivery retries, and auto-disable routing.
 
 ## Security defaults worth keeping
 
@@ -117,6 +117,7 @@ Delivery is queued with retries so a flaky webhook doesn’t rewrite a successfu
 
 ## Related
 
+- [Notifications](/notifications) — channels, routing, and delivery
 - [Concepts](/concepts) — run lifecycle and ownership boundaries
 - [CLI](/cli) — command map for the same settings
 - [FAQ](/faq) — “why can’t I …?”

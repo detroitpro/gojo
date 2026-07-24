@@ -208,7 +208,7 @@ onMounted(load);
       </table>
     </div>
 
-    <section v-if="doctorResult" class="panel" style="margin-top: 16px">
+    <section v-if="doctorResult" class="panel mt-7">
       <div class="panel-header">Doctor — {{ doctorProjectName }}</div>
       <div class="panel-body mono">
         <div>
@@ -221,11 +221,11 @@ onMounted(load);
           manifest=
           <span :class="doctorResult.manifest ? 'ok' : 'bad'">{{ doctorResult.manifest }}</span>
         </div>
-        <div class="muted" style="margin-top: 8px">projectId={{ doctorResult.projectId }}</div>
+        <div class="muted mt-3">projectId={{ doctorResult.projectId }}</div>
       </div>
     </section>
 
-    <section v-if="projects.length" id="inspect" class="panel" style="margin-top: 16px">
+    <section v-if="projects.length" id="inspect" class="panel mt-7">
       <div class="panel-header">Inspect</div>
       <div class="panel-body">
         <p class="muted">Select a project row or use the hash anchor to view manifest JSON.</p>

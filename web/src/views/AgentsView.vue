@@ -99,17 +99,17 @@ onMounted(load);
       </table>
     </div>
 
-    <section v-if="testResult" class="panel" style="margin-top: 16px">
+    <section v-if="testResult" class="panel mt-7">
       <div class="panel-header">Test result — {{ testResult.name }}</div>
       <div class="panel-body">
         <div class="mono">
           exitCode={{ testResult.result.exitCode }} timedOut={{ testResult.result.timedOut }}
           canceled={{ testResult.result.canceled }}
         </div>
-        <pre v-if="testResult.result.stdout" class="pre-block" style="margin-top: 10px">{{
+        <pre v-if="testResult.result.stdout" class="pre-block mt-4">{{
           testResult.result.stdout
         }}</pre>
-        <pre v-if="testResult.result.stderr" class="pre-block" style="margin-top: 10px">{{
+        <pre v-if="testResult.result.stderr" class="pre-block mt-4">{{
           testResult.result.stderr
         }}</pre>
       </div>

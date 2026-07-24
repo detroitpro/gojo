@@ -11,18 +11,19 @@ import {
   listBackups,
   listNotificationChannels,
   pauseInstance,
-  putNotificationChannels,
   resumeInstance,
   revokeApiToken,
   updateInstance,
   verifyBackup,
 } from "@/api";
+import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
 import type {
   ApiTokenInfo,
   BackupInfo,
   HealthInfo,
   InstanceDoctorResult,
   InstanceInfo,
+  NotificationChannelMap,
 } from "@/types";
 
 const instance = ref<InstanceInfo | null>(null);
@@ -30,7 +31,7 @@ const health = ref<HealthInfo | null>(null);
 const doctor = ref<InstanceDoctorResult | null>(null);
 const tokens = ref<ApiTokenInfo[]>([]);
 const backups = ref<BackupInfo[]>([]);
-const channelsJson = ref("{}");
+const channels = ref<NotificationChannelMap>({});
 const tokenName = ref("");
 const createdToken = ref<string | null>(null);
 const loading = ref(true);
@@ -43,7 +44,7 @@ async function load() {
   error.value = "";
   message.value = "";
   try {
-    const [inst, h, toks, channels, backs, doc] = await Promise.all([
+    const [inst, h, toks, channelMap, backs, doc] = await Promise.all([
       getInstance(),
       getHealth(),
       listApiTokens(),
@@ -54,7 +55,7 @@ async function load() {
     instance.value = inst;
     health.value = h;
     tokens.value = toks;
-    channelsJson.value = JSON.stringify(channels, null, 2);
+    channels.value = channelMap;
     backups.value = backs;
     doctor.value = doc;
   } catch (err) {
@@ -97,22 +98,6 @@ async function toggleTelemetry() {
     });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to update telemetry";
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function saveChannels() {
-  busy.value = true;
-  error.value = "";
-  message.value = "";
-  try {
-    const parsed = JSON.parse(channelsJson.value) as Record<string, unknown>;
-    const saved = await putNotificationChannels(parsed);
-    channelsJson.value = JSON.stringify(saved, null, 2);
-    message.value = "Notification channels saved";
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Failed to save channels";
   } finally {
     busy.value = false;
   }
@@ -204,6 +189,16 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function onChannelError(msg: string) {
+  error.value = msg;
+  message.value = "";
+}
+
+function onChannelMessage(msg: string) {
+  message.value = msg;
+  error.value = "";
+}
+
 onMounted(load);
 </script>
 
@@ -225,17 +220,17 @@ onMounted(load);
       <div class="stats-row">
         <div class="stat">
           <div class="label">Version</div>
-          <div class="value" style="font-size: 16px">{{ health?.version ?? "—" }}</div>
+          <div class="value compact">{{ health?.version ?? "—" }}</div>
         </div>
         <div class="stat">
           <div class="label">Scheduler</div>
-          <div class="value" :class="instance.paused ? 'bad' : 'ok'" style="font-size: 16px">
+          <div class="value compact" :class="instance.paused ? 'bad' : 'ok'">
             {{ instance.paused ? "Paused" : "Active" }}
           </div>
         </div>
         <div class="stat">
           <div class="label">Telemetry</div>
-          <div class="value" style="font-size: 16px">
+          <div class="value compact">
             {{ instance.telemetryEnabled ? "On" : "Off" }}
           </div>
         </div>
@@ -245,11 +240,11 @@ onMounted(load);
         <div class="panel-header">Instance</div>
         <div class="panel-body">
           <p class="mono">{{ instance.bindHost }}:{{ instance.bindPort }}</p>
-          <p class="muted" style="margin-top: 10px">
+          <p class="muted mt-4">
             Bind address is configured in instance.yaml. Remote access should run behind HTTPS, a
             reverse proxy, or VPN.
           </p>
-          <div class="toolbar" style="margin-top: 12px">
+          <div class="toolbar mt-5">
             <button class="btn btn-sm" type="button" :disabled="busy" @click="togglePause">
               {{ instance.paused ? "Resume scheduler" : "Pause scheduler" }}
             </button>
@@ -257,7 +252,7 @@ onMounted(load);
               {{ instance.telemetryEnabled ? "Disable telemetry" : "Enable telemetry" }}
             </button>
           </div>
-          <div class="mono muted" style="margin-top: 12px">
+          <div class="mono muted mt-5">
             health status={{ health?.status ?? "unknown" }} paused={{ String(health?.paused) }}
           </div>
         </div>
@@ -278,8 +273,8 @@ onMounted(load);
               disk=<span :class="doctor.disk ? 'ok' : 'bad'">{{ doctor.disk }}</span>
               database=<span :class="doctor.database ? 'ok' : 'bad'">{{ doctor.database }}</span>
             </div>
-            <div class="mono muted" style="margin-top: 8px">home={{ doctor.home }}</div>
-            <div class="table-wrap" style="margin-top: 12px">
+            <div class="mono muted mt-3">home={{ doctor.home }}</div>
+            <div class="table-wrap mt-5">
               <table class="data">
                 <thead>
                   <tr>
@@ -313,12 +308,12 @@ onMounted(load);
               Create token
             </button>
           </form>
-          <div v-if="createdToken" class="alert alert-info" style="margin-top: 12px">
+          <div v-if="createdToken" class="alert alert-info mt-5">
             Copy this token now; it will not be shown again.
-            <pre class="pre-block" style="margin-top: 8px">{{ createdToken }}</pre>
+            <pre class="pre-block mt-3">{{ createdToken }}</pre>
           </div>
-          <div v-if="tokens.length === 0" class="muted" style="margin-top: 12px">No tokens</div>
-          <div v-else class="table-wrap" style="margin-top: 12px">
+          <div v-if="tokens.length === 0" class="muted mt-5">No tokens</div>
+          <div v-else class="table-wrap mt-5">
             <table class="data">
               <thead>
                 <tr>
@@ -348,46 +343,29 @@ onMounted(load);
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-header">Notification channels</div>
-        <div class="panel-body">
-          <p class="muted">JSON map of channel name → connector config.</p>
-          <textarea
-            v-model="channelsJson"
-            class="mono"
-            rows="8"
-            style="width: 100%; margin-top: 8px"
-          ></textarea>
-          <button
-            class="btn btn-primary"
-            type="button"
-            style="margin-top: 10px"
-            :disabled="busy"
-            @click="saveChannels"
-          >
-            Save channels
-          </button>
-        </div>
-      </section>
+      <NotificationChannelsPanel
+        :initial-channels="channels"
+        @error="onChannelError"
+        @message="onChannelMessage"
+      />
 
       <section class="panel">
         <div class="panel-header">Backups</div>
         <div class="panel-body">
           <p class="muted">
             Create and verify archives under the Gojo data directory. Restore remains CLI-only
-            (<span class="mono">gojo backup restore</span>.
+            <span class="mono">gojo backup restore</span>.
           </p>
           <button
-            class="btn btn-primary"
+            class="btn btn-primary mt-4"
             type="button"
-            style="margin-top: 10px"
             :disabled="busy"
             @click="doCreateBackup"
           >
             Create backup
           </button>
-          <div v-if="backups.length === 0" class="muted" style="margin-top: 12px">No backups</div>
-          <div v-else class="table-wrap" style="margin-top: 12px">
+          <div v-if="backups.length === 0" class="muted mt-5">No backups</div>
+          <div v-else class="table-wrap mt-5">
             <table class="data">
               <thead>
                 <tr>

@@ -80,6 +80,21 @@ export type {
 } from './manifest';
 
 export {
+  NotificationChannelConfigSchema,
+  NotificationChannelMapSchema,
+  NotificationChannelTypeSchema,
+  parseNotificationChannelConfig,
+  parseNotificationChannelMap,
+  safeParseNotificationChannelConfig,
+  safeParseNotificationChannelMap,
+} from './notifications';
+export type {
+  NotificationChannelConfig,
+  NotificationChannelMap,
+  NotificationChannelType,
+} from './notifications';
+
+export {
   canTransition,
   isTerminal,
   RunState,

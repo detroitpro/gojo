@@ -10,6 +10,7 @@ const docPaths = [
   "/advanced-agent",
   "/advanced-usage",
   "/settings",
+  "/notifications",
   "/concepts",
   "/cli",
   "/faq",
@@ -47,6 +48,11 @@ const inDocs = docPaths.some((path) => current(path));
             >Advanced usage</a
           >
           <a href="/settings" aria-current={current("/settings") ? "page" : undefined}>Settings</a>
+          <a
+            href="/notifications"
+            aria-current={current("/notifications") ? "page" : undefined}
+            >Notifications</a
+          >
           <a href="/concepts" aria-current={current("/concepts") ? "page" : undefined}>Concepts</a>
           <a href="/cli" aria-current={current("/cli") ? "page" : undefined}>CLI</a>
           <a href="/faq" aria-current={current("/faq") ? "page" : undefined}>FAQ</a>

@@ -67,7 +67,7 @@ async function submit() {
       <p v-else-if="mode === 'login'">Sign in to the ops console.</p>
       <p v-else>Connecting…</p>
 
-      <div v-if="version" class="muted" style="margin-bottom: 14px">v{{ version }}</div>
+      <div v-if="version" class="muted mb-6">v{{ version }}</div>
 
       <div v-if="error" class="alert alert-error">{{ error }}</div>
 
@@ -86,7 +86,7 @@ async function submit() {
             required
           />
         </div>
-        <button class="btn btn-primary" type="submit" :disabled="busy" style="width: 100%">
+        <button class="btn btn-primary w-full" type="submit" :disabled="busy">
           {{ mode === "setup" ? "Complete setup" : "Sign in" }}
         </button>
       </form>

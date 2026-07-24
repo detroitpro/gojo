@@ -179,6 +179,25 @@ export interface BackupInfo {
   createdAt: string;
 }
 
+export type NotificationChannelType =
+  | "slack"
+  | "webhook"
+  | "discord"
+  | "teams"
+  | "telegram";
+
+export interface NotificationChannelConfig {
+  type: NotificationChannelType;
+  webhookUrl: string;
+  config?: Record<string, unknown>;
+}
+
+export type NotificationChannelMap = Record<string, NotificationChannelConfig>;
+
+export interface NotificationChannelEntry extends NotificationChannelConfig {
+  name: string;
+}
+
 export interface DirectoryEntry {
   name: string;
   path: string;

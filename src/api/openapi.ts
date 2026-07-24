@@ -111,6 +111,9 @@ export const openApiDocument = {
       get: { summary: "Get notification channels" },
       put: { summary: "Update notification channels" },
     },
+    "/api/v1/notification-channels/test": {
+      post: { summary: "Send a test notification to a channel config" },
+    },
     "/api/v1/backups": {
       get: { summary: "List backups" },
       post: { summary: "Create backup" },

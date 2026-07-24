@@ -15,7 +15,12 @@ import {
   verifyBackup,
 } from "@/backup";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
+import { redactSecrets } from "@/notifications/dispatcher";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
+import {
+  safeParseNotificationChannelConfig,
+  safeParseNotificationChannelMap,
+} from "@shared/notifications";
 import { isTerminal } from "@shared/run-states";
 import type { Schedule } from "@/storage/types";
 
@@ -735,8 +740,13 @@ export async function handleApiRequest(
 
   if (method === "PUT" && pathname === "/api/v1/notification-channels") {
     const body = await readJsonBody<Record<string, unknown>>(request);
-    if (!body || typeof body !== "object") {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
       return failure("validation_error", "channel map object is required", 400);
+    }
+    const parsed = safeParseNotificationChannelMap(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues.map((issue) => issue.message).join("; ");
+      return failure("validation_error", message || "Invalid notification channel map", 400);
     }
     const now = new Date().toISOString();
     ctx.db
@@ -746,8 +756,45 @@ export async function handleApiRequest(
          VALUES (?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
       )
-      .run("notification_channels", JSON.stringify(body), now);
-    return success({ channels: body });
+      .run("notification_channels", JSON.stringify(parsed.data), now);
+    return success({ channels: parsed.data });
+  }
+
+  if (method === "POST" && pathname === "/api/v1/notification-channels/test") {
+    const body = await readJsonBody<Record<string, unknown>>(request);
+    const parsed = safeParseNotificationChannelConfig(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues.map((issue) => issue.message).join("; ");
+      return failure("validation_error", message || "Invalid notification channel", 400);
+    }
+
+    const channel = {
+      id: "test",
+      type: parsed.data.type,
+      config: {
+        ...(parsed.data.config ?? {}),
+        webhookUrl: parsed.data.webhookUrl,
+      },
+    };
+
+    const samplePayload = {
+      test: true,
+      project: "gojo-test",
+      task: "notification-test",
+      runId: "test",
+      state: "Succeeded",
+      error: null,
+      finishedAt: new Date().toISOString(),
+    };
+
+    try {
+      await ctx.notifications.deliver(channel, samplePayload);
+      return success({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const redacted = redactSecrets(message, [parsed.data.webhookUrl]);
+      return failure("delivery_failed", redacted, 502);
+    }
   }
 
   if (pathname.startsWith("/api/")) {
