@@ -120,6 +120,13 @@ export function syncProjectFromManifest(
     tasks += 1;
   }
 
+  // Disable tasks removed from the manifest so they stop appearing as runnable.
+  for (const existing of repos.tasks.listByProject(project.id)) {
+    if (!taskIds.has(existing.name) && existing.enabled) {
+      repos.tasks.update(existing.id, { enabled: false });
+    }
+  }
+
   let schedules = 0;
   if (manifest.schedules) {
     for (const [name, scheduleConfig] of Object.entries(manifest.schedules)) {

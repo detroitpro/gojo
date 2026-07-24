@@ -31,6 +31,32 @@ validationProfiles:
       - name: typecheck
         command: bun run typecheck
         timeout: 5m
+  daemon-test:
+    steps:
+      - name: typecheck
+        command: bun run typecheck
+        timeout: 5m
+      - name: test-coverage
+        command: bash scripts/daemon-coverage.sh
+        timeout: 15m
+  full-check:
+    steps:
+      - name: ci-check
+        command: bash scripts/ci-check.sh
+        timeout: 25m
+  docs-build:
+    steps:
+      - name: site-build
+        command: bun run --cwd site build
+        timeout: 5m
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
+  noop:
+    steps:
+      - name: noop
+        command: "true"
+        timeout: 30s
 
 tasks:
   self-heal:
@@ -50,17 +76,16 @@ tasks:
       disableAfterConsecutiveFailedRuns: 5
       backoff: none
 
-  # Example platform maintenance task that can self-heal when it fails.
-  typecheck-gate:
-    description: Run daemon TypeScript check and report via handoff
-    agent: shell
-    promptFile: .gojo/tasks/typecheck-gate.sh
-    validationProfile: typecheck
+  maintain-quality:
+    description: Refactor for module boundaries, low complexity, and expert TypeScript quality
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-quality.md
+    validationProfile: daemon-test
     concurrency:
       projectLimit: 1
       overlapPolicy: skip
     integration:
-      mode: commit-only
+      mode: pull-request
       targetBranch: main
       requireAllValidations: true
     failurePolicy:
@@ -71,10 +96,107 @@ tasks:
       task: self-heal
       afterConsecutiveFailedRuns: 1
 
+  maintain-tests:
+    description: Raise daemon/CLI test coverage toward 95% without product features
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-tests.md
+    validationProfile: daemon-test
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+    selfHeal:
+      task: self-heal
+      afterConsecutiveFailedRuns: 1
+
+  maintain-deps:
+    description: Update dependencies including majors; keep build and tests green
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-deps.md
+    validationProfile: full-check
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+    selfHeal:
+      task: self-heal
+      afterConsecutiveFailedRuns: 1
+
+  maintain-docs:
+    description: Keep site/ and docs/ aligned with implemented behavior
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-docs.md
+    validationProfile: docs-build
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+    selfHeal:
+      task: self-heal
+      afterConsecutiveFailedRuns: 1
+
+  maintain-merge:
+    description: Babysit and merge open maintenance PRs from gojo scheduled agents
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-merge.md
+    validationProfile: noop
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: commit-only
+      targetBranch: main
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: exponential
+
 schedules:
   self-heal-daily:
     task: self-heal
     cron: "0 7 * * *"
+    timezone: America/Detroit
+  maintain-quality-weekly:
+    task: maintain-quality
+    cron: "0 2 * * 5"
+    timezone: America/Detroit
+  maintain-tests-weekly:
+    task: maintain-tests
+    cron: "0 2 * * 6"
+    timezone: America/Detroit
+  maintain-deps-weekly:
+    task: maintain-deps
+    cron: "0 2 * * 0"
+    timezone: America/Detroit
+  maintain-docs-weekly:
+    task: maintain-docs
+    cron: "0 4 * * 0"
+    timezone: America/Detroit
+  maintain-merge-daily:
+    task: maintain-merge
+    cron: "0 6 * * *"
     timezone: America/Detroit
 
 notifications: {}
