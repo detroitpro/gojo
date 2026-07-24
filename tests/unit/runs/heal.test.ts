@@ -106,7 +106,7 @@ describe('decideHealEnqueue', () => {
     });
 
     const missingHealer = decideHealEnqueue({
-      db,
+      repos,
       failedRun: run,
       failedTask: failing,
       policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
@@ -121,7 +121,7 @@ describe('decideHealEnqueue', () => {
     });
 
     const belowThreshold = decideHealEnqueue({
-      db,
+      repos,
       failedRun: run,
       failedTask: failing,
       policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
