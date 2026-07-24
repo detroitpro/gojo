@@ -1,5 +1,4 @@
-import type { Database } from '@/storage/db';
-import { createRepositories } from '@/storage/repositories';
+import type { Repositories } from '@/storage/repositories';
 import type { Run, Task } from '@/storage/types';
 
 import type { ParsedFailurePolicy } from './failure-policy';
@@ -19,12 +18,12 @@ export interface HealEnqueueDecision {
  * cap heal runs per project per hour.
  */
 export function decideHealEnqueue(opts: {
-  db: Database;
+  repos: Repositories;
   failedRun: Run;
   failedTask: Task;
   policy: ParsedFailurePolicy;
 }): HealEnqueueDecision {
-  const { db, failedRun, failedTask, policy } = opts;
+  const { repos, failedRun, failedTask, policy } = opts;
   const selfHeal = policy.selfHeal;
   if (!selfHeal) {
     return { shouldEnqueue: false, reason: 'no selfHeal configured' };
@@ -38,17 +37,14 @@ export function decideHealEnqueue(opts: {
     return { shouldEnqueue: false, reason: 'healer task excluded from healing' };
   }
 
-  const repos = createRepositories(db);
-  const healer = repos.tasks
-    .listByProject(failedTask.projectId)
-    .find((task) => task.name === selfHeal.task && task.enabled);
+  const healer = repos.tasks.findEnabledByProjectAndName(failedTask.projectId, selfHeal.task);
 
   if (!healer) {
     return { shouldEnqueue: false, reason: `healer task not found: ${selfHeal.task}` };
   }
 
   const threshold = selfHeal.afterConsecutiveFailedRuns ?? 1;
-  const recentFailed = countRecentFailedRuns(db, failedTask.id, threshold);
+  const recentFailed = repos.runs.countConsecutiveFailuresForTask(failedTask.id, threshold);
   if (recentFailed < threshold) {
     return {
       shouldEnqueue: false,
@@ -56,7 +52,8 @@ export function decideHealEnqueue(opts: {
     };
   }
 
-  const healCount = countRecentHealRuns(db, failedTask.projectId);
+  const since = new Date(Date.now() - HEAL_WINDOW_MS).toISOString();
+  const healCount = repos.runs.countByProjectTriggerSince(failedTask.projectId, 'heal', since);
   if (healCount >= HEAL_MAX_PER_PROJECT) {
     return {
       shouldEnqueue: false,
@@ -69,42 +66,4 @@ export function decideHealEnqueue(opts: {
     healerTaskId: healer.id,
     reason: 'enqueue healer',
   };
-}
-
-function countRecentFailedRuns(db: Database, taskId: string, limit: number): number {
-  const rows = db
-    .connection()
-    .query<{ state: string }, [string, number]>(
-      `SELECT state FROM runs
-       WHERE task_id = ?
-       ORDER BY created_at DESC
-       LIMIT ?`,
-    )
-    .all(taskId, Math.max(limit * 5, 10));
-
-  let consecutive = 0;
-  for (const row of rows) {
-    if (
-      row.state === 'Failed' ||
-      row.state === 'TimedOut' ||
-      row.state === 'InfrastructureFailure'
-    ) {
-      consecutive += 1;
-    } else if (row.state === 'Succeeded') {
-      break;
-    }
-  }
-  return consecutive;
-}
-
-function countRecentHealRuns(db: Database, projectId: string): number {
-  const since = new Date(Date.now() - HEAL_WINDOW_MS).toISOString();
-  const row = db
-    .connection()
-    .query<{ count: number }, [string, string]>(
-      `SELECT COUNT(*) as count FROM runs
-       WHERE project_id = ? AND trigger = 'heal' AND created_at >= ?`,
-    )
-    .get(projectId, since);
-  return row?.count ?? 0;
 }
