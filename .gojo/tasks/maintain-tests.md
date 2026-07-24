@@ -27,6 +27,7 @@ You are a test guru: you know what to assert, how to mock, and how to avoid flak
 - Prefer the smallest change set that meaningfully raises coverage.
 - Stay inside this worktree.
 - Do **not** commit secrets.
+- Do **not** create more than 5 tests
 
 ## Process
 
