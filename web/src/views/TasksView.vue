@@ -1,77 +1,53 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { onMounted, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listProjects, listTasks, runTask } from "@/api";
-import type { Project, Task } from "@/types";
+import StateBadge from "@/components/StateBadge.vue";
+import TablePager from "@/components/TablePager.vue";
+import { useServerTable } from "@/composables/useServerTable";
+import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import type { Project } from "@/types";
 
+const route = useRoute();
 const router = useRouter();
 
-const PAGE_SIZE = 25;
+function queryParam(key: string): string {
+  const value = route.query[key];
+  return typeof value === "string" ? value : "";
+}
 
 const projects = ref<Project[]>([]);
-const tasks = ref<Task[]>([]);
-const projectFilter = ref("");
+const projectFilter = ref(queryParam("projectId"));
 const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
 const query = ref("");
-const page = ref(1);
-const loading = ref(true);
-const error = ref("");
 const busyId = ref<string | null>(null);
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return tasks.value.filter((task) => {
-    if (projectFilter.value && task.projectId !== projectFilter.value) {
-      return false;
-    }
-    if (enabledFilter.value === "enabled" && !task.enabled) {
-      return false;
-    }
-    if (enabledFilter.value === "disabled" && task.enabled) {
-      return false;
-    }
-    if (!q) {
-      return true;
-    }
-    return (
-      task.name.toLowerCase().includes(q) ||
-      task.id.toLowerCase().includes(q) ||
-      (task.description?.toLowerCase().includes(q) ?? false) ||
-      (task.projectName?.toLowerCase().includes(q) ?? false)
-    );
-  });
+const {
+  page,
+  pages,
+  items: tasks,
+  total,
+  loading,
+  error,
+  rangeLabel,
+  reload,
+  load,
+} = useServerTable({
+  watchSources: [projectFilter, enabledFilter, query],
+  fetchPage: ({ limit, offset }) =>
+    listTasks({
+      limit,
+      offset,
+      projectId: projectFilter.value || undefined,
+      enabled: enabledFilter.value,
+      q: query.value || undefined,
+    }),
 });
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)));
-
-const pageItems = computed(() => {
-  const start = (page.value - 1) * PAGE_SIZE;
-  return filtered.value.slice(start, start + PAGE_SIZE);
-});
-
-watch([projectFilter, enabledFilter, query], () => {
-  page.value = 1;
-});
-
-watch(pageCount, (count) => {
-  if (page.value > count) {
-    page.value = count;
-  }
-});
-
-async function load() {
-  loading.value = true;
-  error.value = "";
-  try {
-    const [projectList, taskList] = await Promise.all([listProjects(), listTasks()]);
-    projects.value = projectList;
-    tasks.value = taskList;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Failed to load tasks";
-  } finally {
-    loading.value = false;
-  }
+async function loadProjects() {
+  const result = await listProjects({ limit: MAX_PAGE_LIMIT, offset: 0 });
+  projects.value = result.items;
 }
 
 async function runNow(id: string) {
@@ -87,7 +63,39 @@ async function runNow(id: string) {
   }
 }
 
+function fmtTime(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  return new Date(value).toLocaleString();
+}
+
+watch(
+  () => route.query.projectId,
+  (value) => {
+    const next = typeof value === "string" ? value : "";
+    if (projectFilter.value !== next) {
+      projectFilter.value = next;
+    }
+  },
+);
+
+watch(projectFilter, (value) => {
+  const current = queryParam("projectId");
+  if (value === current) {
+    return;
+  }
+  const nextQuery = { ...route.query } as Record<string, string>;
+  if (value) {
+    nextQuery.projectId = value;
+  } else {
+    delete nextQuery.projectId;
+  }
+  void router.replace({ query: nextQuery });
+});
+
 onMounted(() => {
+  void loadProjects();
   void load();
 });
 </script>
@@ -99,7 +107,7 @@ onMounted(() => {
         <h1>Tasks</h1>
         <div class="subtitle">Manifest-synced and API-created tasks across all projects</div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="load">Refresh</button>
+      <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -134,14 +142,19 @@ onMounted(() => {
       </div>
       <div class="field task-filter-count">
         <label>&nbsp;</label>
-        <span class="muted">{{ filtered.length }} task{{ filtered.length === 1 ? "" : "s" }}</span>
+        <span class="muted">{{ total }} task{{ total === 1 ? "" : "s" }}</span>
       </div>
     </div>
 
-    <div v-if="loading" class="empty">Loading…</div>
+    <div v-if="loading && tasks.length === 0" class="empty">Loading…</div>
     <div v-else-if="projects.length === 0" class="empty">Add a project first</div>
-    <div v-else-if="tasks.length === 0" class="empty">No tasks yet — sync a project manifest</div>
-    <div v-else-if="filtered.length === 0" class="empty">No tasks match these filters</div>
+    <div v-else-if="total === 0" class="empty">
+      {{
+        query || projectFilter || enabledFilter !== "all"
+          ? "No tasks match these filters"
+          : "No tasks yet — sync a project manifest"
+      }}
+    </div>
     <template v-else>
       <div class="table-wrap">
         <table class="data">
@@ -149,6 +162,7 @@ onMounted(() => {
             <tr>
               <th>Name</th>
               <th>Project</th>
+              <th>Last run</th>
               <th>Enabled</th>
               <th>Agent</th>
               <th>Created</th>
@@ -156,9 +170,20 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="task in pageItems" :key="task.id">
+            <tr v-for="task in tasks" :key="task.id">
               <td>
-                <div class="entity-name">{{ task.name }}</div>
+                <RouterLink
+                  :to="{
+                    name: 'runs',
+                    query: {
+                      taskId: task.id,
+                      ...(task.projectId ? { projectId: task.projectId } : {}),
+                    },
+                  }"
+                  class="entity-name"
+                >
+                  {{ task.name }}
+                </RouterLink>
                 <div class="mono muted text-sm">{{ task.id.slice(0, 10) }}…</div>
                 <div v-if="task.description" class="muted text-sm">
                   {{ task.description }}
@@ -167,6 +192,15 @@ onMounted(() => {
               <td>
                 <div>{{ task.projectName || "—" }}</div>
                 <div class="mono muted text-sm">{{ task.projectId.slice(0, 10) }}…</div>
+              </td>
+              <td>
+                <template v-if="task.lastRunId && task.lastRunState">
+                  <RouterLink :to="`/runs/${task.lastRunId}`" class="last-run-link">
+                    <StateBadge :state="task.lastRunState" />
+                  </RouterLink>
+                  <div class="mono muted text-sm">{{ fmtTime(task.lastRunCreatedAt) }}</div>
+                </template>
+                <span v-else class="muted">—</span>
               </td>
               <td>{{ task.enabled ? "yes" : "no" }}</td>
               <td>
@@ -191,20 +225,12 @@ onMounted(() => {
         </table>
       </div>
 
-      <div v-if="pageCount > 1" class="activity-pager">
-        <button class="btn btn-sm" type="button" :disabled="page <= 1" @click="page -= 1">
-          Prev
-        </button>
-        <span class="muted">Page {{ page }} / {{ pageCount }}</span>
-        <button
-          class="btn btn-sm"
-          type="button"
-          :disabled="page >= pageCount"
-          @click="page += 1"
-        >
-          Next
-        </button>
-      </div>
+      <TablePager
+        v-model:page="page"
+        :page-count="pages"
+        :range-label="rangeLabel"
+        :total="total"
+      />
     </template>
   </div>
 </template>

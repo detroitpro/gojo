@@ -21,8 +21,6 @@ import {
   safeParseNotificationChannelConfig,
   safeParseNotificationChannelMap,
 } from "@shared/notifications";
-import type { Schedule } from "@/storage/types";
-
 import {
   bearerToken,
   clearSessionCookie,
@@ -38,48 +36,13 @@ import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "./project-sync";
 import { openApiDocument } from "./openapi";
-
-interface ScheduleRow {
-  id: string;
-  task_id: string;
-  name: string;
-  cron_expr: string;
-  timezone: string;
-  enabled: number;
-  overlap_policy: string;
-  missed_run_policy: string;
-  retry_json: string;
-  consecutive_failures: number;
-  disable_after: number | null;
-  next_run_at: string | null;
-  last_run_at: string | null;
-  created_at: string;
-  task_name?: string | null;
-  project_id?: string | null;
-  project_name?: string | null;
-}
-
-interface RunRow {
-  id: string;
-  project_id: string;
-  task_id: string;
-  schedule_id: string | null;
-  state: string;
-  idempotency_key: string;
-  trigger: string;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  error_message: string | null;
-  project_name?: string | null;
-  task_name?: string | null;
-}
-
-type ScheduleListItem = Schedule & {
-  taskName: string | null;
-  projectId: string | null;
-  projectName: string | null;
-};
+import {
+  listProjectsPage,
+  listRunsPage,
+  listSchedulesPage,
+  listTasksPage,
+} from "@/storage/paged-lists";
+import { paginateArray, parsePageParamsFromUrl } from "@shared/pagination";
 
 type RunListItem = {
   id: string;
@@ -96,46 +59,6 @@ type RunListItem = {
   projectName: string | null;
   taskName: string | null;
 };
-
-function mapScheduleRow(row: ScheduleRow): ScheduleListItem {
-  return {
-    id: row.id,
-    taskId: row.task_id,
-    name: row.name,
-    cronExpr: row.cron_expr,
-    timezone: row.timezone,
-    enabled: row.enabled !== 0,
-    overlapPolicy: row.overlap_policy,
-    missedRunPolicy: row.missed_run_policy,
-    retryJson: row.retry_json,
-    consecutiveFailures: row.consecutive_failures,
-    disableAfter: row.disable_after,
-    nextRunAt: row.next_run_at,
-    lastRunAt: row.last_run_at,
-    createdAt: row.created_at,
-    taskName: row.task_name ?? null,
-    projectId: row.project_id ?? null,
-    projectName: row.project_name ?? null,
-  };
-}
-
-function mapRunRow(row: RunRow): RunListItem {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    taskId: row.task_id,
-    scheduleId: row.schedule_id,
-    state: row.state,
-    idempotencyKey: row.idempotency_key,
-    trigger: row.trigger,
-    createdAt: row.created_at,
-    startedAt: row.started_at,
-    finishedAt: row.finished_at,
-    errorMessage: row.error_message,
-    projectName: row.project_name ?? null,
-    taskName: row.task_name ?? null,
-  };
-}
 
 function enrichRun(ctx: AppContext, run: {
   id: string;
@@ -159,34 +82,17 @@ function enrichRun(ctx: AppContext, run: {
   };
 }
 
-function listAllSchedules(ctx: AppContext): ScheduleListItem[] {
-  const rows = ctx.db
-    .connection()
-    .query<ScheduleRow, []>(
-      `SELECT s.*, t.name AS task_name, t.project_id AS project_id, p.name AS project_name
-       FROM schedules s
-       LEFT JOIN tasks t ON t.id = s.task_id
-       LEFT JOIN projects p ON p.id = t.project_id
-       ORDER BY s.created_at`,
-    )
-    .all();
-  return rows.map(mapScheduleRow);
-}
-
-function listRuns(ctx: AppContext, projectId?: string | null): RunListItem[] {
-  const sqlite = ctx.db.connection();
-  const select = `SELECT r.*, p.name AS project_name, t.name AS task_name
-       FROM runs r
-       LEFT JOIN projects p ON p.id = r.project_id
-       LEFT JOIN tasks t ON t.id = r.task_id`;
-  const rows =
-    projectId && projectId.length > 0
-      ? sqlite
-          .query<RunRow, [string]>(`${select} WHERE r.project_id = ? ORDER BY r.created_at DESC`)
-          .all(projectId)
-      : sqlite.query<RunRow, []>(`${select} ORDER BY r.created_at DESC`).all();
-
-  return rows.map(mapRunRow);
+function parseEnabledParam(value: string | null): boolean | null {
+  if (value == null || value === "" || value === "all") {
+    return null;
+  }
+  if (value === "true" || value === "1" || value === "enabled") {
+    return true;
+  }
+  if (value === "false" || value === "0" || value === "disabled") {
+    return false;
+  }
+  return null;
 }
 
 function publicUser(user: { id: string; username: string; role: string }) {
@@ -361,13 +267,27 @@ export async function handleApiRequest(
     if (!auth) {
       return failure("unauthorized", "Authentication required", 401);
     }
-    const tokens = users.listApiTokens(auth.userId).map((token) => ({
+    const page = parsePageParamsFromUrl(url);
+    const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
+    const all = users.listApiTokens(auth.userId).map((token) => ({
       id: token.id,
       name: token.name,
       createdAt: token.createdAt,
       expiresAt: token.expiresAt,
     }));
-    return success({ tokens });
+    const filtered = q
+      ? all.filter(
+          (token) =>
+            token.name.toLowerCase().includes(q) || token.id.toLowerCase().includes(q),
+        )
+      : all;
+    const paged = paginateArray(filtered, page);
+    return success({
+      tokens: paged.items,
+      total: paged.total,
+      limit: paged.limit,
+      offset: paged.offset,
+    });
   }
 
   if (method === "POST" && pathname === "/api/v1/auth/tokens") {
@@ -405,7 +325,17 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/projects") {
-    return success({ projects: ctx.repos.projects.list() });
+    const page = parsePageParamsFromUrl(url);
+    const result = listProjectsPage(ctx.db, {
+      ...page,
+      q: url.searchParams.get("q"),
+    });
+    return success({
+      projects: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
   }
 
   if (method === "POST" && pathname === "/api/v1/projects") {
@@ -497,32 +427,19 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/tasks") {
-    const projectId = url.searchParams.get("projectId");
-    const projectCache = new Map<string, string | null>();
-    const resolveProjectName = (id: string): string | null => {
-      if (projectCache.has(id)) {
-        return projectCache.get(id) ?? null;
-      }
-      const name = ctx.repos.projects.findById(id)?.name ?? null;
-      projectCache.set(id, name);
-      return name;
-    };
-
-    const baseTasks = projectId
-      ? ctx.repos.tasks.listByProject(projectId)
-      : ctx.repos.tasks.listAll();
-
-    const tasks = baseTasks.map((task) => {
-      const agent = task.agentProfileId
-        ? ctx.repos.agentProfiles.findById(task.agentProfileId)
-        : null;
-      return {
-        ...task,
-        projectName: resolveProjectName(task.projectId),
-        agentProfileName: agent?.name ?? null,
-      };
+    const page = parsePageParamsFromUrl(url);
+    const result = listTasksPage(ctx.db, {
+      ...page,
+      projectId: url.searchParams.get("projectId"),
+      enabled: parseEnabledParam(url.searchParams.get("enabled")),
+      q: url.searchParams.get("q"),
     });
-    return success({ tasks });
+    return success({
+      tasks: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
   }
 
   if (method === "POST" && pathname === "/api/v1/tasks") {
@@ -591,7 +508,19 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/schedules") {
-    return success({ schedules: listAllSchedules(ctx) });
+    const page = parsePageParamsFromUrl(url);
+    const result = listSchedulesPage(ctx.db, {
+      ...page,
+      projectId: url.searchParams.get("projectId"),
+      enabled: parseEnabledParam(url.searchParams.get("enabled")),
+      q: url.searchParams.get("q"),
+    });
+    return success({
+      schedules: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
   }
 
   const scheduleActionMatch = pathname.match(/^\/api\/v1\/schedules\/([^/]+)\/(enable|disable|pause)$/);
@@ -614,8 +543,21 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/runs") {
-    const projectId = url.searchParams.get("projectId");
-    return success({ runs: listRuns(ctx, projectId) });
+    const page = parsePageParamsFromUrl(url);
+    const result = listRunsPage(ctx.db, {
+      ...page,
+      projectId: url.searchParams.get("projectId"),
+      taskId: url.searchParams.get("taskId"),
+      state: url.searchParams.get("state"),
+      trigger: url.searchParams.get("trigger"),
+      q: url.searchParams.get("q"),
+    });
+    return success({
+      runs: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
   }
 
   const runEventsMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/events$/);
@@ -801,7 +743,11 @@ export async function handleApiRequest(
       .connection()
       .query<{ count: number }, []>("SELECT COUNT(*) as count FROM tasks")
       .get()?.count ?? 0;
-    const schedules = listAllSchedules(ctx).length;
+    const schedules =
+      ctx.db
+        .connection()
+        .query<{ count: number }, []>("SELECT COUNT(*) as count FROM schedules")
+        .get()?.count ?? 0;
     const runs = ctx.db
       .connection()
       .query<{ count: number }, []>("SELECT COUNT(*) as count FROM runs")
@@ -856,7 +802,22 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/backups") {
-    return success({ backups: listBackups(ctx.paths) });
+    const page = parsePageParamsFromUrl(url);
+    const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
+    const all = listBackups(ctx.paths);
+    const filtered = q
+      ? all.filter(
+          (backup) =>
+            backup.name.toLowerCase().includes(q) || backup.path.toLowerCase().includes(q),
+        )
+      : all;
+    const paged = paginateArray(filtered, page);
+    return success({
+      backups: paged.items,
+      total: paged.total,
+      limit: paged.limit,
+      offset: paged.offset,
+    });
   }
 
   if (method === "POST" && pathname === "/api/v1/backups") {
@@ -880,6 +841,7 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/notification-channels") {
+    // Full map always — PUT replaces the whole map; UI pages entries client-side.
     const row = ctx.db
       .connection()
       .query<{ value_json: string }, [string]>(

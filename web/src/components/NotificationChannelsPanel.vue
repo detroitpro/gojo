@@ -6,6 +6,8 @@ import {
   putNotificationChannels,
   testNotificationChannel,
 } from "@/api";
+import TablePager from "@/components/TablePager.vue";
+import { useClientPager } from "@/composables/useClientPager";
 import type {
   NotificationChannelConfig,
   NotificationChannelEntry,
@@ -53,11 +55,35 @@ const formError = ref("");
 const testMessage = ref("");
 const testOk = ref(false);
 
+const channelQuery = ref("");
+
 const entries = computed<NotificationChannelEntry[]>(() =>
   Object.entries(channels.value)
     .map(([channelName, config]) => ({ name: channelName, ...config }))
     .sort((a, b) => a.name.localeCompare(b.name)),
 );
+
+const filteredEntries = computed(() => {
+  const q = channelQuery.value.trim().toLowerCase();
+  if (!q) {
+    return entries.value;
+  }
+  return entries.value.filter(
+    (entry) =>
+      entry.name.toLowerCase().includes(q) || entry.type.toLowerCase().includes(q),
+  );
+});
+
+const {
+  page: channelPage,
+  pages: channelPages,
+  pageItems: channelItems,
+  total: channelTotal,
+  rangeLabel: channelRange,
+  reset: resetChannelPage,
+} = useClientPager(filteredEntries, 25);
+
+watch(channelQuery, () => resetChannelPage());
 
 const typeHelp = computed(() => TYPE_HELP[type.value]);
 
@@ -241,48 +267,76 @@ defineExpose({ reload });
         No channels configured yet
       </div>
 
-      <div v-else-if="entries.length" class="table-wrap mt-5">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Webhook</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in entries" :key="entry.name">
-              <td class="mono">{{ entry.name }}</td>
-              <td>
-                <span class="badge badge-neutral">{{ entry.type }}</span>
-              </td>
-              <td class="mono muted">{{ maskUrl(entry.webhookUrl) }}</td>
-              <td>
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  :disabled="busy"
-                  @click="sendTestForRow(entry)"
-                >
-                  Send test
-                </button>
-                <button class="btn btn-sm" type="button" :disabled="busy" @click="openEdit(entry)">
-                  Edit
-                </button>
-                <button
-                  class="btn btn-sm btn-danger"
-                  type="button"
-                  :disabled="busy"
-                  @click="removeChannel(entry.name)"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <template v-else-if="entries.length">
+        <div class="inline-form mt-5 task-filters">
+          <div class="field flex-2">
+            <label for="channel-search">Search</label>
+            <input
+              id="channel-search"
+              v-model="channelQuery"
+              class="input"
+              type="search"
+              placeholder="Channel name, type…"
+            />
+          </div>
+        </div>
+        <div v-if="channelTotal === 0" class="muted mt-5">No channels match these filters</div>
+        <template v-else>
+          <div class="table-wrap mt-5">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Webhook</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="entry in channelItems" :key="entry.name">
+                  <td class="mono">{{ entry.name }}</td>
+                  <td>
+                    <span class="badge badge-neutral">{{ entry.type }}</span>
+                  </td>
+                  <td class="mono muted">{{ maskUrl(entry.webhookUrl) }}</td>
+                  <td>
+                    <button
+                      class="btn btn-sm"
+                      type="button"
+                      :disabled="busy"
+                      @click="sendTestForRow(entry)"
+                    >
+                      Send test
+                    </button>
+                    <button
+                      class="btn btn-sm"
+                      type="button"
+                      :disabled="busy"
+                      @click="openEdit(entry)"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      class="btn btn-sm btn-danger"
+                      type="button"
+                      :disabled="busy"
+                      @click="removeChannel(entry.name)"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <TablePager
+            v-model:page="channelPage"
+            :page-count="channelPages"
+            :range-label="channelRange"
+            :total="channelTotal"
+          />
+        </template>
+      </template>
 
       <div v-if="formOpen" class="channel-form mt-6">
         <div class="inline-form">

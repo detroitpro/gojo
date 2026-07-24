@@ -153,7 +153,7 @@ interface AgentProfileRow {
   created_at: string;
 }
 
-function mapProject(row: ProjectRow): Project {
+export function mapProject(row: ProjectRow): Project {
   return {
     id: row.id,
     name: row.name,
@@ -166,7 +166,7 @@ function mapProject(row: ProjectRow): Project {
   };
 }
 
-function mapTask(row: TaskRow): Task {
+export function mapTask(row: TaskRow): Task {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -183,7 +183,7 @@ function mapTask(row: TaskRow): Task {
   };
 }
 
-function mapSchedule(row: ScheduleRow): Schedule {
+export function mapSchedule(row: ScheduleRow): Schedule {
   return {
     id: row.id,
     taskId: row.task_id,
@@ -202,7 +202,7 @@ function mapSchedule(row: ScheduleRow): Schedule {
   };
 }
 
-function mapRun(row: RunRow): Run {
+export function mapRun(row: RunRow): Run {
   return {
     id: row.id,
     projectId: row.project_id,

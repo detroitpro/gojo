@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import TablePager from "@/components/TablePager.vue";
+import { useClientPager } from "@/composables/useClientPager";
 import { fmtDuration, fmtTime } from "@/lib/format";
 import {
   buildActivityItems,
@@ -20,7 +22,6 @@ const PAGE_SIZE = 10;
 
 const kindFilter = ref<ActivityKind | "all">("all");
 const query = ref("");
-const page = ref(1);
 const expanded = ref<Record<string, boolean>>({});
 
 const allItems = computed(() => buildActivityItems(props.events));
@@ -45,12 +46,7 @@ const filtered = computed(() => {
   });
 });
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)));
-
-const pageItems = computed(() => {
-  const start = (page.value - 1) * PAGE_SIZE;
-  return filtered.value.slice(start, start + PAGE_SIZE);
-});
+const { page, pages, pageItems, total, rangeLabel, reset } = useClientPager(filtered, PAGE_SIZE);
 
 // Auto-expand the newest assistant/stderr message so live thinking is visible.
 watch(
@@ -65,7 +61,7 @@ watch(
 );
 
 watch([() => props.phaseFilter, kindFilter, query], () => {
-  page.value = 1;
+  reset();
 });
 
 watch(
@@ -110,7 +106,7 @@ function statusClass(item: ActivityItem): string {
         type="search"
         placeholder="Filter activity…"
       />
-      <span class="muted">{{ filtered.length }} events</span>
+      <span class="muted">{{ total }} events</span>
     </div>
 
     <ul v-if="pageItems.length" class="activity-feed">
@@ -162,19 +158,11 @@ function statusClass(item: ActivityItem): string {
     </ul>
     <div v-else class="muted">No activity matches this filter.</div>
 
-    <div v-if="pageCount > 1" class="activity-pager">
-      <button class="btn btn-sm" type="button" :disabled="page <= 1" @click="page -= 1">
-        Prev
-      </button>
-      <span class="muted">Page {{ page }} / {{ pageCount }}</span>
-      <button
-        class="btn btn-sm"
-        type="button"
-        :disabled="page >= pageCount"
-        @click="page += 1"
-      >
-        Next
-      </button>
-    </div>
+    <TablePager
+      v-model:page="page"
+      :page-count="pages"
+      :range-label="rangeLabel"
+      :total="total"
+    />
   </div>
 </template>

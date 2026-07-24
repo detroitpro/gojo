@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import {
   createApiToken,
@@ -17,6 +17,8 @@ import {
   verifyBackup,
 } from "@/api";
 import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
+import TablePager from "@/components/TablePager.vue";
+import { useClientPager } from "@/composables/useClientPager";
 import type {
   ApiTokenInfo,
   BackupInfo,
@@ -38,6 +40,72 @@ const loading = ref(true);
 const error = ref("");
 const busy = ref(false);
 const message = ref("");
+const tokenQuery = ref("");
+const backupQuery = ref("");
+const doctorQuery = ref("");
+
+const filteredTokens = computed(() => {
+  const q = tokenQuery.value.trim().toLowerCase();
+  if (!q) {
+    return tokens.value;
+  }
+  return tokens.value.filter(
+    (token) => token.name.toLowerCase().includes(q) || token.id.toLowerCase().includes(q),
+  );
+});
+
+const filteredBackups = computed(() => {
+  const q = backupQuery.value.trim().toLowerCase();
+  if (!q) {
+    return backups.value;
+  }
+  return backups.value.filter(
+    (backup) =>
+      backup.name.toLowerCase().includes(q) || backup.path.toLowerCase().includes(q),
+  );
+});
+
+const filteredDoctorAgents = computed(() => {
+  const agents = doctor.value?.agents ?? [];
+  const q = doctorQuery.value.trim().toLowerCase();
+  if (!q) {
+    return agents;
+  }
+  return agents.filter(
+    (agent) =>
+      agent.name.toLowerCase().includes(q) ||
+      (agent.version?.toLowerCase().includes(q) ?? false),
+  );
+});
+
+const {
+  page: tokenPage,
+  pages: tokenPages,
+  pageItems: tokenItems,
+  total: tokenTotal,
+  rangeLabel: tokenRange,
+  reset: resetTokenPage,
+} = useClientPager(filteredTokens, 25);
+const {
+  page: backupPage,
+  pages: backupPages,
+  pageItems: backupItems,
+  total: backupTotal,
+  rangeLabel: backupRange,
+  reset: resetBackupPage,
+} = useClientPager(filteredBackups, 25);
+const {
+  page: doctorPage,
+  pages: doctorPages,
+  pageItems: doctorItems,
+  total: doctorTotal,
+  rangeLabel: doctorRange,
+  reset: resetDoctorPage,
+} = useClientPager(filteredDoctorAgents, 25);
+
+watch(tokenQuery, () => resetTokenPage());
+watch(backupQuery, () => resetBackupPage());
+watch(doctorQuery, () => resetDoctorPage());
 
 async function load() {
   loading.value = true;
@@ -47,16 +115,16 @@ async function load() {
     const [inst, h, toks, channelMap, backs, doc] = await Promise.all([
       getInstance(),
       getHealth(),
-      listApiTokens(),
+      listApiTokens({ limit: 100, offset: 0 }),
       listNotificationChannels(),
-      listBackups(),
+      listBackups({ limit: 100, offset: 0 }),
       getInstanceDoctor(),
     ]);
     instance.value = inst;
     health.value = h;
-    tokens.value = toks;
+    tokens.value = toks.items;
     channels.value = channelMap;
-    backups.value = backs;
+    backups.value = backs.items;
     doctor.value = doc;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load settings";
@@ -114,7 +182,7 @@ async function createToken() {
     const created = await createApiToken(tokenName.value.trim());
     createdToken.value = created.token;
     tokenName.value = "";
-    tokens.value = await listApiTokens();
+    tokens.value = (await listApiTokens({ limit: 100, offset: 0 })).items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to create token";
   } finally {
@@ -130,7 +198,7 @@ async function revokeToken(id: string) {
   error.value = "";
   try {
     await revokeApiToken(id);
-    tokens.value = await listApiTokens();
+    tokens.value = (await listApiTokens({ limit: 100, offset: 0 })).items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to revoke token";
   } finally {
@@ -145,7 +213,7 @@ async function doCreateBackup() {
   try {
     const result = await createBackup();
     message.value = `Backup created: ${result.path}`;
-    backups.value = await listBackups();
+    backups.value = (await listBackups({ limit: 100, offset: 0 })).items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Backup failed";
   } finally {
@@ -274,6 +342,18 @@ onMounted(load);
               database=<span :class="doctor.database ? 'ok' : 'bad'">{{ doctor.database }}</span>
             </div>
             <div class="mono muted mt-3">home={{ doctor.home }}</div>
+            <div class="inline-form mt-5 task-filters">
+              <div class="field flex-2">
+                <label for="doctor-agent-search">Search agents</label>
+                <input
+                  id="doctor-agent-search"
+                  v-model="doctorQuery"
+                  class="input"
+                  type="search"
+                  placeholder="Adapter name…"
+                />
+              </div>
+            </div>
             <div class="table-wrap mt-5">
               <table class="data">
                 <thead>
@@ -284,7 +364,7 @@ onMounted(load);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="agent in doctor.agents" :key="agent.name">
+                  <tr v-for="agent in doctorItems" :key="agent.name">
                     <td class="mono">{{ agent.name }}</td>
                     <td>{{ agent.installed ? "yes" : "no" }}</td>
                     <td class="mono muted">{{ agent.version ?? "—" }}</td>
@@ -292,6 +372,12 @@ onMounted(load);
                 </tbody>
               </table>
             </div>
+            <TablePager
+              v-model:page="doctorPage"
+              :page-count="doctorPages"
+              :range-label="doctorRange"
+              :total="doctorTotal"
+            />
           </template>
         </div>
       </section>
@@ -312,34 +398,55 @@ onMounted(load);
             Copy this token now; it will not be shown again.
             <pre class="pre-block mt-3">{{ createdToken }}</pre>
           </div>
-          <div v-if="tokens.length === 0" class="muted mt-5">No tokens</div>
-          <div v-else class="table-wrap mt-5">
-            <table class="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="token in tokens" :key="token.id">
-                  <td>{{ token.name }}</td>
-                  <td class="mono muted">{{ new Date(token.createdAt).toLocaleString() }}</td>
-                  <td>
-                    <button
-                      class="btn btn-sm btn-danger"
-                      type="button"
-                      :disabled="busy"
-                      @click="revokeToken(token.id)"
-                    >
-                      Revoke
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="inline-form mt-5 task-filters">
+            <div class="field flex-2">
+              <label for="token-search">Search</label>
+              <input
+                id="token-search"
+                v-model="tokenQuery"
+                class="input"
+                type="search"
+                placeholder="Token name…"
+              />
+            </div>
           </div>
+          <div v-if="tokens.length === 0" class="muted mt-5">No tokens</div>
+          <div v-else-if="tokenTotal === 0" class="muted mt-5">No tokens match these filters</div>
+          <template v-else>
+            <div class="table-wrap mt-5">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="token in tokenItems" :key="token.id">
+                    <td>{{ token.name }}</td>
+                    <td class="mono muted">{{ new Date(token.createdAt).toLocaleString() }}</td>
+                    <td>
+                      <button
+                        class="btn btn-sm btn-danger"
+                        type="button"
+                        :disabled="busy"
+                        @click="revokeToken(token.id)"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <TablePager
+              v-model:page="tokenPage"
+              :page-count="tokenPages"
+              :range-label="tokenRange"
+              :total="tokenTotal"
+            />
+          </template>
         </div>
       </section>
 
@@ -364,36 +471,57 @@ onMounted(load);
           >
             Create backup
           </button>
-          <div v-if="backups.length === 0" class="muted mt-5">No backups</div>
-          <div v-else class="table-wrap mt-5">
-            <table class="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Size</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="backup in backups" :key="backup.path">
-                  <td class="mono">{{ backup.name }}</td>
-                  <td class="mono muted">{{ formatBytes(backup.size) }}</td>
-                  <td class="mono muted">{{ new Date(backup.createdAt).toLocaleString() }}</td>
-                  <td>
-                    <button
-                      class="btn btn-sm"
-                      type="button"
-                      :disabled="busy"
-                      @click="doVerify(backup.path)"
-                    >
-                      Verify
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="inline-form mt-5 task-filters">
+            <div class="field flex-2">
+              <label for="backup-search">Search</label>
+              <input
+                id="backup-search"
+                v-model="backupQuery"
+                class="input"
+                type="search"
+                placeholder="Backup name…"
+              />
+            </div>
           </div>
+          <div v-if="backups.length === 0" class="muted mt-5">No backups</div>
+          <div v-else-if="backupTotal === 0" class="muted mt-5">No backups match these filters</div>
+          <template v-else>
+            <div class="table-wrap mt-5">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="backup in backupItems" :key="backup.path">
+                    <td class="mono">{{ backup.name }}</td>
+                    <td class="mono muted">{{ formatBytes(backup.size) }}</td>
+                    <td class="mono muted">{{ new Date(backup.createdAt).toLocaleString() }}</td>
+                    <td>
+                      <button
+                        class="btn btn-sm"
+                        type="button"
+                        :disabled="busy"
+                        @click="doVerify(backup.path)"
+                      >
+                        Verify
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <TablePager
+              v-model:page="backupPage"
+              :page-count="backupPages"
+              :range-label="backupRange"
+              :total="backupTotal"
+            />
+          </template>
         </div>
       </section>
     </template>

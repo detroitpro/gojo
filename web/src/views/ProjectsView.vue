@@ -10,35 +10,42 @@ import {
   syncProject,
 } from "@/api";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
+import TablePager from "@/components/TablePager.vue";
+import { useServerTable } from "@/composables/useServerTable";
 import type { Project, ProjectDoctorResult } from "@/types";
 
-const projects = ref<Project[]>([]);
-const loading = ref(true);
-const error = ref("");
+const query = ref("");
 const busyId = ref<string | null>(null);
 const pickerOpen = ref(false);
 const doctorResult = ref<ProjectDoctorResult | null>(null);
 const doctorProjectName = ref("");
-
 const name = ref("");
 const repoPath = ref("");
+
+const {
+  page,
+  pages,
+  items: projects,
+  total,
+  loading,
+  error,
+  rangeLabel,
+  reload,
+  load,
+} = useServerTable({
+  watchSources: [query],
+  fetchPage: ({ limit, offset }) =>
+    listProjects({
+      limit,
+      offset,
+      q: query.value || undefined,
+    }),
+});
 
 function basename(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, "");
   const parts = trimmed.split(/[/\\]/);
   return parts[parts.length - 1] || "project";
-}
-
-async function load() {
-  loading.value = true;
-  error.value = "";
-  try {
-    projects.value = await listProjects();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Failed to load projects";
-  } finally {
-    loading.value = false;
-  }
 }
 
 function onPicked(path: string) {
@@ -110,7 +117,9 @@ async function remove(project: Project) {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+});
 </script>
 
 <template>
@@ -120,7 +129,7 @@ onMounted(load);
         <h1>Projects</h1>
         <div class="subtitle">Git repositories under orchestration</div>
       </div>
-      <button class="btn btn-sm" type="button" @click="load">Refresh</button>
+      <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -155,63 +164,94 @@ onMounted(load);
       @select="onPicked"
     />
 
-    <div v-if="loading" class="empty">Loading…</div>
-    <div v-else-if="projects.length === 0" class="empty">No projects registered</div>
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Repo path</th>
-            <th>Branch</th>
-            <th>Updated</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="project in projects" :key="project.id">
-            <td>
-              <RouterLink :to="`/projects#${project.id}`" class="entity-name">{{
-                project.name
-              }}</RouterLink>
-              <div class="mono muted text-sm">{{ project.id.slice(0, 10) }}…</div>
-            </td>
-            <td class="mono muted">{{ project.repoPath }}</td>
-            <td class="mono">{{ project.defaultBranch }}</td>
-            <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
-            <td>
-              <div class="toolbar">
-                <RouterLink :to="`/projects#${project.id}`" class="btn btn-sm">Inspect</RouterLink>
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  :disabled="busyId === project.id"
-                  @click="sync(project.id)"
-                >
-                  Sync
-                </button>
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  :disabled="busyId === project.id"
-                  @click="doctor(project)"
-                >
-                  Doctor
-                </button>
-                <button
-                  class="btn btn-sm btn-danger"
-                  type="button"
-                  :disabled="busyId === project.id"
-                  @click="remove(project)"
-                >
-                  Remove
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="inline-form mb-7 task-filters">
+      <div class="field flex-2">
+        <label for="project-search">Search</label>
+        <input
+          id="project-search"
+          v-model="query"
+          class="input"
+          type="search"
+          placeholder="Name, path, id…"
+        />
+      </div>
+      <div class="field task-filter-count">
+        <label>&nbsp;</label>
+        <span class="muted">{{ total }} project{{ total === 1 ? "" : "s" }}</span>
+      </div>
     </div>
+
+    <div v-if="loading && projects.length === 0" class="empty">Loading…</div>
+    <div v-else-if="total === 0" class="empty">
+      {{ query ? "No projects match these filters" : "No projects registered" }}
+    </div>
+    <template v-else>
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Repo path</th>
+              <th>Branch</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="project in projects" :key="project.id">
+              <td>
+                <RouterLink
+                  :to="{ name: 'tasks', query: { projectId: project.id } }"
+                  class="entity-name"
+                >
+                  {{ project.name }}
+                </RouterLink>
+                <div class="mono muted text-sm">{{ project.id.slice(0, 10) }}…</div>
+              </td>
+              <td class="mono muted">{{ project.repoPath }}</td>
+              <td class="mono">{{ project.defaultBranch }}</td>
+              <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
+              <td>
+                <div class="toolbar">
+                  <RouterLink :to="`/projects#${project.id}`" class="btn btn-sm">Inspect</RouterLink>
+                  <button
+                    class="btn btn-sm"
+                    type="button"
+                    :disabled="busyId === project.id"
+                    @click="sync(project.id)"
+                  >
+                    Sync
+                  </button>
+                  <button
+                    class="btn btn-sm"
+                    type="button"
+                    :disabled="busyId === project.id"
+                    @click="doctor(project)"
+                  >
+                    Doctor
+                  </button>
+                  <button
+                    class="btn btn-sm btn-danger"
+                    type="button"
+                    :disabled="busyId === project.id"
+                    @click="remove(project)"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <TablePager
+        v-model:page="page"
+        :page-count="pages"
+        :range-label="rangeLabel"
+        :total="total"
+      />
+    </template>
 
     <section v-if="doctorResult" class="panel mt-7">
       <div class="panel-header">Doctor — {{ doctorProjectName }}</div>

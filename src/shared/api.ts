@@ -28,10 +28,11 @@ export const ApiErrorResponseSchema = z.object({
 
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 
+/** Offset/limit pagination meta (sibling to resource arrays under `data`). */
 export const PaginationMetaSchema = z.object({
-  page: z.number().int().positive(),
-  pageSize: z.number().int().positive(),
   total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
 });
 
 export type PaginationMeta = z.infer<typeof PaginationMetaSchema>;
@@ -43,11 +44,33 @@ export function apiSuccessResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) 
   });
 }
 
-/** Build a paginated list response schema. */
+/**
+ * Build a paginated list response schema.
+ * Resource arrays stay under a named key (e.g. `runs`); meta fields sit alongside.
+ */
+export function paginatedListDataSchema<T extends z.ZodTypeAny>(
+  resourceKey: string,
+  itemSchema: T,
+) {
+  return z
+    .object({
+      total: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
+      offset: z.number().int().nonnegative(),
+    })
+    .catchall(z.unknown())
+    .and(z.object({ [resourceKey]: z.array(itemSchema) }));
+}
+
+/** List payload with `items` plus pagination meta. */
 export function paginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
   return z.object({
-    data: z.array(itemSchema),
-    meta: PaginationMetaSchema,
+    data: z.object({
+      items: z.array(itemSchema),
+      total: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
+      offset: z.number().int().nonnegative(),
+    }),
   });
 }
 

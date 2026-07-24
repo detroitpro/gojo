@@ -598,11 +598,25 @@ table.data tr:hover td {
   justify-content: flex-end;
 }
 
+.table-pager,
 .activity-pager {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-4);
+}
+
+.table-pager-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.last-run-link {
+  display: inline-flex;
+  text-decoration: none;
 }
 
 .activity-row.highlighted {

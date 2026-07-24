@@ -353,10 +353,18 @@ describe("api/router", () => {
     const allResponse = await fetch(`${baseUrl}/api/v1/tasks`, { headers: auth });
     expect(allResponse.status).toBe(200);
     const allBody = (await allResponse.json()) as {
-      data: { tasks: Array<{ name: string; projectId: string; projectName: string | null }> };
+      data: {
+        tasks: Array<{ name: string; projectId: string; projectName: string | null }>;
+        total: number;
+        limit: number;
+        offset: number;
+      };
     };
     expect(allBody.data.tasks.map((t) => t.name).sort()).toEqual(["task-a", "task-b"]);
     expect(allBody.data.tasks.every((t) => t.projectName)).toBe(true);
+    expect(allBody.data.total).toBe(2);
+    expect(allBody.data.limit).toBe(25);
+    expect(allBody.data.offset).toBe(0);
 
     const scoped = await fetch(
       `${baseUrl}/api/v1/tasks?projectId=${encodeURIComponent(dataA.project.id)}`,
@@ -364,10 +372,36 @@ describe("api/router", () => {
     );
     expect(scoped.status).toBe(200);
     const scopedBody = (await scoped.json()) as {
-      data: { tasks: Array<{ name: string; projectId: string }> };
+      data: { tasks: Array<{ name: string; projectId: string }>; total: number };
     };
     expect(scopedBody.data.tasks).toHaveLength(1);
+    expect(scopedBody.data.total).toBe(1);
     expect(scopedBody.data.tasks[0]?.name).toBe("task-a");
     expect(scopedBody.data.tasks[0]?.projectId).toBe(dataA.project.id);
+
+    const paged = await fetch(`${baseUrl}/api/v1/tasks?limit=1&offset=1`, { headers: auth });
+    expect(paged.status).toBe(200);
+    const pagedBody = (await paged.json()) as {
+      data: {
+        tasks: Array<{
+          name: string;
+          lastRunId: string | null;
+          lastRunState: string | null;
+          lastRunCreatedAt: string | null;
+        }>;
+        total: number;
+        limit: number;
+        offset: number;
+      };
+    };
+    expect(pagedBody.data.tasks).toHaveLength(1);
+    expect(pagedBody.data.total).toBe(2);
+    expect(pagedBody.data.limit).toBe(1);
+    expect(pagedBody.data.offset).toBe(1);
+    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunId");
+    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunState");
+    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunCreatedAt");
   });
 });
+
+

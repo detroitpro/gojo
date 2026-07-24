@@ -15,6 +15,8 @@ import {
 import RunActivityFeed from "@/components/RunActivityFeed.vue";
 import RunTimelineChart from "@/components/RunTimelineChart.vue";
 import StateBadge from "@/components/StateBadge.vue";
+import TablePager from "@/components/TablePager.vue";
+import { useClientPager } from "@/composables/useClientPager";
 import {
   durationBetween,
   fmtCost,
@@ -41,6 +43,14 @@ const artifacts = ref<RunArtifactsResult | null>(null);
 const inspectBusy = ref(false);
 const selectedPhase = ref<PhaseKey | null>(null);
 const highlightActivityId = ref<string | null>(null);
+
+const {
+  page: attemptPage,
+  pages: attemptPages,
+  pageItems: attemptItems,
+  total: attemptTotal,
+  rangeLabel: attemptRange,
+} = useClientPager(attempts, 25);
 
 let unsubscribe: (() => void) | null = null;
 
@@ -517,7 +527,7 @@ onUnmounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="attempt in attempts" :key="attempt.id">
+              <tr v-for="attempt in attemptItems" :key="attempt.id">
                 <td class="mono">{{ attempt.attemptNumber }}</td>
                 <td class="mono">{{ attempt.state }}</td>
                 <td class="mono">{{ attempt.exitCode ?? "—" }}</td>
@@ -537,6 +547,12 @@ onUnmounted(() => {
               </tr>
             </tbody>
           </table>
+          <TablePager
+            v-model:page="attemptPage"
+            :page-count="attemptPages"
+            :range-label="attemptRange"
+            :total="attemptTotal"
+          />
         </div>
       </section>
     </template>

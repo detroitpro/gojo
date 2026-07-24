@@ -24,6 +24,9 @@ import type {
   User,
 } from "./types";
 import { ApiError } from "./types";
+import { buildListQuery, type ListQuery, type PaginatedResult } from "./lib/pagination";
+
+export type { ListQuery, PaginatedResult };
 
 const API_BASE = "/api/v1";
 
@@ -162,9 +165,19 @@ export async function testNotificationChannel(
   return data;
 }
 
-export async function listApiTokens(): Promise<ApiTokenInfo[]> {
-  const { data } = await request<{ tokens: ApiTokenInfo[] }>("/auth/tokens");
-  return data.tokens;
+export async function listApiTokens(query: ListQuery = {}): Promise<PaginatedResult<ApiTokenInfo>> {
+  const { data } = await request<{
+    tokens: ApiTokenInfo[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/auth/tokens${buildListQuery(query)}`);
+  return {
+    items: data.tokens,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function createApiToken(name: string): Promise<CreatedApiToken> {
@@ -179,9 +192,19 @@ export async function revokeApiToken(id: string): Promise<void> {
   await request<{ revoked: boolean }>(`/auth/tokens/${id}`, { method: "DELETE" });
 }
 
-export async function listBackups(): Promise<BackupInfo[]> {
-  const { data } = await request<{ backups: BackupInfo[] }>("/backups");
-  return data.backups;
+export async function listBackups(query: ListQuery = {}): Promise<PaginatedResult<BackupInfo>> {
+  const { data } = await request<{
+    backups: BackupInfo[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/backups${buildListQuery(query)}`);
+  return {
+    items: data.backups,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function createBackup(): Promise<{ path: string }> {
@@ -197,9 +220,19 @@ export async function verifyBackup(path: string): Promise<{ path: string; valid:
   return data;
 }
 
-export async function listProjects(): Promise<Project[]> {
-  const { data } = await request<{ projects: Project[] }>("/projects");
-  return data.projects;
+export async function listProjects(query: ListQuery = {}): Promise<PaginatedResult<Project>> {
+  const { data } = await request<{
+    projects: Project[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/projects${buildListQuery(query)}`);
+  return {
+    items: data.projects,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function createProject(input: {
@@ -251,10 +284,19 @@ export async function getProjectDoctor(id: string): Promise<ProjectDoctorResult>
   return data;
 }
 
-export async function listTasks(projectId?: string): Promise<Task[]> {
-  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
-  const { data } = await request<{ tasks: Task[] }>(`/tasks${query}`);
-  return data.tasks;
+export async function listTasks(query: ListQuery = {}): Promise<PaginatedResult<Task>> {
+  const { data } = await request<{
+    tasks: Task[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/tasks${buildListQuery(query)}`);
+  return {
+    items: data.tasks,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function runTask(id: string): Promise<Run> {
@@ -262,10 +304,19 @@ export async function runTask(id: string): Promise<Run> {
   return data.run;
 }
 
-export async function listRuns(projectId?: string): Promise<Run[]> {
-  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
-  const { data } = await request<{ runs: Run[] }>(`/runs${query}`);
-  return data.runs;
+export async function listRuns(query: ListQuery = {}): Promise<PaginatedResult<Run>> {
+  const { data } = await request<{
+    runs: Run[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/runs${buildListQuery(query)}`);
+  return {
+    items: data.runs,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function getRun(id: string): Promise<{ run: Run; attempts: Attempt[] }> {
@@ -365,9 +416,19 @@ export function subscribeRunEvents(
   return () => source.close();
 }
 
-export async function listSchedules(): Promise<Schedule[]> {
-  const { data } = await request<{ schedules: Schedule[] }>("/schedules");
-  return data.schedules;
+export async function listSchedules(query: ListQuery = {}): Promise<PaginatedResult<Schedule>> {
+  const { data } = await request<{
+    schedules: Schedule[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/schedules${buildListQuery(query)}`);
+  return {
+    items: data.schedules,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function enableSchedule(id: string): Promise<Schedule> {

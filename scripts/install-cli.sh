@@ -53,23 +53,40 @@ if [[ ! -x "$BIN_SRC" ]]; then
   exit 1
 fi
 
+# Atomic install: Linux rejects in-place overwrite of a running binary (ETXTBSY /
+# "Text file busy") when systemd/launchd still has the old gojo mapped. Write a
+# sibling then rename over the destination so the new inode replaces the path;
+# the running process keeps the old inode until restart.
+install_binary() {
+  local src="$1"
+  local dest="$2"
+  local use_sudo="${3:-0}"
+  local tmp="${dest}.new.$$"
+  if [[ "$use_sudo" -eq 1 ]]; then
+    sudo cp "$src" "$tmp"
+    sudo chmod 755 "$tmp"
+    sudo mv -f "$tmp" "$dest"
+  else
+    cp "$src" "$tmp"
+    chmod 755 "$tmp"
+    mv -f "$tmp" "$dest"
+  fi
+}
+
 if [[ "$SYSTEM" -eq 1 ]]; then
   INSTALL_DIR="/usr/local/bin"
   INSTALL_PATH="$INSTALL_DIR/gojo"
   if [[ -w "$INSTALL_DIR" ]]; then
-    cp "$BIN_SRC" "$INSTALL_PATH"
+    install_binary "$BIN_SRC" "$INSTALL_PATH" 0
   else
     echo "Copying to $INSTALL_PATH (sudo)..."
-    sudo cp "$BIN_SRC" "$INSTALL_PATH"
-    sudo chmod 755 "$INSTALL_PATH"
+    install_binary "$BIN_SRC" "$INSTALL_PATH" 1
   fi
-  chmod 755 "$INSTALL_PATH" 2>/dev/null || true
 else
   INSTALL_DIR="${HOME}/.local/bin"
   INSTALL_PATH="$INSTALL_DIR/gojo"
   mkdir -p "$INSTALL_DIR"
-  cp "$BIN_SRC" "$INSTALL_PATH"
-  chmod 755 "$INSTALL_PATH"
+  install_binary "$BIN_SRC" "$INSTALL_PATH" 0
 fi
 
 GOJO_HOME_DIR="${GOJO_HOME:-$HOME/.gojo}"

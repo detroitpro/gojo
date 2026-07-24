@@ -1,0 +1,30 @@
+---
+description: Planning values — prefer holistic, reusable, scale-ready designs over short-term scope cuts
+alwaysApply: true
+---
+
+# Planning values (gojo)
+
+When creating or revising plans, optimize for a **holistic platform**, not for how fast or small the change is.
+
+## Priorities (in order)
+
+1. **Consistency** — Same patterns for the same problem across API, storage, CLI, and UI.
+2. **Reusability** — Shared primitives (types, helpers, components, composables) over one-off copies.
+3. **Self-contained modules** — Clear ownership; callers depend on small contracts.
+4. **Testability** — Design so unit/integration tests are natural, not bolted on.
+5. **Forward scale** — Prefer the shape we will need at 10× data (e.g. server-side pagination now), even if current volume is small.
+
+## Do not
+
+- Cut API/storage work from a plan only because “client-side is enough for now” or “scope/time.”
+- Ship UI-only pagination/filtering for list endpoints that will grow (runs, tasks, schedules, …) without a matching paged API.
+- Leave “follow-up when it gets big” as the default for cross-cutting platform concerns.
+
+## Allowed client-only paging
+
+In-memory or parent-scoped datasets that are not unbounded lists: e.g. activity events already loaded for one run, adapter detect results, tiny settings sublists that are not DB-backed history. Still use the **same pager UI** so the product feels consistent.
+
+## Plan content
+
+Plans should state the shared contract first (types + query params + response shape), then storage, API, UI, and tests — not UI shortcuts with deferred backend.

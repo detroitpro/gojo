@@ -145,6 +145,9 @@ export interface Task {
   /** Present on list API responses */
   projectName?: string | null;
   agentProfileName?: string | null;
+  lastRunId?: string | null;
+  lastRunState?: string | null;
+  lastRunCreatedAt?: string | null;
 }
 
 export interface ApiTokenInfo {

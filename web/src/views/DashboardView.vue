@@ -1,59 +1,62 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
-import {
-  getDashboard,
-  listRuns,
-  listSchedules,
-  pauseInstance,
-  resumeInstance,
-} from "@/api";
+import { getDashboard, listRuns, listSchedules, pauseInstance, resumeInstance } from "@/api";
 import StateBadge from "@/components/StateBadge.vue";
-import type { Run, Schedule } from "@/types";
+import TablePager from "@/components/TablePager.vue";
+import { useServerTable } from "@/composables/useServerTable";
 
 const loading = ref(true);
 const error = ref("");
 const paused = ref(false);
 const activeRuns = ref(0);
-const runs = ref<Run[]>([]);
-const schedules = ref<Schedule[]>([]);
+const projectCount = ref(0);
+const taskCount = ref(0);
+const scheduleCount = ref(0);
+const runsTotal = ref(0);
 
-const runningCount = computed(
-  () =>
-    runs.value.filter((r) =>
-      ["Running", "Preparing", "Validating", "Integrating", "Reporting"].includes(r.state),
-    ).length,
-);
+const {
+  page: recentPage,
+  pages: recentPages,
+  items: recentRuns,
+  total: recentTotal,
+  rangeLabel: recentRange,
+  load: loadRecent,
+} = useServerTable({
+  pageSize: 8,
+  fetchPage: ({ limit, offset }) => listRuns({ limit, offset }),
+});
 
-const queuedCount = computed(
-  () => runs.value.filter((r) => ["Queued", "Scheduled"].includes(r.state)).length,
-);
-
-const failedCount = computed(
-  () =>
-    runs.value.filter((r) =>
-      ["Failed", "TimedOut", "InfrastructureFailure", "Conflict", "Abandoned"].includes(r.state),
-    ).length,
-);
-
-const recentRuns = computed(() => runs.value.slice(0, 8));
-
-const disabledSchedules = computed(() => schedules.value.filter((s) => !s.enabled));
+const {
+  page: disabledPage,
+  pages: disabledPages,
+  items: disabledSchedules,
+  total: disabledTotal,
+  rangeLabel: disabledRange,
+  load: loadDisabled,
+} = useServerTable({
+  pageSize: 25,
+  fetchPage: ({ limit, offset }) =>
+    listSchedules({
+      limit,
+      offset,
+      enabled: false,
+    }),
+});
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [dashboard, runList, scheduleList] = await Promise.all([
-      getDashboard(),
-      listRuns(),
-      listSchedules(),
-    ]);
+    const dashboard = await getDashboard();
     paused.value = dashboard.paused;
     activeRuns.value = dashboard.activeRuns;
-    runs.value = runList;
-    schedules.value = scheduleList;
+    projectCount.value = dashboard.projects;
+    taskCount.value = dashboard.tasks;
+    scheduleCount.value = dashboard.schedules;
+    runsTotal.value = dashboard.runs;
+    await Promise.all([loadRecent(), loadDisabled()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load dashboard";
   } finally {
@@ -77,7 +80,9 @@ function fmtTime(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+});
 </script>
 
 <template>
@@ -102,78 +107,98 @@ onMounted(load);
     <template v-else>
       <div class="stats-row">
         <div class="stat">
-          <div class="label">Running</div>
-          <div class="value">{{ runningCount }}</div>
+          <div class="label">Projects</div>
+          <div class="value">{{ projectCount }}</div>
         </div>
         <div class="stat">
-          <div class="label">Queued</div>
-          <div class="value">{{ queuedCount }}</div>
+          <div class="label">Tasks</div>
+          <div class="value">{{ taskCount }}</div>
         </div>
         <div class="stat">
-          <div class="label">Failed</div>
-          <div class="value bad">{{ failedCount }}</div>
+          <div class="label">Schedules</div>
+          <div class="value">{{ scheduleCount }}</div>
         </div>
         <div class="stat">
-          <div class="label">Active (API)</div>
+          <div class="label">Runs</div>
+          <div class="value">{{ runsTotal }}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Active</div>
           <div class="value ok">{{ activeRuns }}</div>
         </div>
       </div>
 
       <section class="panel">
         <div class="panel-header">Recent runs</div>
-        <div v-if="recentRuns.length === 0" class="empty">No runs yet</div>
-        <div v-else class="table-wrap">
-          <table class="data">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Project</th>
-                <th>State</th>
-                <th>Trigger</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="run in recentRuns" :key="run.id">
-                <td>
-                  <RouterLink :to="`/runs/${run.id}`" class="entity-name">
-                    {{ run.taskName || "Unknown task" }}
-                  </RouterLink>
-                  <div class="mono muted text-sm">{{ run.id.slice(0, 10) }}…</div>
-                </td>
-                <td>{{ run.projectName || "—" }}</td>
-                <td><StateBadge :state="run.state" /></td>
-                <td class="mono">{{ run.trigger }}</td>
-                <td class="mono muted">{{ fmtTime(run.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div v-if="recentTotal === 0" class="empty">No runs yet</div>
+        <template v-else>
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Project</th>
+                  <th>State</th>
+                  <th>Trigger</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="run in recentRuns" :key="run.id">
+                  <td>
+                    <RouterLink :to="`/runs/${run.id}`" class="entity-name">
+                      {{ run.taskName || "Unknown task" }}
+                    </RouterLink>
+                    <div class="mono muted text-sm">{{ run.id.slice(0, 10) }}…</div>
+                  </td>
+                  <td>{{ run.projectName || "—" }}</td>
+                  <td><StateBadge :state="run.state" /></td>
+                  <td class="mono">{{ run.trigger }}</td>
+                  <td class="mono muted">{{ fmtTime(run.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <TablePager
+            v-model:page="recentPage"
+            :page-count="recentPages"
+            :range-label="recentRange"
+            :total="recentTotal"
+          />
+        </template>
       </section>
 
       <section class="panel">
-        <div class="panel-header">Disabled schedules ({{ disabledSchedules.length }})</div>
-        <div v-if="disabledSchedules.length === 0" class="panel-body muted">All schedules enabled</div>
-        <div v-else class="table-wrap">
-          <table class="data">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Cron</th>
-                <th>Failures</th>
-                <th>Last run</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="schedule in disabledSchedules" :key="schedule.id">
-                <td>{{ schedule.name }}</td>
-                <td class="mono">{{ schedule.cronExpr }}</td>
-                <td class="mono">{{ schedule.consecutiveFailures }}</td>
-                <td class="mono muted">{{ fmtTime(schedule.lastRunAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div class="panel-header">Disabled schedules</div>
+        <div v-if="disabledTotal === 0" class="panel-body muted">All schedules enabled</div>
+        <template v-else>
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Cron</th>
+                  <th>Failures</th>
+                  <th>Last run</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="schedule in disabledSchedules" :key="schedule.id">
+                  <td>{{ schedule.name }}</td>
+                  <td class="mono">{{ schedule.cronExpr }}</td>
+                  <td class="mono">{{ schedule.consecutiveFailures }}</td>
+                  <td class="mono muted">{{ fmtTime(schedule.lastRunAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <TablePager
+            v-model:page="disabledPage"
+            :page-count="disabledPages"
+            :range-label="disabledRange"
+            :total="disabledTotal"
+          />
+        </template>
       </section>
     </template>
   </div>

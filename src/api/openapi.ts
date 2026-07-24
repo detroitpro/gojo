@@ -19,14 +19,28 @@ export const openApiDocument = {
       post: { summary: "Clear session cookie" },
     },
     "/api/v1/auth/tokens": {
-      get: { summary: "List API tokens" },
+      get: {
+        summary: "List API tokens",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
       post: { summary: "Create API token" },
     },
     "/api/v1/auth/tokens/{id}": {
       delete: { summary: "Revoke API token" },
     },
     "/api/v1/projects": {
-      get: { summary: "List projects" },
+      get: {
+        summary: "List projects",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
       post: { summary: "Create project" },
     },
     "/api/v1/projects/{id}": {
@@ -46,14 +60,32 @@ export const openApiDocument = {
       post: { summary: "Smoke-test agent adapter" },
     },
     "/api/v1/tasks": {
-      get: { summary: "List tasks" },
+      get: {
+        summary: "List tasks",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "enabled", in: "query", schema: { type: "string" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
       post: { summary: "Create task" },
     },
     "/api/v1/tasks/{id}/run": {
       post: { summary: "Queue task run" },
     },
     "/api/v1/schedules": {
-      get: { summary: "List schedules" },
+      get: {
+        summary: "List schedules",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "enabled", in: "query", schema: { type: "string" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
     },
     "/api/v1/schedules/{id}/enable": {
       post: { summary: "Enable schedule" },
@@ -65,7 +97,18 @@ export const openApiDocument = {
       post: { summary: "Pause schedule" },
     },
     "/api/v1/runs": {
-      get: { summary: "List runs" },
+      get: {
+        summary: "List runs",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "taskId", in: "query", schema: { type: "string" } },
+          { name: "state", in: "query", schema: { type: "string" } },
+          { name: "trigger", in: "query", schema: { type: "string" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
     },
     "/api/v1/runs/{id}": {
       get: { summary: "Get run" },
@@ -115,7 +158,14 @@ export const openApiDocument = {
       post: { summary: "Send a test notification to a channel config" },
     },
     "/api/v1/backups": {
-      get: { summary: "List backups" },
+      get: {
+        summary: "List backups",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+      },
       post: { summary: "Create backup" },
     },
     "/api/v1/backups/verify": {
