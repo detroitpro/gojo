@@ -84,6 +84,54 @@ describe('decideHealEnqueue', () => {
     db.close();
   });
 
+  test('does not enqueue when healer task is missing or below failure threshold', () => {
+    const db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: 'demo',
+      repoPath: '/tmp/demo',
+    });
+    const failing = repos.tasks.create({
+      projectId: project.id,
+      name: 'deps',
+      prompt: 'do work',
+    });
+    const run = repos.runs.create({
+      projectId: project.id,
+      taskId: failing.id,
+      idempotencyKey: 'k4',
+      trigger: 'manual',
+      state: RunState.Failed,
+    });
+
+    const missingHealer = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedTask: failing,
+      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
+    });
+    expect(missingHealer.shouldEnqueue).toBe(false);
+    expect(missingHealer.reason).toContain('not found');
+
+    repos.tasks.create({
+      projectId: project.id,
+      name: 'self-heal',
+      prompt: 'heal',
+    });
+
+    const belowThreshold = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedTask: failing,
+      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
+    });
+    expect(belowThreshold.shouldEnqueue).toBe(false);
+    expect(belowThreshold.reason).toContain('consecutive failures');
+
+    db.close();
+  });
+
   test('does not enqueue for heal-triggered runs', () => {
     const db = Database.open(':memory:');
     db.migrate();

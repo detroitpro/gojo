@@ -4,6 +4,7 @@ import {
   backoffMsFor,
   maxAttemptsFor,
   parseFailurePolicy,
+  sleep,
 } from '@/runs/failure-policy';
 
 describe('parseFailurePolicy', () => {
@@ -32,5 +33,15 @@ describe('parseFailurePolicy', () => {
     expect(backoffMsFor({ backoff: 'linear' }, 2)).toBe(5_000);
     expect(backoffMsFor({ backoff: 'exponential' }, 2)).toBe(5_000);
     expect(backoffMsFor({ backoff: 'exponential' }, 3)).toBe(10_000);
+  });
+
+  test('tolerates invalid JSON and sleep handles zero and abort', async () => {
+    expect(parseFailurePolicy('not-json')).toEqual({});
+
+    await expect(sleep(0)).resolves.toBeUndefined();
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(sleep(1_000, controller.signal)).rejects.toThrow('aborted');
   });
 });

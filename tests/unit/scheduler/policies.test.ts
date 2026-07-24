@@ -36,6 +36,7 @@ describe("scheduler/policies", () => {
 
     test("skip returns empty", () => {
       expect(selectMissedRuns("skip", missed)).toEqual([]);
+      expect(selectMissedRuns("run_once", [])).toEqual([]);
     });
 
     test("run_once returns earliest missed", () => {

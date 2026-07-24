@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { getHome, getOutputFormat, parseArgv } from "@/cli/parse";
+import { getFlagString, getHome, getOutputFormat, hasFlag, parseArgv } from "@/cli/parse";
 
 describe("cli/parse", () => {
   test("parses command, flags, and positional args", () => {
@@ -30,6 +30,13 @@ describe("cli/parse", () => {
     expect(parsed.command).toEqual(["server", "start"]);
     expect(parsed.flags["daemon"]).toBe(true);
     expect(parsed.flags["foreground"]).toBe("false");
+
+    const short = parseArgv(["-v", "server", "status"]);
+    expect(short.flags["v"]).toBe(true);
+    expect(getOutputFormat(parseArgv(["--output", "yaml"]))).toBe("yaml");
+    expect(getOutputFormat(parseArgv([]))).toBe("text");
+    expect(getFlagString(parseArgv(["--name", "x"]), "name")).toBe("x");
+    expect(hasFlag(parseArgv(["--verbose"]), "verbose")).toBe(true);
   });
 
   test("supports short help flag", () => {
