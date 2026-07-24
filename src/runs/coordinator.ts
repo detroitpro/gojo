@@ -5,10 +5,12 @@ import { ulid } from 'ulid';
 
 import { getAdapter } from '@/agents';
 import type { AgentExecuteResult } from '@/agents/adapter/types';
+import { readHandoffIfPresent } from '@/agents/handoff-file';
 import { syncProjectFromManifest } from '@/api/project-sync';
 import type { GojoPaths } from '@/config/paths';
 import { diffNameOnly, execGit } from '@/git/git';
 import { integrate, type IntegrationMode } from '@/integration/integrator';
+import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
 import type { AgentHandoffReport } from '@shared/handoff';
@@ -220,6 +222,7 @@ export class RunCoordinator {
 
         const agentResult = await this.executeAgent(
           run.id,
+          attempt.id,
           task,
           workspacePath,
           controller.signal,
@@ -482,6 +485,18 @@ export class RunCoordinator {
 
     run = await this.transitionRun(run, RunState.Integrating);
 
+    const fallbackTitle = buildCommitMessage(input.task, run, input.integration);
+    const handoff = resolveAttemptHandoff(attempt, input.workspacePath);
+    const pr =
+      input.mode === 'pull-request'
+        ? buildPrDescription({
+            taskName: input.task.name,
+            runId: run.id,
+            fallbackTitle,
+            handoff,
+          })
+        : null;
+
     const result = await integrate({
       mode: input.mode,
       projectId: input.project.id,
@@ -489,8 +504,14 @@ export class RunCoordinator {
       repoPath: input.project.repoPath,
       targetBranch: input.integration.targetBranch ?? input.project.defaultBranch,
       branchName: input.branchName,
-      commitMessage: buildCommitMessage(input.task, run, input.integration),
+      commitMessage: pr?.title ?? fallbackTitle,
       runId: run.id,
+      ...(pr
+        ? {
+            prTitle: pr.title,
+            prBody: pr.body,
+          }
+        : {}),
       mergeQueue: this.mergeQueue,
     });
 
@@ -524,6 +545,7 @@ export class RunCoordinator {
 
   private async executeAgent(
     runId: string,
+    attemptId: string,
     task: Task,
     workspacePath: string,
     signal: AbortSignal,
@@ -592,6 +614,7 @@ export class RunCoordinator {
         onAgentEvent: (event) => {
           if (event.type === 'model') {
             this.emit('run.agent.model', runId, { model: event.model });
+            this.repos.attempts.update(attemptId, { model: event.model });
             return;
           }
           this.emit('run.agent.tool', runId, {
@@ -1055,6 +1078,17 @@ function buildCommitMessage(
   integration: IntegrationConfig,
 ): string {
   return integration.commitMessage ?? `gojo: ${task.name} (${run.id})`;
+}
+
+function resolveAttemptHandoff(attempt: Attempt, workspacePath: string): unknown {
+  if (attempt.handoffJson) {
+    try {
+      return JSON.parse(attempt.handoffJson) as unknown;
+    } catch {
+      // Fall through to worktree file.
+    }
+  }
+  return readHandoffIfPresent(workspacePath);
 }
 
 function resolveAdapterName(

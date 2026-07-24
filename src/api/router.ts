@@ -21,7 +21,6 @@ import {
   safeParseNotificationChannelConfig,
   safeParseNotificationChannelMap,
 } from "@shared/notifications";
-import { isTerminal } from "@shared/run-states";
 import type { Schedule } from "@/storage/types";
 
 import {
@@ -499,17 +498,27 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/tasks") {
     const projectId = url.searchParams.get("projectId");
-    if (!projectId) {
-      return failure("validation_error", "projectId query parameter is required", 400);
-    }
-    const project = ctx.repos.projects.findById(projectId);
-    const tasks = ctx.repos.tasks.listByProject(projectId).map((task) => {
+    const projectCache = new Map<string, string | null>();
+    const resolveProjectName = (id: string): string | null => {
+      if (projectCache.has(id)) {
+        return projectCache.get(id) ?? null;
+      }
+      const name = ctx.repos.projects.findById(id)?.name ?? null;
+      projectCache.set(id, name);
+      return name;
+    };
+
+    const baseTasks = projectId
+      ? ctx.repos.tasks.listByProject(projectId)
+      : ctx.repos.tasks.listAll();
+
+    const tasks = baseTasks.map((task) => {
       const agent = task.agentProfileId
         ? ctx.repos.agentProfiles.findById(task.agentProfileId)
         : null;
       return {
         ...task,
-        projectName: project?.name ?? null,
+        projectName: resolveProjectName(task.projectId),
         agentProfileName: agent?.name ?? null,
       };
     });
@@ -617,32 +626,95 @@ export async function handleApiRequest(
       return failure("not_found", "Run not found", 404);
     }
 
-    const historical = ctx.eventHistory.list(runId);
+    const lastEventHeader = request.headers.get("Last-Event-ID");
+    const afterId = lastEventHeader != null ? Number(lastEventHeader) : undefined;
+    const afterIdOk =
+      afterId != null && Number.isFinite(afterId) ? afterId : undefined;
+
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
-        for (const event of historical) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        }
+        let closed = false;
+        const seen = new Set<number>();
+        let unsubscribe = () => {};
+        let keepalive: ReturnType<typeof setInterval> | undefined;
 
-        const unsubscribe = ctx.eventBus.subscribe((event) => {
+        const shutdown = () => {
+          if (closed) {
+            return;
+          }
+          closed = true;
+          if (keepalive !== undefined) {
+            clearInterval(keepalive);
+          }
+          unsubscribe();
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
+
+        const send = (event: { id?: number; type: string; runId: string }) => {
+          if (closed || event.runId !== runId) {
+            return;
+          }
+          if (event.id != null) {
+            if (seen.has(event.id)) {
+              return;
+            }
+            seen.add(event.id);
+          }
+          const idLine = event.id != null ? `id: ${event.id}\n` : "";
+          controller.enqueue(
+            encoder.encode(`${idLine}data: ${JSON.stringify(event)}\n\n`),
+          );
+          if (event.type === "run.finished") {
+            shutdown();
+          }
+        };
+
+        // Subscribe first so events during replay are buffered, then replay.
+        const liveBuffer: Array<{ id?: number; type: string; runId: string }> = [];
+        let replaying = true;
+        unsubscribe = ctx.eventBus.subscribe((event) => {
           if (event.runId !== runId) {
             return;
           }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-          if (isTerminal(run.state) && event.type === "run.finished") {
-            controller.close();
+          if (replaying) {
+            liveBuffer.push(event);
+            return;
           }
+          send(event);
         });
 
-        request.signal.addEventListener(
-          "abort",
-          () => {
-            unsubscribe();
-            controller.close();
-          },
-          { once: true },
-        );
+        for (const event of ctx.eventHistory.list(runId, afterIdOk)) {
+          send(event);
+          if (closed) {
+            return;
+          }
+        }
+        replaying = false;
+        for (const event of liveBuffer) {
+          send(event);
+          if (closed) {
+            return;
+          }
+        }
+
+        // Comment pings keep proxies from treating a quiet agent as dead.
+        keepalive = setInterval(() => {
+          if (closed) {
+            return;
+          }
+          try {
+            controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+          } catch {
+            shutdown();
+          }
+        }, 15_000);
+
+        request.signal.addEventListener("abort", shutdown, { once: true });
       },
     });
 
@@ -651,6 +723,7 @@ export async function handleApiRequest(
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   }

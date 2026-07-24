@@ -4,7 +4,11 @@ import type {
   AgentExecuteResult,
 } from '@/agents/adapter/types';
 import { readHandoffIfPresent } from '@/agents/handoff-file';
-import { mapCursorStreamEvent, NdjsonLineBuffer } from '@/agents/stream-json';
+import {
+  mapCursorStreamEvent,
+  NdjsonLineBuffer,
+  resolveAssistantTextDelta,
+} from '@/agents/stream-json';
 import { parseCursorUsage, type AgentUsage } from '@/agents/usage';
 import { runProcess } from '@/process/supervisor';
 
@@ -101,7 +105,7 @@ export class CursorAgentAdapter implements AgentAdapter {
     let model: string | undefined;
     let usage: AgentUsage | undefined;
     let resultText = '';
-    const seenAssistantTexts = new Set<string>();
+    let assistantEmitted = '';
 
     const handleLine = (line: string) => {
       let parsed: unknown;
@@ -117,12 +121,16 @@ export class CursorAgentAdapter implements AgentAdapter {
           model = event.model;
           ctx.onAgentEvent?.({ type: 'model', model: event.model });
         } else if (event.kind === 'text') {
-          if (seenAssistantTexts.has(event.text)) {
+          const delta = resolveAssistantTextDelta(assistantEmitted, event.text);
+          if (!delta || !delta.emit) {
             continue;
           }
-          seenAssistantTexts.add(event.text);
-          ctx.onOutput?.('stdout', event.text.endsWith('\n') ? event.text : `${event.text}\n`);
+          assistantEmitted = delta.nextPrevious;
+          // Emit tokens as-is — do not force a newline per partial chunk.
+          ctx.onOutput?.('stdout', delta.emit);
         } else if (event.kind === 'tool') {
+          // New assistant segment after tools; avoid sticking markers mid-token.
+          assistantEmitted = '';
           ctx.onAgentEvent?.({
             type: 'tool',
             phase: event.phase,
@@ -131,7 +139,7 @@ export class CursorAgentAdapter implements AgentAdapter {
           });
           ctx.onOutput?.(
             'stdout',
-            `[tool ${event.phase}] ${event.name} (${event.callId})\n`,
+            `\n[tool ${event.phase}] ${event.name} (${event.callId})\n`,
           );
         } else if (event.kind === 'result') {
           resultText =

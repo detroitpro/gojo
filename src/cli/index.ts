@@ -55,10 +55,37 @@ async function runServerStart(parsed: ParsedArgv, format: ReturnType<typeof getO
   }
 
   await new Promise<void>((resolve) => {
+    let shuttingDown = false;
     const shutdown = async () => {
-      server.stop();
-      await ctx.dispose();
-      resolve();
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+
+      // Never hang forever on dispose (scheduler/DB/open requests).
+      const forceTimer = setTimeout(() => {
+        process.exit(0);
+      }, 3_000);
+      forceTimer.unref?.();
+
+      try {
+        server.stop();
+        await ctx.dispose();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(
+          JSON.stringify({
+            level: "error",
+            component: "server",
+            event: "shutdown_failed",
+            error: message,
+          }),
+        );
+      } finally {
+        clearTimeout(forceTimer);
+        resolve();
+        process.exit(0);
+      }
     };
     process.on("SIGINT", () => {
       void shutdown();

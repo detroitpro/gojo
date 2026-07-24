@@ -159,6 +159,12 @@ Full guide: **[Self-healing](https://detroitpro.github.io/gojo/self-healing)** (
 
 This repo dogfoods the pattern via [`gojo.yaml`](./gojo.yaml) — register the gojo checkout as a project and `gojo project sync <id>`.
 
+## Task prompt limits
+
+Start every scheduled AI task with **numeric Hard rules** (max tests, files, deps, PRs). Timeouts stop the process; limits keep the diff reviewable. Guide: **[Task prompt best practices](https://detroitpro.github.io/gojo/task-prompts)** (source: [`site/src/pages/task-prompts.md`](./site/src/pages/task-prompts.md); engineering note: [`docs/task-prompts.md`](./docs/task-prompts.md)).
+
+For `pull-request` tasks, gojo builds the GitHub PR title/body from `.gojo/handoff.json` — prompts must put **what / why / value** in `summary` and rationale in `decisions`.
+
 ## Background service
 
 ```bash
@@ -222,7 +228,7 @@ bun run build:web      # Vue admin UI → web/dist (embedded by the server)
 bun run install:cli    # copy binary to ~/.local/bin (+ web assets to ~/.gojo)
 ```
 
-`make check` runs typecheck, tests with coverage baseline, web + site builds, and binary compile (same as GitHub Actions).
+`make check` runs typecheck, tests, web + site builds, and binary compile (same as GitHub Actions). Coverage % never fails CI or gojo validation; use `make coverage` (or `scripts/daemon-coverage.sh`) for an informational report.
 
 Engineering docs (boundaries, modules): [`docs/`](./docs/). Product spec: [`PRD.md`](./PRD.md).
 

@@ -39,7 +39,8 @@ const filtered = computed(() => {
     }
     return (
       item.title.toLowerCase().includes(q) ||
-      (item.detail?.toLowerCase().includes(q) ?? false)
+      (item.detail?.toLowerCase().includes(q) ?? false) ||
+      (item.body?.toLowerCase().includes(q) ?? false)
     );
   });
 });
@@ -50,6 +51,18 @@ const pageItems = computed(() => {
   const start = (page.value - 1) * PAGE_SIZE;
   return filtered.value.slice(start, start + PAGE_SIZE);
 });
+
+// Auto-expand the newest assistant/stderr message so live thinking is visible.
+watch(
+  pageItems,
+  (rows) => {
+    const newest = rows.find((row) => row.kind === "assistant" || row.body);
+    if (newest && expanded.value[newest.id] === undefined) {
+      expanded.value = { ...expanded.value, [newest.id]: true };
+    }
+  },
+  { immediate: true },
+);
 
 watch([() => props.phaseFilter, kindFilter, query], () => {
   page.value = 1;
@@ -85,6 +98,7 @@ function statusClass(item: ActivityItem): string {
         <option value="all">All kinds</option>
         <option value="lifecycle">Lifecycle</option>
         <option value="agent">Agent</option>
+        <option value="assistant">Assistant</option>
         <option value="tool">Tools</option>
         <option value="validation">Validation</option>
         <option value="artifact">Artifacts</option>
@@ -111,6 +125,17 @@ function statusClass(item: ActivityItem): string {
         <div class="activity-body">
           <div class="activity-title">{{ row.title }}</div>
           <div v-if="row.detail" class="activity-detail muted">{{ row.detail }}</div>
+
+          <template v-if="row.body">
+            <button class="btn btn-sm mt-2" type="button" @click="toggle(row.id)">
+              {{ expanded[row.id] ? "Hide message" : "Show message" }}
+            </button>
+            <pre
+              v-if="expanded[row.id]"
+              class="pre-block mt-2 activity-assistant-body"
+              >{{ row.body }}</pre
+            >
+          </template>
 
           <template v-if="row.validation">
             <div class="activity-meta mono muted">

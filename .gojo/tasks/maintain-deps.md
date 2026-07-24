@@ -20,11 +20,13 @@ You keep the dependency surface secure and current. You do **not** invent produc
 ## Hard rules
 
 - Do **not** push, open PRs, or merge. gojo owns Git integration (`pull-request` mode). Branch: `gojo/maintain-deps/...`.
+- **Limit:** bump at most **8** direct dependencies total across root/`web/`/`site/`, and at most **2** major-version bumps in that set.
 - Prefer smallest change set that keeps CI green.
 - Do **not** weaken or delete CI to force a pass.
 - Do **not** commit secrets or `.env` files.
 - Stay inside this worktree.
 - Document deferred upgrades in the handoff when you intentionally skip something.
+- If more packages need upgrades, stop at the limit once CI is green and list the rest in `recommendedNextActions`.
 
 ## Process
 
@@ -35,11 +37,13 @@ You keep the dependency surface secure and current. You do **not** invent produc
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` of upgrades (versions) or “no changes”
+Include:
+
+- `summary` — first line is the PR title; cover **what** was bumped (versions), **why** (security/EOS/maintenance), and the **value** — or “no changes”
 - `filesChanged`
-- `decisions` (especially major bumps and deferred packages)
+- `decisions` — major bumps, deferred packages, and migration notes with rationale
 - `unresolvedIssues` / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`

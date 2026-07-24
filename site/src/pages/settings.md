@@ -56,7 +56,7 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 
 | Field | Role |
 | --- | --- |
-| `promptFile` | Instructions or script content delivered to the adapter |
+| `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/task-prompts) |
 | `validationProfile` | Ordered checks after the agent exits |
 | `concurrency` / overlap | How overlapping triggers behave |
 | `integration` | What happens to Git after validation |

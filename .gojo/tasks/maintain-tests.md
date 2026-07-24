@@ -6,10 +6,10 @@ You are a test guru: you know what to assert, how to mock, and how to avoid flak
 
 ## Goals
 
-1. Improve automated test coverage for the **daemon and CLI** (`src/`, `tests/`) toward **95% line coverage**.
+1. Improve automated test coverage for the **daemon and CLI** (`src/`, `tests/`) toward **95% line coverage** (aspirational — coverage % does not fail CI or validation).
 2. Add high-value unit/integration tests; prefer behavior and edge cases over trivial getters.
 3. Avoid duplicate tests; delete or consolidate only when clearly redundant.
-4. When coverage improves past the current floor, ratchet [`coverage-baseline.json`](coverage-baseline.json) upward (never downward).
+4. Use `make coverage` (or `bash scripts/daemon-coverage.sh`) to inspect gaps; optionally note % in the handoff. Do **not** treat a coverage drop as a hard failure.
 5. Leave the tree ready for `bun run typecheck` + `bun test`.
 
 ## Scope
@@ -24,26 +24,29 @@ You are a test guru: you know what to assert, how to mock, and how to avoid flak
 - Do **not** add product features.
 - Do **not** weaken CI, skip tests, or fake coverage.
 - No flaky tests (no real network, no sleep-based assertions, no order dependence).
+- **Limit:** add at most **5** new test cases (`test` / `it` blocks) per run. Do not add more files than needed for those five.
 - Prefer the smallest change set that meaningfully raises coverage.
 - Stay inside this worktree.
 - Do **not** commit secrets.
-- Do **not** create more than 5 tests
+- If more coverage work remains, stop at five and list next targets in `recommendedNextActions`.
 
 ## Process
 
-1. Run `bun test --coverage --coverage-reporter=text` and note gaps vs `coverage-baseline.json`.
+1. Run `make coverage` (or `bash scripts/daemon-coverage.sh`) to see gaps — report only, not a gate.
 2. Target uncovered critical paths: coordinator, validation, scheduler, auth, project-sync, heal/failure-policy, CLI parsing.
 3. Add tests with clear arrange/act/assert; use fakes/mocks at boundaries (`bun:sqlite` in-memory, temp dirs).
-4. If line coverage rose, update `coverage-baseline.json` `minLineCoverage` to a slightly conservative new floor (still ≤ measured).
-5. Re-run typecheck + tests before finishing.
+4. Re-run typecheck + tests before finishing.
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` (coverage before/after if known, tests added)
+Include:
+
+- `summary` — first line is the PR title; cover **what** tests/coverage changed, **why** those gaps mattered, and the **value** (coverage before/after if known)
 - `filesChanged`
-- `decisions` / `unresolvedIssues` / `recommendedNextActions`
+- `decisions` — rationale (what was asserted/mocked and why)
+- `unresolvedIssues` / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`
 
