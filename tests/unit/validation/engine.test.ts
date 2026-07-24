@@ -94,4 +94,27 @@ describe('validation/engine', () => {
     expect(result.passed).toBe(true);
     expect(result.results).toHaveLength(0);
   });
+
+  test('runValidationProfile cancels when signal is already aborted', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'gojo-validation-abort-test-'));
+    const controller = new AbortController();
+    controller.abort();
+
+    const steps: Array<{ name: string; command: string }> = [];
+    const onStep = (result: { status: string }) => {
+      steps.push({ name: result.status, command: '' });
+    };
+
+    const result = await runValidationProfile({
+      cwd: tempDir,
+      steps: [{ name: 'never-runs', command: 'true' }],
+      signal: controller.signal,
+      onStep,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.status).toBe('canceled');
+    expect(steps).toHaveLength(1);
+  });
 });
