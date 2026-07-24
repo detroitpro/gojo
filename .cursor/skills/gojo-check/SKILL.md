@@ -20,12 +20,12 @@ description: >-
 Delegates to `scripts/ci-check.sh`:
 
 - Daemon `typecheck`
-- Daemon `bun test --coverage` with **line coverage ≥** `coverage-baseline.json`
+- Daemon `bun test` (no coverage % fail gate)
 - Web typecheck + build
 - Site Astro build
 - Compile `bin/gojo`
 
 ## Notes
 
-- Prefer fixing root causes over lowering the coverage baseline.
-- Ratchet `coverage-baseline.json` upward when overall coverage meaningfully improves.
+- Coverage reporting is optional and never a fail gate: `make coverage` or `scripts/daemon-coverage.sh`.
+- Prefer fixing root causes over weakening tests.

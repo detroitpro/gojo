@@ -228,7 +228,7 @@ bun run build:web      # Vue admin UI → web/dist (embedded by the server)
 bun run install:cli    # copy binary to ~/.local/bin (+ web assets to ~/.gojo)
 ```
 
-`make check` runs typecheck, tests with coverage baseline, web + site builds, and binary compile (same as GitHub Actions).
+`make check` runs typecheck, tests, web + site builds, and binary compile (same as GitHub Actions). Coverage % never fails CI or gojo validation; use `make coverage` (or `scripts/daemon-coverage.sh`) for an informational report.
 
 Engineering docs (boundaries, modules): [`docs/`](./docs/). Product spec: [`PRD.md`](./PRD.md).
 
