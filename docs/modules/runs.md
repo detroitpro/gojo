@@ -29,7 +29,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 - `validation/`
 - `integration/`
 - `storage/`
-- `api/project-sync` (manifest re-sync before run)
+- `app/project-sync` (manifest re-sync before run)
 - `notifications/` hooks (outcomes)
 - `process/` (indirectly via agents/validation)
 

@@ -31,6 +31,7 @@ workspace ────────► git
 | Adapter marking run Succeeded | Return handoff; let validation/integration decide |
 | Agent `git push` to default branch as success path | `commit-only` / PR / approval modes via integration |
 | UI or router embedding cron math | `scheduler/` + storage |
+| Domain modules importing `api/` for manifest sync | `app/project-sync` (shared by CLI, API, coordinator) |
 
 ## When you change a boundary
 

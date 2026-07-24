@@ -2,7 +2,7 @@
 
 import { createAppContext } from "@/app/context";
 import { computeScheduleNextRun } from "@/app/context";
-import { syncProjectFromManifest } from "@/api/project-sync";
+import { syncProjectFromManifest } from "@/app/project-sync";
 import { checkHealth, readPidFile, startServer, stopServerByPid } from "@/api/server";
 import { listAdapters } from "@/agents";
 import { UserService } from "@/auth/users";

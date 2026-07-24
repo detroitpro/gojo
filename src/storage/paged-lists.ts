@@ -1,7 +1,10 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import type { PageParams, PaginatedList } from "@shared/pagination";
+import type { RunState } from "@shared/run-states";
 
 import type { Database } from "@/storage";
-import type { Project, Run, Schedule, Task } from "@/storage/types";
+import type { Project, Run, RunTrigger, Schedule, Task } from "@/storage/types";
 import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
 
 export type ListProjectsPageInput = PageParams & {
@@ -109,9 +112,9 @@ function likePattern(q: string): string {
 
 function buildWhere(
   clauses: string[],
-  params: unknown[],
+  params: SQLQueryBindings[],
   clause: string,
-  value: unknown,
+  value: SQLQueryBindings,
 ): void {
   clauses.push(clause);
   params.push(value);
@@ -123,7 +126,7 @@ export function listProjectsPage(
 ): PaginatedList<Project> {
   const sqlite = db.connection();
   const clauses: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
   const q = input.q?.trim();
   if (q) {
     buildWhere(
@@ -137,7 +140,7 @@ export function listProjectsPage(
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const total =
     sqlite
-      .query<{ count: number }, unknown[]>(
+      .query<{ count: number }, SQLQueryBindings[]>(
         `SELECT COUNT(*) AS count FROM projects ${where}`,
       )
       .get(...params)?.count ?? 0;
@@ -162,7 +165,7 @@ export function listTasksPage(
 ): PaginatedList<TaskListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (input.projectId) {
     buildWhere(clauses, params, "t.project_id = ?", input.projectId);
@@ -193,7 +196,7 @@ export function listTasksPage(
 
   const total =
     sqlite
-      .query<{ count: number }, unknown[]>(
+      .query<{ count: number }, SQLQueryBindings[]>(
         `SELECT COUNT(*) AS count FROM tasks t
          LEFT JOIN projects p ON p.id = t.project_id
          ${where}`,
@@ -201,7 +204,7 @@ export function listTasksPage(
       .get(...params)?.count ?? 0;
 
   const rows = sqlite
-    .query<SqlTaskRow, unknown[]>(
+    .query<SqlTaskRow, SQLQueryBindings[]>(
       `SELECT t.*, p.name AS project_name, a.name AS agent_profile_name,
               lr.id AS last_run_id, lr.state AS last_run_state, lr.created_at AS last_run_created_at
        ${from} ${where}
@@ -212,7 +215,7 @@ export function listTasksPage(
 
   return {
     items: rows.map((row) => ({
-      ...mapTask(row),
+      ...mapTask({ ...row, description: row.description ?? "" }),
       projectName: row.project_name,
       agentProfileName: row.agent_profile_name,
       lastRunId: row.last_run_id,
@@ -231,7 +234,7 @@ export function listRunsPage(
 ): PaginatedList<RunListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (input.projectId) {
     buildWhere(clauses, params, "r.project_id = ?", input.projectId);
@@ -261,11 +264,11 @@ export function listRunsPage(
 
   const total =
     sqlite
-      .query<{ count: number }, unknown[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
+      .query<{ count: number }, SQLQueryBindings[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
       .get(...params)?.count ?? 0;
 
   const rows = sqlite
-    .query<SqlRunRow, unknown[]>(
+    .query<SqlRunRow, SQLQueryBindings[]>(
       `SELECT r.*, p.name AS project_name, t.name AS task_name
        ${from} ${where}
        ORDER BY r.created_at DESC
@@ -275,7 +278,11 @@ export function listRunsPage(
 
   return {
     items: rows.map((row) => ({
-      ...mapRun(row),
+      ...mapRun({
+        ...row,
+        state: row.state as RunState,
+        trigger: row.trigger as RunTrigger,
+      }),
       projectName: row.project_name,
       taskName: row.task_name,
     })),
@@ -291,7 +298,7 @@ export function listSchedulesPage(
 ): PaginatedList<ScheduleListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [];
-  const params: unknown[] = [];
+  const params: SQLQueryBindings[] = [];
 
   if (input.projectId) {
     buildWhere(clauses, params, "t.project_id = ?", input.projectId);
@@ -317,11 +324,11 @@ export function listSchedulesPage(
 
   const total =
     sqlite
-      .query<{ count: number }, unknown[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
+      .query<{ count: number }, SQLQueryBindings[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
       .get(...params)?.count ?? 0;
 
   const rows = sqlite
-    .query<SqlScheduleRow, unknown[]>(
+    .query<SqlScheduleRow, SQLQueryBindings[]>(
       `SELECT s.*, t.name AS task_name, t.project_id AS project_id, p.name AS project_name
        ${from} ${where}
        ORDER BY s.created_at

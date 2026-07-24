@@ -6,7 +6,7 @@ import { ulid } from 'ulid';
 import { getAdapter } from '@/agents';
 import type { AgentExecuteResult } from '@/agents/adapter/types';
 import { readHandoffIfPresent } from '@/agents/handoff-file';
-import { syncProjectFromManifest } from '@/api/project-sync';
+import { syncProjectFromManifest } from '@/app/project-sync';
 import type { GojoPaths } from '@/config/paths';
 import { diffNameOnly, execGit } from '@/git/git';
 import { integrate, type IntegrationMode } from '@/integration/integrator';
