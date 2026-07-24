@@ -31,6 +31,9 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
     hostname,
     port,
     fetch: handler,
+    // SSE run event streams stay open for minutes; Bun's default 10s idle
+    // timeout otherwise closes them ("request timed out" → Vite socket hang up).
+    idleTimeout: 0,
   });
 
   if (options.writePid !== false) {

@@ -75,6 +75,39 @@ function assistantText(message: unknown): string {
 }
 
 /**
+ * Turn Cursor `--stream-partial-output` assistant payloads into printable
+ * deltas. Handles both incremental tokens and cumulative snapshots without
+ * forcing a newline after every piece (that made the agent console
+ * word-wrap vertically).
+ */
+export function resolveAssistantTextDelta(
+  previouslyEmitted: string,
+  incoming: string,
+): { emit: string; nextPrevious: string } | null {
+  if (!incoming) {
+    return null;
+  }
+  if (incoming === previouslyEmitted) {
+    return null;
+  }
+  if (previouslyEmitted && incoming.startsWith(previouslyEmitted)) {
+    return {
+      emit: incoming.slice(previouslyEmitted.length),
+      nextPrevious: incoming,
+    };
+  }
+  if (previouslyEmitted && previouslyEmitted.startsWith(incoming)) {
+    // Shorter prefix / rewind — ignore.
+    return null;
+  }
+  // Fresh delta token (or a new segment after a tool call).
+  return {
+    emit: incoming,
+    nextPrevious: previouslyEmitted + incoming,
+  };
+}
+
+/**
  * Map a Cursor stream-json event object into gojo stream events.
  * Filters duplicate assistant flushes when stream-partial-output is used.
  */

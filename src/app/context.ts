@@ -12,7 +12,7 @@ import { UserService } from "@/auth/users";
 import { NotificationDispatcher } from "@/notifications/dispatcher";
 import { wireNotificationHooks } from "@/notifications/hooks";
 import { RunCoordinator } from "@/runs/coordinator";
-import { RunEventBus, type RunEvent } from "@/runs/events";
+import { RunEventBus, RunEventHistory } from "@/runs/events";
 import { Scheduler } from "@/scheduler/scheduler";
 import { nextOccurrence } from "@/scheduler/cron";
 import { SecretStore } from "@/secrets/store";
@@ -25,28 +25,6 @@ import { isInstancePaused, setInstancePaused } from "./instance-settings";
 const AGENT_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 
 const SESSION_SECRET_NAME = "__gojo_session_secret__";
-
-class RunEventHistory {
-  private readonly events = new Map<string, RunEvent[]>();
-  private readonly maxPerRun = 500;
-
-  record(event: RunEvent): void {
-    const list = this.events.get(event.runId) ?? [];
-    list.push(event);
-    if (list.length > this.maxPerRun) {
-      list.shift();
-    }
-    this.events.set(event.runId, list);
-  }
-
-  list(runId: string): RunEvent[] {
-    return [...(this.events.get(runId) ?? [])];
-  }
-
-  clear(): void {
-    this.events.clear();
-  }
-}
 
 export interface AppContext {
   paths: GojoPaths;

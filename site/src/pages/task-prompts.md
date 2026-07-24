@@ -36,7 +36,7 @@ Structure every AI task prompt the same way:
 3. **Scope** — paths in / paths out.
 4. **Hard rules** — safety + **numeric limits** (non-negotiable).
 5. **Process** — short ordered steps.
-6. **Required handoff** — `.gojo/handoff.json` (schemaVersion 1).
+6. **Required handoff** — `.gojo/handoff.json` (schemaVersion 1) with **what / why / value** (see below).
 
 ### Hard rules checklist
 
@@ -45,6 +45,20 @@ Structure every AI task prompt the same way:
 - Stay in the worktree.
 - **Explicit caps** (files, packages, tests, PRs, themes).
 - What to do when unfinished work remains (`recommendedNextActions`).
+
+## Handoff drives the pull request
+
+When `integration.mode` is `pull-request`, **gojo** runs `gh pr create` — the agent must not. The PR title and body are built from `.gojo/handoff.json`:
+
+| Handoff field | PR use |
+| --- | --- |
+| `summary` (first line) | PR title (truncated) |
+| `summary` (full) | Opening “Summary” section — must include **what**, **why**, and **value** |
+| `decisions` | Decisions section (rationale, not only outcomes) |
+| `filesChanged` | Files changed |
+| `unresolvedIssues` / `recommendedNextActions` | Follow-ups |
+
+Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create`.
 
 ### Minimal Hard rules sketch
 

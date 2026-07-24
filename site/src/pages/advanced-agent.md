@@ -136,10 +136,13 @@ You are maintaining dependencies for this repository in an unattended gojo run.
 4. Summarize every decision in the handoff.
 
 ## Required handoff
-Write `.gojo/handoff.json` before you finish, including:
-- summary of upgrades applied
+Write `.gojo/handoff.json` before you finish. **gojo opens the PR from this handoff**
+(title ≈ first line of summary; body from summary/decisions/files). Do **not** run \`gh pr create\`.
+
+Include:
+- summary — first line is the PR title; cover **what** changed, **why**, and the **value**
 - filesChanged
-- decisions (especially skipped majors)
+- decisions (especially skipped majors, with rationale)
 - unresolvedIssues
 - recommendedNextActions
 - agentAssessment.successful and confidence
@@ -150,7 +153,7 @@ gojo will still associate the artifact with the real run.
 
 Adjust package manager commands in `validationProfiles` to match the repo (`npm`, `yarn`, `cargo test`, `go test`, etc.).
 
-**Start every new task with constrained limits** in Hard rules (tests, files, packages, PRs). Widen later once the schedule is trusted — see [Task prompt best practices](/task-prompts).
+**Start every new task with constrained limits** in Hard rules (tests, files, packages, PRs). Widen later once the schedule is trusted — see [Task prompt best practices](/task-prompts). That guide also covers **handoff → PR description**.
 
 ## Why this is “advanced”
 

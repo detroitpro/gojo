@@ -40,11 +40,14 @@ You are a test guru: you know what to assert, how to mock, and how to avoid flak
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` (coverage before/after if known, tests added)
+Include:
+
+- `summary` — first line is the PR title; cover **what** tests/coverage changed, **why** those gaps mattered, and the **value** (coverage before/after if known)
 - `filesChanged`
-- `decisions` / `unresolvedIssues` / `recommendedNextActions`
+- `decisions` — rationale (what was asserted/mocked and why)
+- `unresolvedIssues` / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`
 

@@ -38,11 +38,14 @@ You are a pedantic TypeScript expert building one of the most performant, readab
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` of refactors (or “no changes”)
+Include:
+
+- `summary` — first line is the PR title; body must cover **what** changed, **why**, and the **value** (or “no changes”)
 - `filesChanged`
-- `decisions` / `unresolvedIssues` / `recommendedNextActions`
+- `decisions` — rationale for each notable choice (not only “what”)
+- `unresolvedIssues` / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`
 

@@ -310,4 +310,64 @@ describe("api/router", () => {
       webhookServer.stop();
     }
   });
+
+  test("lists all tasks without projectId and scopes when provided", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const projectA = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "alpha", repoPath: `${tempDir}/alpha` }),
+    });
+    expect(projectA.status).toBe(201);
+    const { data: dataA } = (await projectA.json()) as { data: { project: { id: string } } };
+
+    const projectB = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "beta", repoPath: `${tempDir}/beta` }),
+    });
+    expect(projectB.status).toBe(201);
+    const { data: dataB } = (await projectB.json()) as { data: { project: { id: string } } };
+
+    for (const [projectId, name] of [
+      [dataA.project.id, "task-a"],
+      [dataB.project.id, "task-b"],
+    ] as const) {
+      const created = await fetch(`${baseUrl}/api/v1/tasks`, {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          projectId,
+          name,
+          prompt: "echo ok",
+        }),
+      });
+      expect(created.status).toBe(201);
+    }
+
+    const allResponse = await fetch(`${baseUrl}/api/v1/tasks`, { headers: auth });
+    expect(allResponse.status).toBe(200);
+    const allBody = (await allResponse.json()) as {
+      data: { tasks: Array<{ name: string; projectId: string; projectName: string | null }> };
+    };
+    expect(allBody.data.tasks.map((t) => t.name).sort()).toEqual(["task-a", "task-b"]);
+    expect(allBody.data.tasks.every((t) => t.projectName)).toBe(true);
+
+    const scoped = await fetch(
+      `${baseUrl}/api/v1/tasks?projectId=${encodeURIComponent(dataA.project.id)}`,
+      { headers: auth },
+    );
+    expect(scoped.status).toBe(200);
+    const scopedBody = (await scoped.json()) as {
+      data: { tasks: Array<{ name: string; projectId: string }> };
+    };
+    expect(scopedBody.data.tasks).toHaveLength(1);
+    expect(scopedBody.data.tasks[0]?.name).toBe("task-a");
+    expect(scopedBody.data.tasks[0]?.projectId).toBe(dataA.project.id);
+  });
 });

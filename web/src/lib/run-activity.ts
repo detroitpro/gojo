@@ -4,6 +4,7 @@ import type { RunEvent, ValidationStepEventData } from "@/types";
 export type ActivityKind =
   | "lifecycle"
   | "agent"
+  | "assistant"
   | "tool"
   | "validation"
   | "artifact"
@@ -17,9 +18,12 @@ export interface ActivityItem {
   kind: ActivityKind;
   title: string;
   detail?: string;
+  body?: string;
   status?: "info" | "success" | "error" | "warn";
   validation?: ValidationStepEventData;
 }
+
+const TOOL_LINE_RE = /^\[tool (?:started|completed)\]\s+/;
 
 function phaseForState(state: string): PhaseKey | null {
   switch (state) {
@@ -43,16 +47,95 @@ function parseMs(at: string): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+function stripToolDuplicateLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !TOOL_LINE_RE.test(line.trim()))
+    .join("\n");
+}
+
+function assistantTitle(text: string): string {
+  const first = text.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  if (!first) {
+    return "Assistant";
+  }
+  return first.length > 80 ? `${first.slice(0, 79)}…` : first;
+}
+
+interface OpenAssistant {
+  stream: "stdout" | "stderr";
+  at: string;
+  atMs: number;
+  text: string;
+  index: number;
+}
+
+function flushAssistant(open: OpenAssistant | null, out: ActivityItem[]): void {
+  if (!open) {
+    return;
+  }
+  const cleaned = stripToolDuplicateLines(open.text).trim();
+  if (!cleaned) {
+    return;
+  }
+  const isErr = open.stream === "stderr";
+  out.push({
+    id: `assistant-${open.index}-${open.atMs}`,
+    at: open.at,
+    atMs: open.atMs,
+    phase: "agent",
+    kind: isErr ? "error" : "assistant",
+    title: isErr ? "Agent stderr" : assistantTitle(cleaned),
+    body: cleaned,
+    status: isErr ? "error" : "info",
+  });
+}
+
+/**
+ * Build newest-first activity rows from run SSE events.
+ * Coalesces run.agent.output into assistant turns (not one row per token).
+ */
 export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
   const out: ActivityItem[] = [];
   let lastStateTitle = "";
+  let open: OpenAssistant | null = null;
+  let assistantIndex = 0;
+
+  const breakAssistant = () => {
+    flushAssistant(open, out);
+    open = null;
+  };
 
   events.forEach((event, index) => {
-    if (event.type === "run.agent.output") {
+    if (event.type === "run.agent.output" && event.data && typeof event.data === "object") {
+      const data = event.data as { stream?: string; chunk?: string };
+      const stream = data.stream === "stderr" ? "stderr" : "stdout";
+      const chunk = typeof data.chunk === "string" ? data.chunk : "";
+      if (!chunk) {
+        return;
+      }
+      if (open && open.stream !== stream) {
+        breakAssistant();
+      }
+      if (!open) {
+        open = {
+          stream,
+          at: event.at,
+          atMs: parseMs(event.at),
+          text: chunk,
+          index: assistantIndex++,
+        };
+      } else {
+        open.text += chunk;
+      }
       return;
     }
 
-    const id = `${event.at}-${event.type}-${index}`;
+    // Non-output events end the current assistant turn.
+    breakAssistant();
+
+    const id =
+      event.id != null ? `evt-${event.id}` : `${event.at}-${event.type}-${index}`;
     const atMs = parseMs(event.at);
 
     if (event.type === "run.created") {
@@ -120,7 +203,7 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
         phase: "agent",
         kind: "tool",
         title: `Tool ${data.phase ?? "event"} · ${data.name ?? "tool"}`,
-        detail: data.callId,
+        ...(data.callId ? { detail: data.callId } : {}),
         status: data.phase === "completed" ? "success" : "info",
       });
       return;
@@ -192,7 +275,7 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
         phase: "integrate",
         kind: "artifact",
         title: "Handoff written",
-        detail: path || undefined,
+        ...(path ? { detail: path } : {}),
         status: "success",
       });
       return;
@@ -245,6 +328,8 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
       });
     }
   });
+
+  breakAssistant();
 
   // Newest activity first so live updates appear at the top of the feed.
   out.reverse();

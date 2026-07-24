@@ -37,11 +37,13 @@ You keep the dependency surface secure and current. You do **not** invent produc
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` of upgrades (versions) or “no changes”
+Include:
+
+- `summary` — first line is the PR title; cover **what** was bumped (versions), **why** (security/EOS/maintenance), and the **value** — or “no changes”
 - `filesChanged`
-- `decisions` (especially major bumps and deferred packages)
+- `decisions` — major bumps, deferred packages, and migration notes with rationale
 - `unresolvedIssues` / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`

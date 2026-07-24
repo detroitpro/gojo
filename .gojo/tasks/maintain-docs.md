@@ -38,12 +38,14 @@ You scour the implementation and ensure documentation matches reality. You do **
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
 
-- `summary` of docs corrected (or “no changes”)
+Include:
+
+- `summary` — first line is the PR title; cover **what** docs were corrected, **why** they were wrong/stale, and the **value** for operators/readers — or “no changes”
 - `filesChanged`
-- `decisions` / `unresolvedIssues` (code bugs found but not fixed)
-- `recommendedNextActions`
+- `decisions` — notable doc choices / scope cuts with rationale
+- `unresolvedIssues` (code bugs found but not fixed) / `recommendedNextActions`
 - `agentAssessment.successful` and `confidence`
 - `status`: `"completed"`
 

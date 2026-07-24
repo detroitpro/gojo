@@ -163,6 +163,8 @@ This repo dogfoods the pattern via [`gojo.yaml`](./gojo.yaml) — register the g
 
 Start every scheduled AI task with **numeric Hard rules** (max tests, files, deps, PRs). Timeouts stop the process; limits keep the diff reviewable. Guide: **[Task prompt best practices](https://detroitpro.github.io/gojo/task-prompts)** (source: [`site/src/pages/task-prompts.md`](./site/src/pages/task-prompts.md); engineering note: [`docs/task-prompts.md`](./docs/task-prompts.md)).
 
+For `pull-request` tasks, gojo builds the GitHub PR title/body from `.gojo/handoff.json` — prompts must put **what / why / value** in `summary` and rationale in `decisions`.
+
 ## Background service
 
 ```bash

@@ -43,6 +43,7 @@ For each PR:
 ## Hard rules
 
 - You **may** use `gh` and `git push` on PR branches — this task owns merge, unlike the worker tasks.
+- If an allowlisted PR still has a stub/empty body (`Automated run…` / no what-why-value), improve the description with `gh pr edit` when you touch that PR (use the handoff or commit messages — do not invent features).
 - **Limit:** babysit/merge at most **3** allowlisted PRs per run (newest first). Do not open new feature work beyond fixing those PRs.
 - Do **not** push unrelated commits directly to `main` outside of the merge.
 - Do **not** merge PRs outside the allowlist.

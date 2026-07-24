@@ -26,6 +26,10 @@ export interface IntegrateOptions {
   branchName: string;
   commitMessage: string;
   runId: string;
+  /** Overrides commitMessage for `gh pr create --title` when set. */
+  prTitle?: string;
+  /** Markdown body for `gh pr create --body`. */
+  prBody?: string;
   mergeQueue?: MergeQueue;
 }
 
@@ -63,6 +67,7 @@ async function tryGhPrCreate(
   branchName: string,
   targetBranch: string,
   title: string,
+  body: string,
 ): Promise<string | null> {
   const ghCheck = await runProcess({
     command: 'sh',
@@ -87,7 +92,7 @@ async function tryGhPrCreate(
       '--title',
       title,
       '--body',
-      `Automated run ${title}`,
+      body,
     ],
     cwd: repoPath,
     timeoutMs: 60_000,
@@ -145,11 +150,17 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
         await push(opts.repoPath, 'origin', `${opts.branchName}:${opts.branchName}`);
       }
 
+      const prTitle = opts.prTitle?.trim() || opts.commitMessage;
+      const prBody =
+        opts.prBody?.trim() ||
+        `Automated gojo run \`${opts.runId}\`.\n\nTask commit message: ${opts.commitMessage}`;
+
       const ghUrl = await tryGhPrCreate(
         opts.repoPath,
         opts.branchName,
         opts.targetBranch,
-        opts.commitMessage,
+        prTitle,
+        prBody,
       );
 
       const prUrl = ghUrl ?? `local://pr/${opts.branchName}`;

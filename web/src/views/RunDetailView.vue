@@ -13,7 +13,6 @@ import {
   subscribeRunEvents,
 } from "@/api";
 import RunActivityFeed from "@/components/RunActivityFeed.vue";
-import RunAgentConsole from "@/components/RunAgentConsole.vue";
 import RunTimelineChart from "@/components/RunTimelineChart.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import {
@@ -110,24 +109,34 @@ const costSummary = computed(() => {
     }
   }
 
-  // Live fallback from agent.finished events before attempts reload.
-  if (!hasCost) {
-    for (const event of events.value) {
-      if (event.type !== "run.agent.finished" || !event.data || typeof event.data !== "object") {
-        continue;
+  // Live model from SSE (available at agent start).
+  for (const event of events.value) {
+    if (event.type === "run.agent.model" && event.data && typeof event.data === "object") {
+      const m = (event.data as { model?: string }).model;
+      if (m) {
+        model = m;
       }
-      const usage = (event.data as { usage?: {
-        inputTokens?: number;
-        outputTokens?: number;
-        cacheReadTokens?: number;
-        cacheWriteTokens?: number;
-        totalCostUsd?: number | null;
-        costSource?: string;
-        model?: string;
-      } | null }).usage;
-      if (!usage) {
-        continue;
-      }
+    }
+  }
+
+  // Tokens/cost from agent.finished before attempts reload.
+  for (const event of events.value) {
+    if (event.type !== "run.agent.finished" || !event.data || typeof event.data !== "object") {
+      continue;
+    }
+    const usage = (event.data as { usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      totalCostUsd?: number | null;
+      costSource?: string;
+      model?: string;
+    } | null }).usage;
+    if (!usage) {
+      continue;
+    }
+    if (!hasCost) {
       input = usage.inputTokens ?? input;
       output = usage.outputTokens ?? output;
       cacheRead = usage.cacheReadTokens ?? cacheRead;
@@ -137,11 +146,15 @@ const costSummary = computed(() => {
         hasCost = true;
         source = usage.costSource ?? source;
       }
-      if (usage.model) {
-        model = usage.model;
-      }
+    }
+    if (usage.model) {
+      model = usage.model;
     }
   }
+
+  const runActive = run.value
+    ? !["Succeeded", "Failed", "Canceled", "TimedOut", "Abandoned"].includes(run.value.state)
+    : false;
 
   return {
     input,
@@ -151,6 +164,7 @@ const costSummary = computed(() => {
     cost: hasCost ? cost : null,
     source,
     model,
+    pendingUsage: runActive && !hasCost,
   };
 });
 
@@ -202,7 +216,11 @@ async function loadInspect() {
 
 function startEvents() {
   unsubscribe?.();
+  events.value = [];
   unsubscribe = subscribeRunEvents(runId.value, (event) => {
+    if (event.id != null && events.value.some((e) => e.id === event.id)) {
+      return;
+    }
     events.value = [...events.value, event];
 
     if (event.type === "run.state_changed" && run.value && event.data && typeof event.data === "object") {
@@ -219,6 +237,20 @@ function startEvents() {
         state: "Failed",
         errorMessage: data.error ?? run.value.errorMessage,
       };
+    }
+
+    if (event.type === "run.agent.model" && event.data && typeof event.data === "object") {
+      const model = (event.data as { model?: string }).model;
+      const latest = attempts.value.at(-1);
+      if (model && latest && !latest.model) {
+        attempts.value = attempts.value.map((a, i) =>
+          i === attempts.value.length - 1 ? { ...a, model } : a,
+        );
+      }
+    }
+
+    if (event.type === "run.agent.finished") {
+      void load();
     }
 
     if (event.type === "run.finished") {
@@ -346,7 +378,9 @@ onUnmounted(() => {
                   ? "Reported by agent CLI"
                   : costSummary.source === "estimated"
                     ? "Estimated from tokens × model rates"
-                    : "No usage reported yet"
+                    : costSummary.pendingUsage
+                      ? "Tokens/cost finalize when the agent finishes"
+                      : "No usage reported yet"
               }}
             </div>
           </div>
@@ -356,8 +390,11 @@ onUnmounted(() => {
               {{ fmtTokens(costSummary.input) }} in · {{ fmtTokens(costSummary.output) }} out
             </div>
             <div class="muted cost-hint">
-              cache r/w {{ fmtTokens(costSummary.cacheRead) }} /
-              {{ fmtTokens(costSummary.cacheWrite) }}
+              <template v-if="costSummary.pendingUsage">Pending until agent finishes</template>
+              <template v-else>
+                cache r/w {{ fmtTokens(costSummary.cacheRead) }} /
+                {{ fmtTokens(costSummary.cacheWrite) }}
+              </template>
             </div>
           </div>
           <div>
@@ -410,13 +447,6 @@ onUnmounted(() => {
             :phase-filter="selectedPhase"
             :highlight-id="highlightActivityId"
           />
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">Agent console</div>
-        <div class="panel-body panel-body-flush">
-          <RunAgentConsole :events="events" />
         </div>
       </section>
 

@@ -295,6 +295,7 @@ export interface TaskRepository {
   create(input: CreateTaskInput): Task;
   findById(id: string): Task | null;
   listByProject(projectId: string): Task[];
+  listAll(): Task[];
   update(id: string, input: UpdateTaskInput): Task | null;
   delete(id: string): boolean;
 }
@@ -508,8 +509,17 @@ export function createRepositories(db: Database): Repositories {
 
     listByProject(projectId) {
       const rows = sqlite
-        .query<TaskRow, [string]>("SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at")
+        .query<TaskRow, [string]>(
+          "SELECT * FROM tasks WHERE project_id = ? ORDER BY name ASC, project_id ASC",
+        )
         .all(projectId);
+      return rows.map(mapTask);
+    },
+
+    listAll() {
+      const rows = sqlite
+        .query<TaskRow, []>("SELECT * FROM tasks ORDER BY name ASC, project_id ASC")
+        .all();
       return rows.map(mapTask);
     },
 

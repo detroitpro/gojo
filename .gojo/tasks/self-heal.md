@@ -37,4 +37,15 @@ A prior gojo-managed task failed. Diagnose using the gojo API, then propose a du
 
 ## Required handoff
 
-Include `summary`, `filesChanged`, `decisions`, `unresolvedIssues`, `recommendedNextActions`, `agentAssessment`, `status: "completed"`.
+Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
+
+Include:
+
+- `summary` — first line is the PR title; cover **what** failed, **why** (root cause), the **fix**, and the **value** (what will work next run)
+- `filesChanged`
+- `decisions` — diagnosis and fix choices with rationale
+- `unresolvedIssues` / `recommendedNextActions` (include human review)
+- `agentAssessment.successful` and `confidence`
+- `status`: `"completed"`
+
+Use a placeholder ULID for `runId` if unknown.

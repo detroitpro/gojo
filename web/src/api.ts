@@ -251,10 +251,9 @@ export async function getProjectDoctor(id: string): Promise<ProjectDoctorResult>
   return data;
 }
 
-export async function listTasks(projectId: string): Promise<Task[]> {
-  const { data } = await request<{ tasks: Task[] }>(
-    `/tasks?projectId=${encodeURIComponent(projectId)}`,
-  );
+export async function listTasks(projectId?: string): Promise<Task[]> {
+  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+  const { data } = await request<{ tasks: Task[] }>(`/tasks${query}`);
   return data.tasks;
 }
 
@@ -322,12 +321,22 @@ export function subscribeRunEvents(
   onError?: (error: Event) => void,
 ): () => void {
   const source = new EventSource(`${API_BASE}/runs/${runId}/events`, { withCredentials: true });
+  const seenIds = new Set<number>();
 
   source.onmessage = (message) => {
     try {
       const raw = JSON.parse(message.data) as Record<string, unknown>;
+      const idRaw = raw.id ?? (message.lastEventId ? Number(message.lastEventId) : undefined);
+      const id = typeof idRaw === "number" && Number.isFinite(idRaw) ? idRaw : undefined;
+      if (id != null) {
+        if (seenIds.has(id)) {
+          return;
+        }
+        seenIds.add(id);
+      }
       // Normalize legacy { timestamp, payload } if a mixed client ever appears.
       const event: RunEvent = {
+        ...(id != null ? { id } : {}),
         type: String(raw.type ?? ""),
         runId: String(raw.runId ?? runId),
         at: String(raw.at ?? raw.timestamp ?? ""),
@@ -344,6 +353,12 @@ export function subscribeRunEvents(
   };
 
   source.onerror = (event) => {
+    // Auth failures leave readyState CLOSED; stop infinite reconnect spam.
+    if (source.readyState === EventSource.CLOSED) {
+      onError?.(event);
+      source.close();
+      return;
+    }
     onError?.(event);
   };
 

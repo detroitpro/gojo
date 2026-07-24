@@ -31,6 +31,16 @@ validationProfiles:
       - name: typecheck
         command: bun run typecheck
         timeout: 5m
+  # Typecheck + unit/integration tests without the coverage ratchet.
+  # Use for refactor/quality agents; keep coverage gating on maintain-tests.
+  daemon-unit:
+    steps:
+      - name: typecheck
+        command: bun run typecheck
+        timeout: 5m
+      - name: test
+        command: bun test
+        timeout: 15m
   daemon-test:
     steps:
       - name: typecheck
@@ -80,7 +90,7 @@ tasks:
     description: Refactor for module boundaries, low complexity, and expert TypeScript quality
     agent: cursor
     promptFile: .gojo/tasks/maintain-quality.md
-    validationProfile: daemon-test
+    validationProfile: daemon-unit
     concurrency:
       projectLimit: 1
       overlapPolicy: skip

@@ -239,6 +239,7 @@ export interface BrowseRoot {
 }
 
 export interface RunEvent {
+  id?: number;
   type: string;
   runId: string;
   at: string;
