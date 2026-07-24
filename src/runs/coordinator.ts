@@ -59,7 +59,6 @@ export interface CreateRunInput {
 }
 
 export class RunCoordinator {
-  private readonly db: Database;
   private readonly paths: GojoPaths;
   private readonly workspace: WorkspaceManager;
   private readonly eventBus: RunEventBus;
@@ -77,7 +76,6 @@ export class RunCoordinator {
     apiBaseUrl?: string;
     issueAgentToken?: () => { token: string } | null;
   }) {
-    this.db = deps.db;
     this.paths = deps.paths;
     this.workspace = deps.workspace;
     this.eventBus = deps.eventBus ?? new RunEventBus();
@@ -771,7 +769,7 @@ export class RunCoordinator {
     policy: ParsedFailurePolicy,
   ): void {
     const decision = decideHealEnqueue({
-      db: this.db,
+      repos: this.repos,
       failedRun,
       failedTask,
       policy,

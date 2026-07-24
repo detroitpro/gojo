@@ -35,7 +35,7 @@ describe('decideHealEnqueue', () => {
     });
 
     const decision = decideHealEnqueue({
-      db,
+      repos,
       failedRun: run,
       failedTask: failing,
       policy: {
@@ -73,7 +73,7 @@ describe('decideHealEnqueue', () => {
     });
 
     const decision = decideHealEnqueue({
-      db,
+      repos,
       failedRun: run,
       failedTask: healer,
       policy: { selfHeal: { task: 'self-heal' } },
@@ -111,7 +111,7 @@ describe('decideHealEnqueue', () => {
     });
 
     const decision = decideHealEnqueue({
-      db,
+      repos,
       failedRun: run,
       failedTask: failing,
       policy: { selfHeal: { task: 'self-heal' } },
