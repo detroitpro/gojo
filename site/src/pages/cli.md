@@ -10,7 +10,7 @@ Global flags:
 gojo --home <path> --output text|json|yaml <command>
 ```
 
-From a source checkout, prefix with `bun run` (for example `bun run gojo server start`).
+Install the CLI onto your `PATH` from a source checkout with `bun run install:cli` (copies to `~/.local/bin/gojo`; use `-- --system` for `/usr/local/bin`). Until then, from the checkout you can prefix with `bun run` (for example `bun run gojo server start`).
 
 ## Setup & server
 
@@ -26,8 +26,8 @@ From a source checkout, prefix with `bun run` (for example `bun run gojo server 
 
 | Command | Purpose |
 | --- | --- |
-| `gojo service install` | systemd / launchd unit |
-| `gojo service start\|stop\|restart\|logs` | Lifecycle |
+| `gojo service install` | systemd / launchd unit (rewrites ExecStart for this binary) |
+| `gojo service start\|stop\|restart\|status\|logs` | Lifecycle |
 | `gojo service uninstall` | Remove unit |
 
 ## Projects

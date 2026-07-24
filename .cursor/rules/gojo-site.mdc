@@ -1,0 +1,7 @@
+---
+description: Pedantic Astro practices for the gojo docs site
+globs: site/**/*
+alwaysApply: false
+---
+
+When editing `site/`, follow project skill **gojo-astro-site**: base-aware links via `site/src/lib/paths.ts`, static Astro best practices, then verify with site build / `make check`.

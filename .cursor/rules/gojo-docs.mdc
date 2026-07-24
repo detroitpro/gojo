@@ -1,0 +1,7 @@
+---
+description: Maintainer docs hygiene for docs/
+globs: docs/**/*
+alwaysApply: false
+---
+
+When editing `docs/`, follow **gojo-docs-hygiene**: living architecture/module pages only, link `PRD.md` for product policy, no ADR process.

@@ -46,7 +46,7 @@ describe('workspace/manager', () => {
 
     const today = new Date().toISOString().slice(0, 10);
     expect(attempt.branchName).toBe(`gojo/lint-fix/${today}/run-01JXYZAB`);
-    expect(attempt.worktreePath).toContain('gojo__lint-fix__2026-07-23__run-01JXYZAB');
+    expect(attempt.worktreePath).toContain(`gojo__lint-fix__${today}__run-01JXYZAB`);
     expect(attempt.startingCommit).toBe(await getHead(repoPath));
   });
 

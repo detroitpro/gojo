@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 
 import { getHome, getOutputFormat, parseArgv } from "@/cli/parse";
 
@@ -41,3 +42,17 @@ describe("cli/parse", () => {
     expect(parsed.positional).toEqual(["extra"]);
   });
 });
+
+describe("cli help", () => {
+  test("documents gojo service status", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "--help"], {
+      cwd: join(import.meta.dir, "../../.."),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const text = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(text).toContain("service install|uninstall|start|stop|restart|status|logs");
+  });
+});
+

@@ -27,27 +27,42 @@ Optional later: Cursor Agent or Claude Code CLIs on your `PATH`.
 git clone https://github.com/detroitpro/gojo.git
 cd gojo
 bun install
+bun run install:cli
+```
 
-bun run gojo setup --username admin --password 'choose-a-strong-password'
-bun run gojo server start
+That builds gojo and copies the binary to **`~/.local/bin/gojo`** (no sudo). Web UI assets land in `~/.gojo/web/dist`. Use `bun run install:cli -- --system` to install to `/usr/local/bin` instead.
+
+If `~/.local/bin` is not on your `PATH`, add:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then set up and start:
+
+```bash
+gojo setup --username admin --password 'choose-a-strong-password'
+gojo server start
 ```
 
 Open **http://127.0.0.1:7430**. Check readiness anytime:
 
 ```bash
-bun run gojo server status
-bun run gojo server doctor
+gojo server status
+gojo server doctor
 ```
 
 `doctor` verifies Git, disk, the database, and which agent adapters are installed.
+
+From a checkout without installing, you can still use `bun run gojo …`.
 
 ### Add a project
 
 In the UI: **Projects → Browse… → Add project**. Or from the CLI:
 
 ```bash
-bun run gojo project add demo /path/to/repo --branch main
-bun run gojo project list
+gojo project add demo /path/to/repo --branch main
+gojo project list
 ```
 
 Registering a path is not enough — the repo needs a `gojo.yaml` (or `.gojo/project.yaml`). Sync loads tasks, agents, and schedules from that manifest.
@@ -127,9 +142,9 @@ JSON
 chmod +x .gojo/tasks/touch-note.sh
 # commit gojo.yaml + the script in the target repo
 
-bun run gojo project sync <project-id>
-bun run gojo task run <task-id>
-bun run gojo run list
+gojo project sync <project-id>
+gojo task run <task-id>
+gojo run list
 ```
 
 Expect Preparing → Running → Validating → Integrating → **Succeeded**. With `commit-only`, changes land on a run branch without merging to `main`. The agent claiming success is not enough — validation and integration policy decide the outcome.
@@ -139,30 +154,30 @@ Prefer an agent to do the install? The docs landing page (`site/`, `#ask-your-ag
 ## Background service
 
 ```bash
-bun run gojo service install
-bun run gojo service start
-bun run gojo service logs
+gojo service install
+gojo service start
+gojo service logs
 ```
 
-Linux uses `systemd`; macOS uses `launchd`.
+Linux uses `systemd`; macOS uses `launchd`. Prefer installing the CLI first (`bun run install:cli`) so the service unit points at the compiled binary.
 
 ## Common commands
 
 ```bash
-bun run gojo setup --username admin --password 'secret'
-bun run gojo server start
-bun run gojo server doctor
+gojo setup --username admin --password 'secret'
+gojo server start
+gojo server doctor
 
-bun run gojo project add demo /path/to/repo --branch main
-bun run gojo project sync <project-id>
-bun run gojo task run <task-id>
+gojo project add demo /path/to/repo --branch main
+gojo project sync <project-id>
+gojo task run <task-id>
 
-bun run gojo run list
-bun run gojo schedule list
-bun run gojo agent detect
+gojo run list
+gojo schedule list
+gojo agent detect
 ```
 
-Use `bun run gojo --help` for the full command tree. After `bun run build`, the same commands work as `./bin/gojo …`.
+Use `gojo --help` for the full command tree. From a source checkout without installing: `bun run gojo …`.
 
 ## Where data lives
 
@@ -191,10 +206,17 @@ Guides cover getting started, first shell agent, Cursor/Claude workflows, schedu
 ## Develop
 
 ```bash
+make check             # full CI gate (required before PR / push)
+make help              # categorized targets
+
 bun run build          # compile bin/gojo for the current platform
 bun run build:web      # Vue admin UI → web/dist (embedded by the server)
-bun run check          # typecheck + tests
+bun run install:cli    # copy binary to ~/.local/bin (+ web assets to ~/.gojo)
 ```
+
+`make check` runs typecheck, tests with coverage baseline, web + site builds, and binary compile (same as GitHub Actions).
+
+Engineering docs (boundaries, modules): [`docs/`](./docs/). Product spec: [`PRD.md`](./PRD.md).
 
 `GOJO_WEB_DIST` overrides where the server loads static admin assets from.
 
@@ -204,3 +226,4 @@ bun run check          # typecheck + tests
 - **Persistence:** SQLite via `bun:sqlite`
 - **Web UI:** Vue app in `web/`, embedded as static assets
 - **Distribution:** `bun build --compile` native binaries; optional Node launcher in `packages/npx-bootstrap`
+- **Maintainer map:** [`docs/architecture/overview.md`](./docs/architecture/overview.md)

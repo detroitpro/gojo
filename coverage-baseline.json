@@ -1,0 +1,4 @@
+{
+  "minLineCoverage": 83.5,
+  "notes": "Ratchet upward as coverage improves. Measured ~83.84% lines on 2026-07-24 after workspace date fix."
+}

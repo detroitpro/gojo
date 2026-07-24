@@ -21,12 +21,29 @@ Optional later: Cursor Agent or Claude Code CLIs on your `PATH`.
 git clone https://github.com/detroitpro/gojo.git
 cd gojo
 bun install
+bun run install:cli
 ```
+
+`install:cli` compiles gojo and copies it to **`~/.local/bin/gojo`** (no sudo), plus the admin UI into `~/.gojo/web/dist`. For a system-wide binary:
+
+```bash
+bun run install:cli -- --system
+```
+
+That installs to `/usr/local/bin/gojo` (may prompt for sudo).
+
+If `~/.local/bin` is missing from your `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+After that you can type `gojo` from any directory. To run from the checkout without installing, use `bun run gojo …` instead.
 
 ## Create your admin account
 
 ```bash
-bun run gojo setup --username admin --password 'choose-a-strong-password'
+gojo setup --username admin --password 'choose-a-strong-password'
 ```
 
 This creates the first user. After setup, mutating API and UI actions require login or an API token.
@@ -34,7 +51,7 @@ This creates the first user. After setup, mutating API and UI actions require lo
 ## Start the server
 
 ```bash
-bun run gojo server start
+gojo server start
 ```
 
 Open **http://127.0.0.1:7430** (default). The server binds to localhost unless you change instance settings.
@@ -42,8 +59,8 @@ Open **http://127.0.0.1:7430** (default). The server binds to localhost unless y
 Useful checks:
 
 ```bash
-bun run gojo server status
-bun run gojo server doctor
+gojo server status
+gojo server doctor
 ```
 
 `doctor` verifies Git, disk, the database, and which agent adapters are installed.
@@ -58,8 +75,8 @@ bun run gojo server doctor
 You can also do this from the CLI:
 
 ```bash
-bun run gojo project add demo /path/to/repo --branch main
-bun run gojo project list
+gojo project add demo /path/to/repo --branch main
+gojo project list
 ```
 
 ## After you add a project
@@ -76,9 +93,11 @@ If Sync finds no manifest, you’ll have zero tasks until you create one in the 
 
 ## Run as a background service
 
+Prefer `bun run install:cli` first so the service unit can point at the compiled binary.
+
 ```bash
-bun run gojo service install
-bun run gojo service start
+gojo service install
+gojo service start
 ```
 
 Linux uses `systemd`; macOS uses `launchd`. Logs: `gojo service logs`.

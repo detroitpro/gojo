@@ -16,7 +16,8 @@
     "lint": "tsc --noEmit",
     "build": "bun run scripts/build.ts",
     "build:web": "bun run --cwd web build",
-    "check": "bun run typecheck && bun test",
+    "install:cli": "bash scripts/install-cli.sh",
+    "check": "bash scripts/ci-check.sh",
     "release:manifest": "bun run scripts/release-manifest.ts"
   },
   "engines": {

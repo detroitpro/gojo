@@ -1,8 +1,5 @@
 #!/usr/bin/env bun
 
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
 import { createAppContext } from "@/app/context";
 import { computeScheduleNextRun } from "@/app/context";
 import { syncProjectFromManifest } from "@/api/project-sync";
@@ -14,7 +11,12 @@ import { defaultBackupDest } from "@/backup/list";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
-import { installService, serviceControl, uninstallService } from "@/service/install";
+import {
+  installService,
+  resolveServiceLaunch,
+  serviceControl,
+  uninstallService,
+} from "@/service/install";
 
 import {
   getFlagString,
@@ -472,16 +474,20 @@ async function runBackupCommand(parsed: ParsedArgv, format: ReturnType<typeof ge
 async function runServiceCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
   const sub = parsed.command[1];
   const home = getHome(parsed) ?? resolvePaths().home;
-  const execPath = process.execPath;
-  const scriptPath = join(process.cwd(), "src", "cli", "index.ts");
-  const useScript = existsSync(scriptPath);
-  const command = useScript ? execPath : process.argv[0] ?? execPath;
-  const args = useScript ? [scriptPath, "server", "start", "--home", home] : ["server", "start", "--home", home];
+  // import.meta.path here is the CLI entry (compiled as /$bunfs/... or source .ts path)
+  const launch = resolveServiceLaunch(home, import.meta.path);
 
   switch (sub) {
     case "install": {
-      const result = installService({ home, execPath: command, args });
-      printOutput(format, result);
+      const result = installService({ home, execPath: launch.execPath, args: launch.args });
+      const reload = serviceControl("daemon-reload");
+      const reloadProc = Bun.spawn(reload, { stdout: "inherit", stderr: "inherit" });
+      await reloadProc.exited;
+      printOutput(format, {
+        ...result,
+        execStart: [launch.execPath, ...launch.args].join(" "),
+        daemonReload: reload.join(" "),
+      });
       break;
     }
     case "uninstall": {
@@ -491,6 +497,7 @@ async function runServiceCommand(parsed: ParsedArgv, format: ReturnType<typeof g
     case "start":
     case "stop":
     case "restart":
+    case "status":
     case "logs": {
       const cmd = serviceControl(sub);
       const proc = Bun.spawn(cmd, { stdout: "inherit", stderr: "inherit" });
@@ -512,7 +519,7 @@ Usage:
 Commands:
   setup                         Create admin user
   server start|status|stop|doctor
-  service install|uninstall|start|stop|restart|logs
+  service install|uninstall|start|stop|restart|status|logs
   project add|list|inspect|sync|doctor|remove
   agent detect|list|inspect|test
   task list|run|cancel|retry

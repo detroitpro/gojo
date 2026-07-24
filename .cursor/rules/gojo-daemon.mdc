@@ -1,0 +1,7 @@
+---
+description: Daemon TDD and check gate when editing gojo src/ or tests/
+globs: src/**/*.{ts,tsx},tests/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+When editing the gojo daemon (`src/`, `tests/`), follow project skills **gojo-tdd-daemon** and **gojo-check**: red→green→refactor, cover changed code, finish with `make check`. Update `docs/modules/*` or `docs/architecture/*` if boundaries or ownership change (**gojo-docs-hygiene**).
