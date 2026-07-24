@@ -15,6 +15,7 @@ export interface HealEnqueueDecision {
 /**
  * Decide whether to enqueue a project's self-heal task after a failed run.
  * Loop guards: heal trigger never re-heals; healer tasks don't heal themselves;
+ * infra/preflight failures (never started / invalid transition) are skipped;
  * cap heal runs per project per hour.
  */
 export function decideHealEnqueue(opts: {
@@ -31,6 +32,14 @@ export function decideHealEnqueue(opts: {
 
   if (failedRun.trigger === 'heal') {
     return { shouldEnqueue: false, reason: 'heal runs do not re-trigger heal' };
+  }
+
+  if (failedRun.startedAt == null) {
+    return { shouldEnqueue: false, reason: 'run never started (infra/preflight)' };
+  }
+
+  if (failedRun.errorMessage?.startsWith('Invalid run transition:')) {
+    return { shouldEnqueue: false, reason: 'invalid state transition (infra)' };
   }
 
   if (failedTask.name === selfHeal.task) {

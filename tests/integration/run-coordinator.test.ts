@@ -165,6 +165,27 @@ describe('integration/run-coordinator', () => {
     expect(validation.steps[0]?.exitCode).toBe(7);
   });
 
+  test('schedule-triggered run transitions Scheduled → Queued → Preparing and succeeds', async () => {
+    const { coordinator, repos, project, task } = await setup();
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      taskId: task.id,
+      trigger: 'schedule',
+      idempotencyKey: 'sched:fire-1',
+    });
+
+    expect(run.state).toBe(RunState.Scheduled);
+
+    const finished = await coordinator.executeRun(run.id);
+    expect(finished.state).toBe(RunState.Succeeded);
+    expect(finished.errorMessage).toBeNull();
+    expect(finished.startedAt).not.toBeNull();
+
+    const stored = repos.runs.findById(run.id);
+    expect(stored?.state).toBe(RunState.Succeeded);
+  });
+
   test('createRun is idempotent by key', async () => {
     const { coordinator, project, task } = await setup();
 

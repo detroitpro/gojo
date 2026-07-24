@@ -26,13 +26,18 @@ describe('decideHealEnqueue', () => {
       name: 'self-heal',
       prompt: 'heal',
     });
-    const run = repos.runs.create({
+    const created = repos.runs.create({
       projectId: project.id,
       taskId: failing.id,
       idempotencyKey: 'k1',
       trigger: 'manual',
       state: RunState.Failed,
     });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
 
     const decision = decideHealEnqueue({
       repos,
@@ -64,13 +69,18 @@ describe('decideHealEnqueue', () => {
         selfHeal: { task: 'self-heal' },
       }),
     });
-    const run = repos.runs.create({
+    const created = repos.runs.create({
       projectId: project.id,
       taskId: healer.id,
       idempotencyKey: 'k2',
       trigger: 'manual',
       state: RunState.Failed,
     });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
 
     const decision = decideHealEnqueue({
       repos,
@@ -97,13 +107,18 @@ describe('decideHealEnqueue', () => {
       name: 'deps',
       prompt: 'do work',
     });
-    const run = repos.runs.create({
+    const created = repos.runs.create({
       projectId: project.id,
       taskId: failing.id,
       idempotencyKey: 'k4',
       trigger: 'manual',
       state: RunState.Failed,
     });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
 
     const missingHealer = decideHealEnqueue({
       repos,
@@ -132,6 +147,91 @@ describe('decideHealEnqueue', () => {
     db.close();
   });
 
+  test('does not enqueue when run never started', () => {
+    const db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: 'demo',
+      repoPath: '/tmp/demo',
+    });
+    const failing = repos.tasks.create({
+      projectId: project.id,
+      name: 'deps',
+      prompt: 'do work',
+    });
+    repos.tasks.create({
+      projectId: project.id,
+      name: 'self-heal',
+      prompt: 'heal',
+    });
+    const created = repos.runs.create({
+      projectId: project.id,
+      taskId: failing.id,
+      idempotencyKey: 'k-never-started',
+      trigger: 'schedule',
+      state: RunState.Failed,
+    });
+    const run =
+      repos.runs.update(created.id, {
+        errorMessage: 'Invalid run transition: Scheduled -> Preparing',
+      }) ?? created;
+
+    const decision = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedTask: failing,
+      policy: { selfHeal: { task: 'self-heal' } },
+    });
+
+    expect(decision.shouldEnqueue).toBe(false);
+    expect(decision.reason).toContain('never started');
+    db.close();
+  });
+
+  test('does not enqueue for invalid run transition failures', () => {
+    const db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: 'demo',
+      repoPath: '/tmp/demo',
+    });
+    const failing = repos.tasks.create({
+      projectId: project.id,
+      name: 'deps',
+      prompt: 'do work',
+    });
+    repos.tasks.create({
+      projectId: project.id,
+      name: 'self-heal',
+      prompt: 'heal',
+    });
+    const created = repos.runs.create({
+      projectId: project.id,
+      taskId: failing.id,
+      idempotencyKey: 'k-bad-transition',
+      trigger: 'schedule',
+      state: RunState.Failed,
+    });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Invalid run transition: Scheduled -> Preparing',
+      }) ?? created;
+
+    const decision = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedTask: failing,
+      policy: { selfHeal: { task: 'self-heal' } },
+    });
+
+    expect(decision.shouldEnqueue).toBe(false);
+    expect(decision.reason).toContain('invalid state transition');
+    db.close();
+  });
+
   test('does not enqueue for heal-triggered runs', () => {
     const db = Database.open(':memory:');
     db.migrate();
@@ -150,13 +250,18 @@ describe('decideHealEnqueue', () => {
       name: 'self-heal',
       prompt: 'heal',
     });
-    const run = repos.runs.create({
+    const created = repos.runs.create({
       projectId: project.id,
       taskId: failing.id,
       idempotencyKey: 'k3',
       trigger: 'heal',
       state: RunState.Failed,
     });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
 
     const decision = decideHealEnqueue({
       repos,
