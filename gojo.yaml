@@ -31,8 +31,7 @@ validationProfiles:
       - name: typecheck
         command: bun run typecheck
         timeout: 5m
-  # Typecheck + unit/integration tests without the coverage ratchet.
-  # Use for refactor/quality agents; keep coverage gating on maintain-tests.
+  # Typecheck + unit/integration tests. Coverage % is never a fail gate.
   daemon-unit:
     steps:
       - name: typecheck
@@ -41,6 +40,7 @@ validationProfiles:
       - name: test
         command: bun test
         timeout: 15m
+  # Same pass/fail as daemon-unit, plus an informational coverage report.
   daemon-test:
     steps:
       - name: typecheck

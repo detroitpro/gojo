@@ -11,7 +11,7 @@ help: ## Show targets
 # Quality
 # ---------------------------------------------------------------------------
 
-check: ## Full CI gate (typecheck, tests+coverage, web, site, binary)
+check: ## Full CI gate (typecheck, tests, web, site, binary)
 	@bash scripts/ci-check.sh
 
 typecheck: ## Daemon TypeScript check
