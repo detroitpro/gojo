@@ -294,6 +294,7 @@ export interface ProjectRepository {
 export interface TaskRepository {
   create(input: CreateTaskInput): Task;
   findById(id: string): Task | null;
+  findEnabledByProjectAndName(projectId: string, name: string): Task | null;
   listByProject(projectId: string): Task[];
   listAll(): Task[];
   update(id: string, input: UpdateTaskInput): Task | null;
@@ -323,6 +324,13 @@ export interface RunRepository {
   findByIdempotencyKey(key: string): Run | null;
   listByProject(projectId: string): Run[];
   listNonTerminal(): Run[];
+  /** Count trailing failed/timed-out/infra-failure runs for a task (stops at first success). */
+  countConsecutiveFailuresForTask(taskId: string, lookback: number): number;
+  countByProjectTriggerSince(
+    projectId: string,
+    trigger: Run["trigger"],
+    since: string,
+  ): number;
   update(id: string, input: UpdateRunInput): Run | null;
   delete(id: string): boolean;
 }
@@ -504,6 +512,15 @@ export function createRepositories(db: Database): Repositories {
 
     findById(id) {
       const row = sqlite.query<TaskRow, [string]>("SELECT * FROM tasks WHERE id = ?").get(id);
+      return row ? mapTask(row) : null;
+    },
+
+    findEnabledByProjectAndName(projectId, name) {
+      const row = sqlite
+        .query<TaskRow, [string, string]>(
+          "SELECT * FROM tasks WHERE project_id = ? AND name = ? AND enabled = 1",
+        )
+        .get(projectId, name);
       return row ? mapTask(row) : null;
     },
 
@@ -804,6 +821,41 @@ export function createRepositories(db: Database): Repositories {
         )
         .all();
       return rows.map(mapRun);
+    },
+
+    countConsecutiveFailuresForTask(taskId, lookback) {
+      const rows = sqlite
+        .query<{ state: Run["state"] }, [string, number]>(
+          `SELECT state FROM runs
+           WHERE task_id = ?
+           ORDER BY created_at DESC
+           LIMIT ?`,
+        )
+        .all(taskId, Math.max(lookback * 5, 10));
+
+      let consecutive = 0;
+      for (const row of rows) {
+        if (
+          row.state === RunState.Failed ||
+          row.state === RunState.TimedOut ||
+          row.state === RunState.InfrastructureFailure
+        ) {
+          consecutive += 1;
+        } else if (row.state === RunState.Succeeded) {
+          break;
+        }
+      }
+      return consecutive;
+    },
+
+    countByProjectTriggerSince(projectId, trigger, since) {
+      const row = sqlite
+        .query<{ count: number }, [string, string, string]>(
+          `SELECT COUNT(*) as count FROM runs
+           WHERE project_id = ? AND trigger = ? AND created_at >= ?`,
+        )
+        .get(projectId, trigger, since);
+      return row?.count ?? 0;
     },
 
     update(id, input) {
