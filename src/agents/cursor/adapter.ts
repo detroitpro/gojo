@@ -136,10 +136,14 @@ export class CursorAgentAdapter implements AgentAdapter {
             phase: event.phase,
             callId: event.callId,
             name: event.name,
+            ...(event.summary ? { summary: event.summary } : {}),
           });
+          const label = event.summary
+            ? `${event.name} · ${event.summary}`
+            : `${event.name} (${event.callId})`;
           ctx.onOutput?.(
             'stdout',
-            `\n[tool ${event.phase}] ${event.name} (${event.callId})\n`,
+            `\n[tool ${event.phase}] ${label}\n`,
           );
         } else if (event.kind === 'result') {
           resultText =

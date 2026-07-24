@@ -94,4 +94,34 @@ describe('AgentHandoffReport', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  test('accepts optional assets with path or content', () => {
+    const result = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      assets: [
+        {
+          role: 'pr-body',
+          path: '.gojo/assets/pr-body.md',
+          mediaType: 'text/markdown',
+          label: 'PR description',
+        },
+        {
+          role: 'pr-title',
+          content: 'Short PR title',
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.assets).toHaveLength(2);
+    }
+  });
+
+  test('rejects asset with neither path nor content', () => {
+    const result = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      assets: [{ role: 'attachment', label: 'empty' }],
+    });
+    expect(result.success).toBe(false);
+  });
 });

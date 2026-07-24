@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import {
@@ -53,8 +53,52 @@ const {
 } = useClientPager(attempts, 25);
 
 let unsubscribe: (() => void) | null = null;
+let durationTick: ReturnType<typeof setInterval> | null = null;
+
+/** Ticks while run is active so header duration re-renders (Date.now is not reactive). */
+const nowMs = ref(Date.now());
 
 const runId = computed(() => route.params.id as string);
+
+const TERMINAL_RUN_STATES = new Set([
+  "Succeeded",
+  "Failed",
+  "Canceled",
+  "TimedOut",
+  "Abandoned",
+  "Skipped",
+  "Superseded",
+  "Blocked",
+  "Conflict",
+  "InfrastructureFailure",
+]);
+
+const runIsActive = computed(() => {
+  const state = run.value?.state;
+  return Boolean(state && !TERMINAL_RUN_STATES.has(state));
+});
+
+function stopDurationTick() {
+  if (durationTick !== null) {
+    clearInterval(durationTick);
+    durationTick = null;
+  }
+}
+
+function syncDurationTick() {
+  if (runIsActive.value) {
+    nowMs.value = Date.now();
+    if (durationTick === null) {
+      durationTick = setInterval(() => {
+        nowMs.value = Date.now();
+      }, 1000);
+    }
+    return;
+  }
+  stopDurationTick();
+}
+
+watch(runIsActive, syncDurationTick, { immediate: true });
 
 const handoffText = computed(() => {
   const latest = attempts.value.at(-1);
@@ -90,9 +134,64 @@ const artifactsValidationText = computed(() => {
   }
 });
 
-const runDurationMs = computed(() =>
-  durationBetween(run.value?.startedAt ?? run.value?.createdAt, run.value?.finishedAt),
-);
+interface HandoffAssetView {
+  role: string;
+  label: string;
+  path?: string;
+  mediaType: string;
+  content?: string;
+}
+
+const handoffAssets = computed((): HandoffAssetView[] => {
+  const handoff = artifacts.value?.handoff;
+  if (!handoff || typeof handoff !== "object") {
+    return [];
+  }
+  const raw = (handoff as { assets?: unknown }).assets;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: HandoffAssetView[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const obj = item as Record<string, unknown>;
+    if (typeof obj.role !== "string") {
+      continue;
+    }
+    out.push({
+      role: obj.role,
+      label:
+        typeof obj.label === "string" && obj.label.trim()
+          ? obj.label.trim()
+          : obj.role,
+      ...(typeof obj.path === "string" ? { path: obj.path } : {}),
+      mediaType:
+        typeof obj.mediaType === "string" && obj.mediaType.trim()
+          ? obj.mediaType.trim()
+          : "text/markdown",
+      ...(typeof obj.content === "string" ? { content: obj.content } : {}),
+    });
+  }
+  return out;
+});
+
+const runDurationMs = computed(() => {
+  const start = run.value?.startedAt ?? run.value?.createdAt;
+  if (!start) {
+    return null;
+  }
+  if (run.value?.finishedAt) {
+    return durationBetween(start, run.value.finishedAt);
+  }
+  // Subscribe to nowMs so the header clock advances during long Running phases.
+  const startMs = Date.parse(start);
+  if (!Number.isFinite(startMs)) {
+    return null;
+  }
+  return Math.max(0, nowMs.value - startMs);
+});
 
 const costSummary = computed(() => {
   let input = 0;
@@ -236,7 +335,15 @@ function startEvents() {
     if (event.type === "run.state_changed" && run.value && event.data && typeof event.data === "object") {
       const data = event.data as { to?: string };
       if (data.to) {
-        run.value = { ...run.value, state: data.to as Run["state"] };
+        const next: Run = { ...run.value, state: data.to as Run["state"] };
+        // Seed startedAt from first transition into Preparing/Running if missing.
+        if (
+          !next.startedAt &&
+          (data.to === "Preparing" || data.to === "Running")
+        ) {
+          next.startedAt = event.at || new Date().toISOString();
+        }
+        run.value = next;
       }
     }
 
@@ -264,6 +371,17 @@ function startEvents() {
     }
 
     if (event.type === "run.finished") {
+      if (run.value) {
+        const data =
+          event.data && typeof event.data === "object"
+            ? (event.data as { state?: string })
+            : {};
+        run.value = {
+          ...run.value,
+          ...(data.state ? { state: data.state as Run["state"] } : {}),
+          finishedAt: event.at || new Date().toISOString(),
+        };
+      }
       void load();
       void loadInspect();
     }
@@ -329,6 +447,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unsubscribe?.();
+  stopDurationTick();
 });
 </script>
 
@@ -486,6 +605,25 @@ onUnmounted(() => {
               <br />
               exists={{ artifacts.exists }}
             </div>
+
+            <div v-if="handoffAssets.length" class="mt-4">
+              <div class="panel-subheader">Handoff assets</div>
+              <ul class="handoff-assets">
+                <li v-for="(asset, idx) in handoffAssets" :key="`${asset.role}-${idx}`">
+                  <div class="handoff-asset-meta">
+                    <span class="mono">{{ asset.role }}</span>
+                    <span class="muted">· {{ asset.label }}</span>
+                    <span v-if="asset.path" class="mono muted"> · {{ asset.path }}</span>
+                  </div>
+                  <pre
+                    v-if="asset.content"
+                    class="pre-block mt-2 activity-assistant-body"
+                    >{{ asset.content }}</pre
+                  >
+                </li>
+              </ul>
+            </div>
+
             <pre v-if="artifactsHandoffText" class="pre-block mt-4">{{
               artifactsHandoffText
             }}</pre>

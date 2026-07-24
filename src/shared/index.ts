@@ -30,6 +30,8 @@ export type { PageParams, PageQueryInput, PaginatedList } from './pagination';
 export {
   AgentHandoffReportSchema,
   HandoffAgentAssessmentSchema,
+  HandoffAssetRoleSchema,
+  HandoffAssetSchema,
   HandoffStatusSchema,
   HandoffValidationSchema,
   HandoffValidationStepSchema,
@@ -40,6 +42,8 @@ export {
 export type {
   AgentHandoffReport,
   HandoffAgentAssessment,
+  HandoffAsset,
+  HandoffAssetRole,
   HandoffStatus,
   HandoffValidation,
   HandoffValidationStep,

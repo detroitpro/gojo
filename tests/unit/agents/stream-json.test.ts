@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   mapCursorStreamEvent,
   resolveAssistantTextDelta,
+  toolSummaryFromPayload,
 } from "@/agents/stream-json";
 
 describe("resolveAssistantTextDelta", () => {
@@ -47,5 +48,66 @@ describe("mapCursorStreamEvent", () => {
       },
     });
     expect(events).toEqual([{ kind: "text", text: "hello" }]);
+  });
+
+  test("maps tool_call with path summary", () => {
+    const events = mapCursorStreamEvent({
+      type: "tool_call",
+      subtype: "started",
+      call_id: "c1",
+      tool_call: {
+        readToolCall: {
+          args: { path: "src/main.ts" },
+        },
+      },
+    });
+    expect(events).toEqual([
+      {
+        kind: "tool",
+        phase: "started",
+        callId: "c1",
+        name: "read",
+        summary: "src/main.ts",
+      },
+    ]);
+  });
+
+  test("maps shell tool_call with command summary", () => {
+    const events = mapCursorStreamEvent({
+      type: "tool_call",
+      subtype: "completed",
+      call_id: "c2",
+      tool_call: {
+        shellToolCall: {
+          args: { command: "bun test" },
+        },
+      },
+    });
+    expect(events).toEqual([
+      {
+        kind: "tool",
+        phase: "completed",
+        callId: "c2",
+        name: "shell",
+        summary: "bun test",
+      },
+    ]);
+  });
+});
+
+describe("toolSummaryFromPayload", () => {
+  test("prefers path and pattern when both present", () => {
+    expect(
+      toolSummaryFromPayload({
+        grepToolCall: {
+          args: { path: "web/src", pattern: "buildActivity" },
+        },
+      }),
+    ).toBe("web/src · buildActivity");
+  });
+
+  test("returns undefined without useful args", () => {
+    expect(toolSummaryFromPayload({ readToolCall: { args: {} } })).toBeUndefined();
+    expect(toolSummaryFromPayload(null)).toBeUndefined();
   });
 });

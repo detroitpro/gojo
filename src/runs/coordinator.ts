@@ -5,6 +5,10 @@ import { ulid } from 'ulid';
 
 import { getAdapter } from '@/agents';
 import type { AgentExecuteResult } from '@/agents/adapter/types';
+import {
+  materializeHandoffAssets,
+  readHandoffAssets,
+} from '@/agents/handoff-assets';
 import { readHandoffIfPresent } from '@/agents/handoff-file';
 import { syncProjectFromManifest } from '@/api/project-sync';
 import type { GojoPaths } from '@/config/paths';
@@ -13,7 +17,7 @@ import { integrate, type IntegrationMode } from '@/integration/integrator';
 import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
-import type { AgentHandoffReport } from '@shared/handoff';
+import type { AgentHandoffReport, HandoffStatus } from '@shared/handoff';
 import { safeParseProjectManifest } from '@shared/manifest';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
@@ -495,6 +499,7 @@ export class RunCoordinator {
             runId: run.id,
             fallbackTitle,
             handoff,
+            workspacePath: input.workspacePath,
           })
         : null;
 
@@ -622,6 +627,7 @@ export class RunCoordinator {
             phase: event.phase,
             callId: event.callId,
             name: event.name,
+            ...(event.summary !== undefined ? { summary: event.summary } : {}),
           });
         },
       });
@@ -666,12 +672,18 @@ export class RunCoordinator {
   }
 
   private terminalRun(run: Run, state: RunState): Run {
+    const from = run.state;
     const updated =
       this.repos.runs.update(run.id, {
         state,
         finishedAt: new Date().toISOString(),
       }) ?? run;
 
+    // Emit state_changed so timeline phases close (Reporting → Succeeded, etc.).
+    // terminalRun updates state directly and historically only emitted run.finished.
+    if (from !== updated.state) {
+      this.emit('run.state_changed', updated.id, { from, to: updated.state });
+    }
     this.emit('run.finished', updated.id, { state: updated.state });
     return updated;
   }
@@ -688,6 +700,7 @@ export class RunCoordinator {
       validationResults?: ValidationStepResult[];
     },
   ): Run {
+    const from = run.state;
     const updated =
       this.repos.runs.update(run.id, {
         state: RunState.Failed,
@@ -712,6 +725,9 @@ export class RunCoordinator {
       projectName: project?.name ?? null,
     });
 
+    if (from !== updated.state) {
+      this.emit('run.state_changed', updated.id, { from, to: updated.state });
+    }
     this.emit('run.failed', updated.id, { error: message });
     this.emit('run.finished', updated.id, { state: updated.state });
 
@@ -914,7 +930,7 @@ export class RunCoordinator {
       }
     }
 
-    const handoff: AgentHandoffReport = {
+    const platformHandoff: AgentHandoffReport = {
       schemaVersion: 1,
       runId: run.id,
       status: 'completed',
@@ -942,6 +958,19 @@ export class RunCoordinator {
         confidence: 1,
       },
     };
+
+    const workspacePath = attempt.workspacePath ?? undefined;
+    const agentHandoff = workspacePath
+      ? resolveAttemptHandoff(attempt, workspacePath)
+      : parseAttemptHandoffJson(attempt);
+    const merged = mergeAgentHandoff(platformHandoff, agentHandoff);
+    const materialized = materializeHandoffAssets(
+      workspacePath,
+      artifactDir,
+      readHandoffAssets(agentHandoff),
+    );
+    const handoff: AgentHandoffReport =
+      materialized.length > 0 ? { ...merged, assets: materialized } : merged;
 
     const artifactPath = join(artifactDir, 'handoff.json');
     writeFileSync(artifactPath, JSON.stringify(handoff, null, 2), 'utf8');
@@ -1081,15 +1110,88 @@ function buildCommitMessage(
   return integration.commitMessage ?? `gojo: ${task.name} (${run.id})`;
 }
 
+function parseAttemptHandoffJson(attempt: Attempt): unknown | undefined {
+  if (!attempt.handoffJson) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(attempt.handoffJson) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveAttemptHandoff(attempt: Attempt, workspacePath: string): unknown {
-  if (attempt.handoffJson) {
-    try {
-      return JSON.parse(attempt.handoffJson) as unknown;
-    } catch {
-      // Fall through to worktree file.
-    }
+  const fromDb = parseAttemptHandoffJson(attempt);
+  if (fromDb !== undefined) {
+    return fromDb;
   }
   return readHandoffIfPresent(workspacePath);
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+const HANDOFF_STATUSES = new Set<HandoffStatus>([
+  'completed',
+  'partial',
+  'failed',
+  'no-change',
+]);
+
+/** Merge agent-written handoff fields onto the platform baseline (keeps runId/commits/validation). */
+function mergeAgentHandoff(
+  platform: AgentHandoffReport,
+  agent: unknown,
+): AgentHandoffReport {
+  if (!agent || typeof agent !== 'object') {
+    return platform;
+  }
+  const obj = agent as Record<string, unknown>;
+  const status =
+    typeof obj['status'] === 'string' && HANDOFF_STATUSES.has(obj['status'] as HandoffStatus)
+      ? (obj['status'] as HandoffStatus)
+      : platform.status;
+  const summary =
+    typeof obj['summary'] === 'string' && obj['summary'].trim()
+      ? obj['summary'].trim()
+      : platform.summary;
+  const assessment =
+    obj['agentAssessment'] && typeof obj['agentAssessment'] === 'object'
+      ? (obj['agentAssessment'] as { successful?: unknown; confidence?: unknown })
+      : null;
+
+  return {
+    ...platform,
+    status,
+    summary,
+    ...(Array.isArray(obj['decisions'])
+      ? { decisions: asStringList(obj['decisions']) }
+      : {}),
+    ...(Array.isArray(obj['unresolvedIssues'])
+      ? { unresolvedIssues: asStringList(obj['unresolvedIssues']) }
+      : {}),
+    ...(Array.isArray(obj['recommendedNextActions'])
+      ? { recommendedNextActions: asStringList(obj['recommendedNextActions']) }
+      : {}),
+    ...(Array.isArray(obj['filesChanged']) && asStringList(obj['filesChanged']).length > 0
+      ? { filesChanged: asStringList(obj['filesChanged']) }
+      : {}),
+    ...(assessment &&
+    typeof assessment.successful === 'boolean' &&
+    typeof assessment.confidence === 'number'
+      ? {
+          agentAssessment: {
+            successful: assessment.successful,
+            confidence: Math.min(1, Math.max(0, assessment.confidence)),
+          },
+        }
+      : {}),
+  };
 }
 
 function resolveAdapterName(

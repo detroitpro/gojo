@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
+import { fmtDuration, fmtTime } from "@/lib/format";
 import { buildActivityItems, type ActivityItem } from "@/lib/run-activity";
 import { buildPhaseSegments, type PhaseKey } from "@/lib/run-phases";
 import type { RunEvent } from "@/types";
@@ -35,12 +36,59 @@ const PHASE_COLORS: Record<PhaseKey, string> = {
   integrate: "rgba(180, 130, 60, 0.55)",
 };
 
+const PHASE_LEGEND: Array<{ key: PhaseKey; label: string; color: string }> = [
+  { key: "prepare", label: "Prepare", color: PHASE_COLORS.prepare },
+  { key: "agent", label: "Agent", color: PHASE_COLORS.agent },
+  { key: "validate", label: "Validate", color: PHASE_COLORS.validate },
+  { key: "integrate", label: "Integrate", color: PHASE_COLORS.integrate },
+];
+
+const STATUS_FALLBACK: Record<"info" | "success" | "error" | "warn", string> = {
+  info: "#8a9bb0",
+  success: "#6fbf8f",
+  error: "#e07070",
+  warn: "#d0a55a",
+};
+
+interface PhaseBand {
+  key: PhaseKey;
+  x0: number;
+  x1: number;
+  y: number;
+  label: string;
+  durationMs: number;
+}
+
+interface TooltipState {
+  show: boolean;
+  x: number;
+  y: number;
+  title: string;
+  detail: string;
+}
+
+const tooltip = ref<TooltipState>({
+  show: false,
+  x: 0,
+  y: 0,
+  title: "",
+  detail: "",
+});
+
 const activities = computed(() => buildActivityItems(props.events));
 const phases = computed(() => buildPhaseSegments(props.events));
 
 const range = computed(() => {
   const times = [
-    ...phases.value.flatMap((p) => [Date.parse(p.startedAt), p.finishedAt ? Date.parse(p.finishedAt) : Date.now()]),
+    ...phases.value.flatMap((p) => {
+      const start = Date.parse(p.startedAt);
+      const end = p.active
+        ? Date.now()
+        : p.finishedAt
+          ? Date.parse(p.finishedAt)
+          : start + p.durationMs;
+      return [start, end];
+    }),
     ...activities.value.map((a) => a.atMs),
   ].filter((n) => Number.isFinite(n) && n > 0);
 
@@ -55,8 +103,74 @@ const range = computed(() => {
 });
 
 function destroy() {
-  plot?.destroy();
+  if (plot) {
+    const over = plot.over as HTMLElement & { __gojoCleanup?: () => void };
+    over.__gojoCleanup?.();
+    plot.destroy();
+  }
   plot = null;
+}
+
+/** Canvas cannot resolve CSS variables — read computed theme tokens. */
+function themeColor(name: string, fallback: string): string {
+  const el = root.value ?? document.documentElement;
+  const value = getComputedStyle(el).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function statusFill(
+  status: ActivityItem["status"],
+  accent: string,
+  textMuted: string,
+): string {
+  switch (status) {
+    case "success":
+      return STATUS_FALLBACK.success;
+    case "error":
+      return STATUS_FALLBACK.error;
+    case "warn":
+      return STATUS_FALLBACK.warn;
+    case "info":
+    default:
+      return accent || textMuted || STATUS_FALLBACK.info;
+  }
+}
+
+function nearestActivity(
+  meta: ActivityItem[],
+  xVal: number,
+  yVal: number,
+): { item: ActivityItem; dist: number } | null {
+  let best: ActivityItem | null = null;
+  let bestDist = Infinity;
+  for (const item of meta) {
+    const dx = Math.abs(item.atMs / 1000 - xVal);
+    const lane = item.phase ? PHASE_Y[item.phase] : 3.5;
+    const dy = Math.abs(lane - yVal);
+    const dist = dx * 2 + dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = item;
+    }
+  }
+  return best ? { item: best, dist: bestDist } : null;
+}
+
+function bandUnder(
+  bands: PhaseBand[],
+  xVal: number,
+  yVal: number,
+): PhaseBand | null {
+  for (const band of bands) {
+    if (xVal >= band.x0 && xVal <= band.x1 && Math.abs(yVal - band.y) < 0.45) {
+      return band;
+    }
+  }
+  return null;
+}
+
+function hideTooltip() {
+  tooltip.value = { ...tooltip.value, show: false };
 }
 
 function rebuild() {
@@ -64,14 +178,20 @@ function rebuild() {
     return;
   }
   destroy();
+  hideTooltip();
 
   const width = chartEl.value.clientWidth || 640;
   const height = 180;
+  const textMuted = themeColor("--text-muted", "#9a9a9a");
+  const border = themeColor("--border", "#333");
+  const accent = themeColor("--accent", "#6a9fd8");
+  const bgElevated = themeColor("--bg-elevated", "#1e1e22");
 
-  // Sparse marker series: x = time, y = lane
+  // Sparse marker series: x = time, y = lane (hit-testing only; dots drawn in hook).
   const xs: number[] = [];
   const ys: number[] = [];
   const meta: ActivityItem[] = [];
+  const fills: string[] = [];
 
   for (const item of activities.value) {
     if (!item.atMs) {
@@ -81,21 +201,31 @@ function rebuild() {
     xs.push(item.atMs / 1000);
     ys.push(lane);
     meta.push(item);
+    fills.push(statusFill(item.status, accent, textMuted));
   }
 
-  if (xs.length === 0) {
-    // Placeholder points so uPlot renders scales; kept off-lane.
+  const hasPoints = xs.length > 0;
+  if (!hasPoints) {
     xs.push(range.value.min / 1000, range.value.max / 1000);
     ys.push(-1, -1);
   }
 
-  const phaseBands = phases.value.map((segment) => ({
-    key: segment.key,
-    x0: Date.parse(segment.startedAt) / 1000,
-    x1: (segment.finishedAt ? Date.parse(segment.finishedAt) : Date.now()) / 1000,
-    y: PHASE_Y[segment.key],
-    label: segment.label,
-  }));
+  const phaseBands: PhaseBand[] = phases.value.map((segment) => {
+    const startMs = Date.parse(segment.startedAt);
+    const endMs = segment.active
+      ? Date.now()
+      : segment.finishedAt
+        ? Date.parse(segment.finishedAt)
+        : startMs + segment.durationMs;
+    return {
+      key: segment.key,
+      x0: startMs / 1000,
+      x1: endMs / 1000,
+      y: PHASE_Y[segment.key],
+      label: segment.label,
+      durationMs: segment.durationMs,
+    };
+  });
 
   const opts: uPlot.Options = {
     width,
@@ -113,35 +243,33 @@ function rebuild() {
     },
     axes: [
       {
-        stroke: "var(--text-muted)",
-        grid: { stroke: "var(--border)", width: 1 },
-        ticks: { stroke: "var(--border)" },
+        stroke: textMuted,
+        grid: { stroke: border, width: 1 },
+        ticks: { stroke: border },
       },
       {
         show: true,
-        stroke: "var(--text-muted)",
+        stroke: textMuted,
         values: (_u, splits) =>
           splits.map((v) => {
-            if (v === 3) return "Prep";
+            if (v === 3) return "Prepare";
             if (v === 2) return "Agent";
-            if (v === 1) return "Valid";
-            if (v === 0) return "Integ";
+            if (v === 1) return "Validate";
+            if (v === 0) return "Integrate";
             return "";
           }),
         grid: { show: false },
         ticks: { show: false },
-        size: 48,
+        size: 72,
       },
     ],
     series: [
       {},
       {
         label: "activity",
-        stroke: "var(--accent)",
+        stroke: "transparent",
         points: {
-          show: true,
-          size: 8,
-          fill: "var(--accent)",
+          show: false,
         },
         paths: () => null,
       },
@@ -149,15 +277,12 @@ function rebuild() {
     cursor: {
       drag: { x: true, y: false },
       focus: { prox: 24 },
+      points: { show: false },
     },
     hooks: {
       draw: [
         (u) => {
           const ctx = u.ctx;
-          const yMin = u.bbox.top;
-          const yMax = u.bbox.top + u.bbox.height;
-          void yMin;
-          void yMax;
           for (const band of phaseBands) {
             const x0 = u.valToPos(band.x0, "x", true);
             const x1 = u.valToPos(band.x1, "x", true);
@@ -167,26 +292,34 @@ function rebuild() {
             ctx.fillStyle = PHASE_COLORS[band.key];
             ctx.fillRect(x0, y - h / 2, Math.max(2, x1 - x0), h);
             if (props.selectedPhase === band.key) {
-              ctx.strokeStyle = "var(--accent)";
+              ctx.strokeStyle = accent;
               ctx.lineWidth = 2;
               ctx.strokeRect(x0, y - h / 2, Math.max(2, x1 - x0), h);
             }
             ctx.restore();
           }
-        },
-      ],
-      setCursor: [
-        (u) => {
-          const idx = u.cursor.idx;
-          if (idx == null || !meta[idx]) {
+
+          if (!hasPoints) {
             return;
+          }
+          for (let i = 0; i < meta.length; i += 1) {
+            const x = u.valToPos(xs[i]!, "x", true);
+            const y = u.valToPos(ys[i]!, "y", true);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = fills[i] ?? accent;
+            ctx.fill();
+            ctx.strokeStyle = bgElevated;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
           }
         },
       ],
     },
   };
 
-  // Attach click via over element after create
   plot = new uPlot(opts, [xs, ys], chartEl.value);
 
   const over = plot.over;
@@ -202,37 +335,67 @@ function rebuild() {
     const xVal = plot.posToVal(left, "x");
     const yVal = plot.posToVal(top, "y");
 
-    // Prefer activity nearest in time within proximity
-    let best: ActivityItem | null = null;
-    let bestDist = Infinity;
-    for (const item of meta) {
-      const dx = Math.abs(item.atMs / 1000 - xVal);
-      const lane = item.phase ? PHASE_Y[item.phase] : 3.5;
-      const dy = Math.abs(lane - yVal);
-      const dist = dx * 2 + dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = item;
-      }
-    }
-    if (best && bestDist < 2) {
-      emit("selectActivity", best.id);
-      if (best.phase) {
-        emit("selectPhase", best.phase);
+    const nearest = nearestActivity(meta, xVal, yVal);
+    if (nearest && nearest.dist < 2) {
+      emit("selectActivity", nearest.item.id);
+      if (nearest.item.phase) {
+        emit("selectPhase", nearest.item.phase);
       }
       return;
     }
 
-    // Otherwise select phase band under cursor
-    for (const band of phaseBands) {
-      if (xVal >= band.x0 && xVal <= band.x1 && Math.abs(yVal - band.y) < 0.45) {
-        emit("selectPhase", props.selectedPhase === band.key ? null : band.key);
-        return;
-      }
+    const band = bandUnder(phaseBands, xVal, yVal);
+    if (band) {
+      emit("selectPhase", props.selectedPhase === band.key ? null : band.key);
     }
   };
 
+  const onMove = (e: MouseEvent) => {
+    if (!plot || !root.value) {
+      return;
+    }
+    const overRect = over.getBoundingClientRect();
+    const rootRect = root.value.getBoundingClientRect();
+    const left = e.clientX - overRect.left;
+    const top = e.clientY - overRect.top;
+    const xVal = plot.posToVal(left, "x");
+    const yVal = plot.posToVal(top, "y");
+
+    const nearest = nearestActivity(meta, xVal, yVal);
+    if (nearest && nearest.dist < 1.2) {
+      const item = nearest.item;
+      tooltip.value = {
+        show: true,
+        x: e.clientX - rootRect.left + 12,
+        y: e.clientY - rootRect.top + 12,
+        title: item.title,
+        detail: `${item.kind}${item.status ? ` · ${item.status}` : ""} · ${fmtTime(item.at)}`,
+      };
+      return;
+    }
+
+    const band = bandUnder(phaseBands, xVal, yVal);
+    if (band) {
+      tooltip.value = {
+        show: true,
+        x: e.clientX - rootRect.left + 12,
+        y: e.clientY - rootRect.top + 12,
+        title: band.label,
+        detail: `Phase · ${fmtDuration(band.durationMs)}`,
+      };
+      return;
+    }
+
+    hideTooltip();
+  };
+
+  const onLeave = () => {
+    hideTooltip();
+  };
+
   over.addEventListener("click", onClick);
+  over.addEventListener("mousemove", onMove);
+  over.addEventListener("mouseleave", onLeave);
 
   const onWheel = (e: WheelEvent) => {
     if (!plot) {
@@ -257,9 +420,10 @@ function rebuild() {
   };
   over.addEventListener("wheel", onWheel, { passive: false });
 
-  // stash cleanup on element
   (over as HTMLElement & { __gojoCleanup?: () => void }).__gojoCleanup = () => {
     over.removeEventListener("click", onClick);
+    over.removeEventListener("mousemove", onMove);
+    over.removeEventListener("mouseleave", onLeave);
     over.removeEventListener("wheel", onWheel);
   };
 }
@@ -281,10 +445,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", rebuild);
-  if (plot) {
-    const over = plot.over as HTMLElement & { __gojoCleanup?: () => void };
-    over.__gojoCleanup?.();
-  }
   destroy();
 });
 
@@ -298,10 +458,40 @@ watch(
 <template>
   <div ref="root" class="timeline-chart">
     <div class="timeline-chart-toolbar">
-      <span class="muted">Drag to pan · scroll to zoom · click phase/activity</span>
+      <span class="muted"
+        >Bars = phase duration · Dots = activity events (click to jump) · Drag to pan ·
+        scroll to zoom</span
+      >
       <button class="btn btn-sm" type="button" @click="resetZoom">Reset zoom</button>
     </div>
+
+    <div class="timeline-legend" aria-label="Timeline legend">
+      <span
+        v-for="item in PHASE_LEGEND"
+        :key="item.key"
+        class="timeline-legend-item"
+      >
+        <span class="timeline-legend-swatch" :style="{ background: item.color }" />
+        {{ item.label }}
+      </span>
+      <span class="timeline-legend-item">
+        <span class="timeline-legend-dot" />
+        Activity event
+      </span>
+    </div>
+
     <div ref="chartEl" class="timeline-chart-canvas" />
+
+    <div
+      v-if="tooltip.show"
+      class="timeline-tooltip"
+      :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }"
+      role="tooltip"
+    >
+      <div class="timeline-tooltip-title">{{ tooltip.title }}</div>
+      <div class="timeline-tooltip-detail muted">{{ tooltip.detail }}</div>
+    </div>
+
     <div v-if="phases.length === 0 && activities.length === 0" class="muted timeline-chart-empty">
       Timeline populates as the run progresses.
     </div>

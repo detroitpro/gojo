@@ -78,7 +78,8 @@ Join task/project names via DB if needed:
 ```bash
 sqlite3 "$GOJO_HOME/data/gojo.db" "
 SELECT substr(r.id,1,12), r.state, t.name, p.name, r.trigger,
-       r.created_at, substr(COALESCE(r.error_message,''),1,100)
+       r.started_at, r.finished_at,
+       substr(COALESCE(r.error_message,''),1,100)
 FROM runs r
 JOIN tasks t ON t.id=r.task_id
 JOIN projects p ON p.id=r.project_id
@@ -86,6 +87,8 @@ WHERE r.created_at >= datetime('now','-1 day')
 ORDER BY r.created_at;
 "
 ```
+
+For timing disputes, also read `attempts.agent_duration_ms` / attempt `started_at`–`finished_at` vs run `started_at`–`finished_at`.
 
 Build a **tree**: project → task → runs (id prefix, state, trigger, short error).
 
@@ -101,6 +104,15 @@ gojo run artifacts <id>
 ```
 
 Note `started_at` null (never started) vs agent/validation/integration failures. Check heal children (`trigger=heal`, idempotency `heal:<failedRunId>:…`).
+
+**UI timeline gotchas (run detail):**
+
+- Lanes are phase buckets, not equal to every `RunState`: **Integrate** = `Integrating` + `AwaitingApproval` + `Reporting` merged.
+- **Bars** = wall-clock phase duration; **dots** = activity rows (assistant/tools/validation/lifecycle). Header duration ≈ agent time on agent-heavy runs; Integrate is usually short (commit/PR + handoff).
+- A huge Integrate bar while Activity shows Succeeded in seconds is usually a **closed-run segment bug**: `terminalRun` used to emit `run.finished` without `run.state_changed → Succeeded`, so Reporting looked “still open” and stretched to *now*. Fixed in `buildPhaseSegments` (honors `run.finished`) + coordinator emit. Prefer DB `finished_at` over the chart when they disagree.
+- Run SSE/events are **in-memory** (`EventStore`), not a `run_events` SQLite table. After daemon restart, live event history for old runs may be gone; use Activity only while the process that executed the run is still up, else artifacts + `runs`/`attempts` rows.
+- API prefix is `/api/v1/…` (not `/api/runs/…`). Vite proxies to `127.0.0.1:7430`. Auth required for most routes.
+- `make dev` vs `gojo.service`: different processes/homes/ports possible — confirm which UI is talking to.
 
 ### 6. Classify
 
