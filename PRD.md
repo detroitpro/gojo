@@ -1008,9 +1008,25 @@ Each completed attempt should produce a normalized handoff document:
   "agentAssessment": {
     "successful": true,
     "confidence": 0.86
-  }
+  },
+  "assets": [
+    {
+      "role": "pr-body",
+      "path": ".gojo/assets/pr-body.md",
+      "mediaType": "text/markdown",
+      "label": "PR description"
+    }
+  ]
 }
 ```
+
+Optional `assets` attach files or inline blobs for downstream use. Roles:
+
+* `pr-body` — preferred GitHub PR body (verbose markdown); gojo still appends a short footer
+* `pr-title` — preferred PR title (first line)
+* `report` / `attachment` — stored under run artifacts for humans and later agents
+
+Prefer workspace-relative `path` for large markdown; use `content` for small inline text. At least one of `path` or `content` is required. gojo materializes assets into `$GOJO_HOME/artifacts/<runId>/assets/` when writing `handoff.json`.
 
 The platform should provide future agents with:
 

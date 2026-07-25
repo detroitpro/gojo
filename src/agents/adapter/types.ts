@@ -12,7 +12,14 @@ export interface AgentAdapter {
 
 export type AgentLifecycleEvent =
   | { type: 'model'; model: string }
-  | { type: 'tool'; phase: 'started' | 'completed'; callId: string; name: string };
+  | {
+      type: 'tool';
+      phase: 'started' | 'completed';
+      callId: string;
+      name: string;
+      /** Short human summary (path, command, pattern, …) when available. */
+      summary?: string;
+    };
 
 export interface AgentExecuteContext {
   workspacePath: string;

@@ -18,6 +18,19 @@ const PHASE_LABELS: Record<PhaseKey, string> = {
   integrate: "Integrate",
 };
 
+const TERMINAL_STATES = new Set([
+  "Succeeded",
+  "Failed",
+  "Canceled",
+  "TimedOut",
+  "Skipped",
+  "Superseded",
+  "Abandoned",
+  "Blocked",
+  "Conflict",
+  "InfrastructureFailure",
+]);
+
 function phaseForState(state: string): PhaseKey | null {
   switch (state) {
     case "Preparing":
@@ -38,17 +51,34 @@ function phaseForState(state: string): PhaseKey | null {
 /**
  * Build wall-clock phase segments from run.state_changed events.
  * Adjacent visits to the same phase are merged.
+ *
+ * `run.finished` / `run.failed` close the last open segment — terminalRun
+ * historically emitted finished without a state_changed to Succeeded/Failed.
  */
 export function buildPhaseSegments(events: RunEvent[], nowMs = Date.now()): PhaseSegment[] {
   const transitions: Array<{ at: string; to: string }> = [];
+  let closeAt: string | null = null;
 
   for (const event of events) {
-    if (event.type !== "run.state_changed" || !event.data || typeof event.data !== "object") {
+    if (event.type === "run.state_changed" && event.data && typeof event.data === "object") {
+      const data = event.data as { to?: string };
+      if (typeof data.to === "string" && event.at) {
+        transitions.push({ at: event.at, to: data.to });
+        if (TERMINAL_STATES.has(data.to)) {
+          closeAt = event.at;
+        }
+      }
       continue;
     }
-    const data = event.data as { to?: string };
-    if (typeof data.to === "string" && event.at) {
-      transitions.push({ at: event.at, to: data.to });
+
+    if (
+      (event.type === "run.finished" || event.type === "run.failed") &&
+      event.at
+    ) {
+      // Prefer the earliest close signal; finished usually arrives once.
+      if (!closeAt || Date.parse(event.at) < Date.parse(closeAt)) {
+        closeAt = event.at;
+      }
     }
   }
 
@@ -78,33 +108,36 @@ export function buildPhaseSegments(events: RunEvent[], nowMs = Date.now()): Phas
     raw.push({ key, startedAt: current.at, finishedAt });
   }
 
-  // Close open segment at "now" only if still active (no terminal after last open).
   const lastTransition = transitions[transitions.length - 1]!;
-  const terminal =
-    lastTransition.to === "Succeeded" ||
-    lastTransition.to === "Failed" ||
-    lastTransition.to === "Canceled" ||
-    lastTransition.to === "TimedOut" ||
-    lastTransition.to === "Abandoned" ||
-    lastTransition.to === "Conflict" ||
-    lastTransition.to === "InfrastructureFailure";
+  const terminalByTransition = TERMINAL_STATES.has(lastTransition.to);
+  const terminal = terminalByTransition || closeAt != null;
+
+  // Close a still-open lane (e.g. Reporting) when the run finished without
+  // a state_changed into a terminal state.
+  if (closeAt) {
+    const open = raw[raw.length - 1];
+    if (open && open.finishedAt === null) {
+      open.finishedAt = closeAt;
+    }
+  }
 
   return raw.map((segment) => {
     const endMs = segment.finishedAt
       ? Date.parse(segment.finishedAt)
       : terminal
-        ? Date.parse(lastTransition.at)
+        ? Date.parse(closeAt ?? lastTransition.at)
         : nowMs;
     const startMs = Date.parse(segment.startedAt);
     const durationMs =
       Number.isFinite(startMs) && Number.isFinite(endMs) ? Math.max(0, endMs - startMs) : 0;
+    const active = segment.finishedAt === null && !terminal;
     return {
       key: segment.key,
       label: PHASE_LABELS[segment.key],
       startedAt: segment.startedAt,
-      finishedAt: segment.finishedAt,
+      finishedAt: active ? null : (segment.finishedAt ?? closeAt ?? lastTransition.at),
       durationMs,
-      active: segment.finishedAt === null && !terminal,
+      active,
     };
   });
 }

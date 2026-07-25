@@ -30,7 +30,13 @@ export class NdjsonLineBuffer {
 
 export type AgentStreamEvent =
   | { kind: 'text'; text: string }
-  | { kind: 'tool'; phase: 'started' | 'completed'; callId: string; name: string }
+  | {
+      kind: 'tool';
+      phase: 'started' | 'completed';
+      callId: string;
+      name: string;
+      summary?: string;
+    }
   | { kind: 'model'; model: string }
   | { kind: 'result'; payload: Record<string, unknown> };
 
@@ -52,6 +58,73 @@ function toolNameFromPayload(toolCall: unknown): string {
     }
   }
   return 'tool';
+}
+
+function truncateSummary(value: string, max = 80): string {
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= max) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, max - 1)}…`;
+}
+
+function toolArgsFromPayload(toolCall: unknown): Record<string, unknown> | null {
+  if (!toolCall || typeof toolCall !== 'object') {
+    return null;
+  }
+  const obj = toolCall as Record<string, unknown>;
+  for (const value of Object.values(obj)) {
+    if (!value || typeof value !== 'object') {
+      continue;
+    }
+    const args = (value as { args?: unknown }).args;
+    if (args && typeof args === 'object' && !Array.isArray(args)) {
+      return args as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+/** Build a short display summary from Cursor tool_call.args. */
+export function toolSummaryFromPayload(toolCall: unknown): string | undefined {
+  const args = toolArgsFromPayload(toolCall);
+  if (!args) {
+    return undefined;
+  }
+
+  const pick = (...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const value = args[key];
+      if (typeof value === 'string' && value.trim()) {
+        return truncateSummary(value);
+      }
+    }
+    return undefined;
+  };
+
+  const path = pick('path', 'filePath', 'file', 'target_file', 'targetDirectory');
+  const command = pick('command', 'cmd');
+  const pattern = pick('pattern', 'query', 'regex', 'search');
+  const glob = pick('glob', 'globPattern', 'glob_pattern');
+
+  const parts: string[] = [];
+  if (path) {
+    parts.push(path);
+  }
+  if (command) {
+    parts.push(command);
+  }
+  if (pattern) {
+    parts.push(pattern);
+  }
+  if (glob && glob !== path) {
+    parts.push(glob);
+  }
+
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return truncateSummary(parts.join(' · '), 100);
 }
 
 function assistantText(message: unknown): string {
@@ -134,12 +207,15 @@ export function mapCursorStreamEvent(raw: unknown): AgentStreamEvent[] {
   if (type === 'tool_call') {
     const phase = event['subtype'] === 'completed' ? 'completed' : 'started';
     const callId = typeof event['call_id'] === 'string' ? event['call_id'] : 'unknown';
+    const toolCall = event['tool_call'];
+    const summary = toolSummaryFromPayload(toolCall);
     return [
       {
         kind: 'tool',
         phase,
         callId,
-        name: toolNameFromPayload(event['tool_call']),
+        name: toolNameFromPayload(toolCall),
+        ...(summary ? { summary } : {}),
       },
     ];
   }

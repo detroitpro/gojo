@@ -36,6 +36,7 @@ import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "@/app/project-sync";
 import { openApiDocument } from "./openapi";
+import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import {
   listProjectsPage,
   listRunsPage,
@@ -521,6 +522,17 @@ export async function handleApiRequest(
       limit: result.limit,
       offset: result.offset,
     });
+  }
+
+  if (method === "GET" && pathname === "/api/v1/schedules/upcoming") {
+    const horizonRaw = Number(url.searchParams.get("horizonHours") ?? "168");
+    const result = listUpcomingSchedules(ctx.db, {
+      horizonHours: horizonRaw,
+      projectId: url.searchParams.get("projectId"),
+      enabled: parseEnabledParam(url.searchParams.get("enabled")),
+      q: url.searchParams.get("q"),
+    });
+    return success(result);
   }
 
   const scheduleActionMatch = pathname.match(/^\/api\/v1\/schedules\/([^/]+)\/(enable|disable|pause)$/);

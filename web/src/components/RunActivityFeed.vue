@@ -38,10 +38,19 @@ const filtered = computed(() => {
     if (!q) {
       return true;
     }
-    return (
+    if (
       item.title.toLowerCase().includes(q) ||
       (item.detail?.toLowerCase().includes(q) ?? false) ||
       (item.body?.toLowerCase().includes(q) ?? false)
+    ) {
+      return true;
+    }
+    return (
+      item.tools?.some(
+        (tool) =>
+          tool.name.toLowerCase().includes(q) ||
+          (tool.summary?.toLowerCase().includes(q) ?? false),
+      ) ?? false
     );
   });
 });
@@ -131,6 +140,29 @@ function statusClass(item: ActivityItem): string {
               class="pre-block mt-2 activity-assistant-body"
               >{{ row.body }}</pre
             >
+          </template>
+
+          <template v-if="row.tools?.length">
+            <button class="btn btn-sm mt-2" type="button" @click="toggle(row.id)">
+              {{
+                expanded[row.id]
+                  ? "Hide tools"
+                  : row.tools.length === 1
+                    ? "Show tool"
+                    : `Show ${row.tools.length} tools`
+              }}
+            </button>
+            <ul v-if="expanded[row.id]" class="tool-list mt-2">
+              <li v-for="tool in row.tools" :key="tool.callId" class="tool-list-item">
+                <span class="tool-name mono">{{ tool.name }}</span>
+                <span
+                  class="tool-phase muted"
+                  :class="tool.phase === 'completed' ? 'tool-done' : ''"
+                  >{{ tool.phase === "completed" ? "done" : "running" }}</span
+                >
+                <span v-if="tool.summary" class="tool-summary muted">{{ tool.summary }}</span>
+              </li>
+            </ul>
           </template>
 
           <template v-if="row.validation">

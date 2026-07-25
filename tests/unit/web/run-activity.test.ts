@@ -68,4 +68,167 @@ describe("buildActivityItems", () => {
     const items = buildActivityItems(events);
     expect(items[0]!.body).toBe("Hello\nWorld");
   });
+
+  test("pairs started/completed by callId into one tool entry", () => {
+    const events: RunEvent[] = [
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "read", callId: "c1", summary: "foo.ts" },
+        "t1",
+        1,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "read", callId: "c1", summary: "foo.ts" },
+        "t2",
+        2,
+      ),
+    ];
+    const items = buildActivityItems(events);
+    const tools = items.filter((i) => i.kind === "tool");
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.tools).toHaveLength(1);
+    expect(tools[0]!.tools![0]).toMatchObject({
+      callId: "c1",
+      name: "read",
+      summary: "foo.ts",
+      phase: "completed",
+    });
+    expect(tools[0]!.title).toBe("read · foo.ts");
+    expect(tools[0]!.detail).toBeUndefined();
+  });
+
+  test("collapses consecutive tools into one group", () => {
+    const events: RunEvent[] = [
+      evt("run.agent.tool", { phase: "started", name: "read", callId: "a" }, "t1", 1),
+      evt("run.agent.tool", { phase: "completed", name: "read", callId: "a" }, "t2", 2),
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "grep", callId: "b", summary: "TODO" },
+        "t3",
+        3,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "grep", callId: "b", summary: "TODO" },
+        "t4",
+        4,
+      ),
+      evt("run.agent.tool", { phase: "started", name: "glob", callId: "c" }, "t5", 5),
+      evt("run.agent.tool", { phase: "completed", name: "glob", callId: "c" }, "t6", 6),
+    ];
+    const items = buildActivityItems(events);
+    const tools = items.filter((i) => i.kind === "tool");
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.tools).toHaveLength(3);
+    expect(tools[0]!.title).toBe("3 tools · read, grep, glob");
+    expect(tools[0]!.status).toBe("success");
+  });
+
+  test("keeps assistant primacy across tool groups", () => {
+    const events: RunEvent[] = [
+      evt("run.agent.output", { stream: "stdout", chunk: "Thinking first" }, "t1", 1),
+      evt("run.agent.tool", { phase: "started", name: "read", callId: "c1" }, "t2", 2),
+      evt("run.agent.tool", { phase: "completed", name: "read", callId: "c1" }, "t3", 3),
+      evt("run.agent.output", { stream: "stdout", chunk: "Thinking after" }, "t4", 4),
+    ];
+    const items = buildActivityItems(events);
+    // Newest first: after, tools, before
+    expect(items.map((i) => i.kind)).toEqual(["assistant", "tool", "assistant"]);
+    expect(items[0]!.body).toBe("Thinking after");
+    expect(items[1]!.tools).toHaveLength(1);
+    expect(items[2]!.body).toBe("Thinking first");
+  });
+
+  test("groups consecutive shells despite interleaved tool-marker stdout", () => {
+    const events: RunEvent[] = [
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "shell", callId: "s1", summary: "cargo check" },
+        "t1",
+        1,
+      ),
+      evt(
+        "run.agent.output",
+        { stream: "stdout", chunk: "\n[tool started] shell · cargo check\n" },
+        "t2",
+        2,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "shell", callId: "s1", summary: "cargo check" },
+        "t3",
+        3,
+      ),
+      evt(
+        "run.agent.output",
+        { stream: "stdout", chunk: "\n[tool completed] shell · cargo check\n" },
+        "t4",
+        4,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "shell", callId: "s2", summary: "cargo test" },
+        "t5",
+        5,
+      ),
+      evt(
+        "run.agent.output",
+        { stream: "stdout", chunk: "\n[tool started] shell · cargo test\n" },
+        "t6",
+        6,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "shell", callId: "s2", summary: "cargo test" },
+        "t7",
+        7,
+      ),
+      evt(
+        "run.agent.output",
+        { stream: "stdout", chunk: "\n[tool completed] shell · cargo test\n" },
+        "t8",
+        8,
+      ),
+    ];
+    const items = buildActivityItems(events);
+    const tools = items.filter((i) => i.kind === "tool");
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.tools).toHaveLength(2);
+    expect(tools[0]!.title).toBe("2 shells · cargo check, cargo test");
+    expect(tools[0]!.status).toBe("success");
+  });
+
+  test("real assistant text between shells still splits groups", () => {
+    const events: RunEvent[] = [
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "shell", callId: "s1", summary: "ls" },
+        "t1",
+        1,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "shell", callId: "s1", summary: "ls" },
+        "t2",
+        2,
+      ),
+      evt("run.agent.output", { stream: "stdout", chunk: "Next I'll run tests" }, "t3", 3),
+      evt(
+        "run.agent.tool",
+        { phase: "started", name: "shell", callId: "s2", summary: "cargo test" },
+        "t4",
+        4,
+      ),
+      evt(
+        "run.agent.tool",
+        { phase: "completed", name: "shell", callId: "s2", summary: "cargo test" },
+        "t5",
+        5,
+      ),
+    ];
+    const items = buildActivityItems(events);
+    expect(items.filter((i) => i.kind === "tool")).toHaveLength(2);
+    expect(items.filter((i) => i.kind === "assistant")).toHaveLength(1);
+  });
 });

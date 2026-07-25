@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { buildPrDescription } from "@/integration/pr-description";
 
@@ -60,5 +63,52 @@ describe("buildPrDescription", () => {
     });
     expect(pr.title.length).toBeLessThanOrEqual(72);
     expect(pr.title.endsWith("…")).toBe(true);
+  });
+
+  test("prefers pr-body and pr-title assets over synthesized sections", () => {
+    const root = mkdtempSync(join(tmpdir(), "gojo-pr-"));
+    mkdirSync(join(root, ".gojo"), { recursive: true });
+    writeFileSync(
+      join(root, ".gojo", "pr-body.md"),
+      "## Custom PR\n\nVerbose details here.\n",
+      "utf8",
+    );
+
+    const pr = buildPrDescription({
+      taskName: "maintain-tests",
+      runId: "01KYTEST000000000000000099",
+      fallbackTitle: "fallback",
+      workspacePath: root,
+      handoff: {
+        summary: "Should not become title when pr-title present",
+        decisions: ["Should not appear in body"],
+        assets: [
+          { role: "pr-title", content: "Custom title from asset" },
+          { role: "pr-body", path: ".gojo/pr-body.md" },
+        ],
+      },
+    });
+
+    expect(pr.title).toBe("Custom title from asset");
+    expect(pr.body).toContain("## Custom PR");
+    expect(pr.body).toContain("Verbose details here.");
+    expect(pr.body).not.toContain("## Decisions");
+    expect(pr.body).toContain("Opened by **gojo**");
+    expect(pr.body).toContain("01KYTEST000000000000000099");
+  });
+
+  test("uses inline pr-body content without workspace", () => {
+    const pr = buildPrDescription({
+      taskName: "t",
+      runId: "r1",
+      fallbackTitle: "fallback",
+      handoff: {
+        summary: "Summary title line",
+        assets: [{ role: "pr-body", content: "Inline body only" }],
+      },
+    });
+    expect(pr.title).toBe("Summary title line");
+    expect(pr.body).toContain("Inline body only");
+    expect(pr.body).toContain("Opened by **gojo**");
   });
 });

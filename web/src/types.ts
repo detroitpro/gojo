@@ -98,6 +98,25 @@ export interface Schedule {
   taskName?: string | null;
   projectId?: string | null;
   projectName?: string | null;
+  /** Human-readable cron from list API */
+  cronDescription?: string | null;
+}
+
+export interface UpcomingScheduleSeries {
+  id: string;
+  name: string;
+  taskName: string | null;
+  timezone: string;
+  enabled: boolean;
+  color: string;
+  fires: string[];
+}
+
+export interface SchedulesUpcomingResult {
+  horizonHours: number;
+  from: string;
+  to: string;
+  schedules: UpcomingScheduleSeries[];
 }
 
 export interface AgentInfo {

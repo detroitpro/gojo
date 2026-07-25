@@ -52,13 +52,15 @@ When `integration.mode` is `pull-request`, **gojo** runs `gh pr create` — the 
 
 | Handoff field | PR use |
 | --- | --- |
-| `summary` (first line) | PR title (truncated) |
-| `summary` (full) | Opening “Summary” section — must include **what**, **why**, and **value** |
-| `decisions` | Decisions section (rationale, not only outcomes) |
-| `filesChanged` | Files changed |
-| `unresolvedIssues` / `recommendedNextActions` | Follow-ups |
+| `assets` (`pr-title`) | Preferred PR title (first line) |
+| `assets` (`pr-body`) | Preferred full PR body (verbose markdown via `path`) |
+| `summary` (first line) | PR title when no `pr-title` asset |
+| `summary` (full) | Opening “Summary” section when no `pr-body` — include **what**, **why**, and **value** |
+| `decisions` | Decisions section when no `pr-body` |
+| `filesChanged` | Files changed (fallback body) |
+| `unresolvedIssues` / `recommendedNextActions` | Follow-ups (fallback body) |
 
-Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create`.
+For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create`.
 
 ### Minimal Hard rules sketch
 

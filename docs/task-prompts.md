@@ -12,4 +12,9 @@ When changing a maintenance prompt, keep the limit line explicit and require lef
 
 ## Handoff → PR body
 
-`pull-request` integration creates GitHub PRs in [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts). Agents must not `gh pr create`; they write rich `.gojo/handoff.json` (`summary` what/why/value, `decisions` with rationale). Coordinator passes title/body into `gh pr create`.
+`pull-request` integration creates GitHub PRs in [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts). Agents must not `gh pr create`; they write `.gojo/handoff.json`.
+
+- Short `summary` (title material) and `decisions` for the structured fallback body.
+- For verbose PR descriptions, add `assets` with `role: "pr-body"` and a workspace-relative `path` (e.g. `.gojo/assets/pr-body.md`), and optionally `role: "pr-title"`. gojo prefers those assets when creating the PR and copies them under `$GOJO_HOME/artifacts/<runId>/assets/`.
+
+Coordinator passes title/body into `gh pr create`.

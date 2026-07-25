@@ -10,6 +10,13 @@ export type ActivityKind =
   | "artifact"
   | "error";
 
+export interface ActivityToolEntry {
+  callId: string;
+  name: string;
+  summary?: string;
+  phase: "started" | "completed";
+}
+
 export interface ActivityItem {
   id: string;
   at: string;
@@ -21,6 +28,8 @@ export interface ActivityItem {
   body?: string;
   status?: "info" | "success" | "error" | "warn";
   validation?: ValidationStepEventData;
+  /** Collapsed tool group entries (when kind === "tool"). */
+  tools?: ActivityToolEntry[];
 }
 
 const TOOL_LINE_RE = /^\[tool (?:started|completed)\]\s+/;
@@ -70,6 +79,15 @@ interface OpenAssistant {
   index: number;
 }
 
+interface OpenToolGroup {
+  id: string;
+  at: string;
+  atMs: number;
+  /** Insertion order of callIds. */
+  order: string[];
+  byCallId: Map<string, ActivityToolEntry>;
+}
+
 function flushAssistant(open: OpenAssistant | null, out: ActivityItem[]): void {
   if (!open) {
     return;
@@ -91,19 +109,99 @@ function flushAssistant(open: OpenAssistant | null, out: ActivityItem[]): void {
   });
 }
 
+function isShellToolName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n === "shell" || n === "bash";
+}
+
+function toolGroupTitle(tools: ActivityToolEntry[]): string {
+  if (tools.length === 0) {
+    return "Tools";
+  }
+  if (tools.length === 1) {
+    const tool = tools[0]!;
+    return tool.summary ? `${tool.name} · ${tool.summary}` : tool.name;
+  }
+
+  const allShell = tools.every((t) => isShellToolName(t.name));
+  if (allShell) {
+    const summaries = tools
+      .map((t) => t.summary)
+      .filter((s): s is string => Boolean(s));
+    const preview = summaries.slice(0, 2).join(", ");
+    const more = summaries.length > 2 ? "…" : "";
+    const label = `${tools.length} shells`;
+    return preview ? `${label} · ${preview}${more}` : label;
+  }
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const tool of tools) {
+    if (seen.has(tool.name)) {
+      continue;
+    }
+    seen.add(tool.name);
+    names.push(tool.name);
+    if (names.length >= 4) {
+      break;
+    }
+  }
+  const distinct = new Set(tools.map((t) => t.name)).size;
+  const preview = names.join(", ");
+  const suffix = distinct > names.length ? `${preview}…` : preview;
+  return `${tools.length} tools · ${suffix}`;
+}
+
+function flushToolGroup(open: OpenToolGroup | null, out: ActivityItem[]): void {
+  if (!open || open.order.length === 0) {
+    return;
+  }
+  const tools = open.order
+    .map((callId) => open.byCallId.get(callId))
+    .filter((entry): entry is ActivityToolEntry => entry != null);
+  if (tools.length === 0) {
+    return;
+  }
+  const allDone = tools.every((t) => t.phase === "completed");
+  const summaries = tools
+    .map((t) => t.summary)
+    .filter((s): s is string => Boolean(s));
+  out.push({
+    id: open.id,
+    at: open.at,
+    atMs: open.atMs,
+    phase: "agent",
+    kind: "tool",
+    title: toolGroupTitle(tools),
+    ...(tools.length > 1 && summaries.length === 1
+      ? { detail: summaries[0] }
+      : {}),
+    status: allDone ? "success" : "info",
+    tools,
+  });
+}
+
 /**
  * Build newest-first activity rows from run SSE events.
  * Coalesces run.agent.output into assistant turns (not one row per token).
+ * Pairs tool started/completed by callId and collapses consecutive tools.
  */
 export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
   const out: ActivityItem[] = [];
   let lastStateTitle = "";
   let open: OpenAssistant | null = null;
+  let openTools: OpenToolGroup | null = null;
   let assistantIndex = 0;
+  let toolGroupIndex = 0;
 
   const breakAssistant = () => {
     flushAssistant(open, out);
     open = null;
+  };
+
+  const breakTools = () => {
+    flushToolGroup(openTools, out);
+    openTools = null;
   };
 
   events.forEach((event, index) => {
@@ -114,6 +212,14 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
       if (!chunk) {
         return;
       }
+      // Adapter-injected `[tool …]` markers must not flush tool groups or create
+      // empty assistant turns — otherwise consecutive shells each become a row.
+      const substantive = stripToolDuplicateLines(chunk).trim();
+      if (!substantive) {
+        return;
+      }
+      // Real assistant/stderr text ends the current tool group.
+      breakTools();
       if (open && open.stream !== stream) {
         breakAssistant();
       }
@@ -137,6 +243,58 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
     const id =
       event.id != null ? `evt-${event.id}` : `${event.at}-${event.type}-${index}`;
     const atMs = parseMs(event.at);
+
+    if (event.type === "run.agent.tool" && event.data && typeof event.data === "object") {
+      const data = event.data as {
+        phase?: string;
+        name?: string;
+        callId?: string;
+        summary?: string;
+      };
+      const callId =
+        typeof data.callId === "string" && data.callId
+          ? data.callId
+          : `anon-${index}`;
+      const name = typeof data.name === "string" && data.name ? data.name : "tool";
+      const phase = data.phase === "completed" ? "completed" : "started";
+      const summary =
+        typeof data.summary === "string" && data.summary.trim()
+          ? data.summary.trim()
+          : undefined;
+
+      if (!openTools) {
+        openTools = {
+          id: `tools-${toolGroupIndex++}-${atMs}`,
+          at: event.at,
+          atMs,
+          order: [],
+          byCallId: new Map(),
+        };
+      }
+
+      const existing = openTools.byCallId.get(callId);
+      if (!existing) {
+        openTools.order.push(callId);
+        openTools.byCallId.set(callId, {
+          callId,
+          name,
+          phase,
+          ...(summary ? { summary } : {}),
+        });
+      } else {
+        existing.phase = phase === "completed" ? "completed" : existing.phase;
+        if (name && name !== "tool") {
+          existing.name = name;
+        }
+        if (summary) {
+          existing.summary = summary;
+        }
+      }
+      return;
+    }
+
+    // Any other event closes the current tool group.
+    breakTools();
 
     if (event.type === "run.created") {
       const state =
@@ -186,25 +344,6 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
         kind: "agent",
         title: `Model · ${model}`,
         status: "info",
-      });
-      return;
-    }
-
-    if (event.type === "run.agent.tool" && event.data && typeof event.data === "object") {
-      const data = event.data as {
-        phase?: string;
-        name?: string;
-        callId?: string;
-      };
-      out.push({
-        id,
-        at: event.at,
-        atMs,
-        phase: "agent",
-        kind: "tool",
-        title: `Tool ${data.phase ?? "event"} · ${data.name ?? "tool"}`,
-        ...(data.callId ? { detail: data.callId } : {}),
-        status: data.phase === "completed" ? "success" : "info",
       });
       return;
     }
@@ -330,6 +469,7 @@ export function buildActivityItems(events: RunEvent[]): ActivityItem[] {
   });
 
   breakAssistant();
+  breakTools();
 
   // Newest activity first so live updates appear at the top of the feed.
   out.reverse();

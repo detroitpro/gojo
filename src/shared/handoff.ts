@@ -44,6 +44,34 @@ export const HandoffAgentAssessmentSchema = z.object({
 
 export type HandoffAgentAssessment = z.infer<typeof HandoffAgentAssessmentSchema>;
 
+/** How an attached handoff asset should be consumed by gojo. */
+export const HandoffAssetRoleSchema = z.enum([
+  'pr-body',
+  'pr-title',
+  'report',
+  'attachment',
+]);
+
+export type HandoffAssetRole = z.infer<typeof HandoffAssetRoleSchema>;
+
+/**
+ * File or inline blob attached to a handoff (PR bodies, reports, …).
+ * Prefer `path` (workspace-relative) for verbose markdown.
+ */
+export const HandoffAssetSchema = z
+  .object({
+    role: HandoffAssetRoleSchema,
+    path: z.string().min(1).optional(),
+    content: z.string().optional(),
+    mediaType: z.string().min(1).optional(),
+    label: z.string().min(1).optional(),
+  })
+  .refine((asset) => Boolean(asset.path?.trim() || asset.content !== undefined), {
+    message: 'Handoff asset requires path and/or content',
+  });
+
+export type HandoffAsset = z.infer<typeof HandoffAssetSchema>;
+
 /** Normalized agent handoff report per PRD §14. */
 export const AgentHandoffReportSchema = z.object({
   schemaVersion: z.literal(1),
@@ -58,6 +86,8 @@ export const AgentHandoffReportSchema = z.object({
   unresolvedIssues: z.array(z.string()),
   recommendedNextActions: z.array(z.string()),
   agentAssessment: HandoffAgentAssessmentSchema,
+  /** Optional attached files/blobs (e.g. verbose PR body markdown). */
+  assets: z.array(HandoffAssetSchema).optional(),
 });
 
 export type AgentHandoffReport = z.infer<typeof AgentHandoffReportSchema>;
