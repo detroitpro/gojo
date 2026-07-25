@@ -232,6 +232,60 @@ describe('decideHealEnqueue', () => {
     db.close();
   });
 
+  test('does not enqueue when hourly heal cap is reached', () => {
+    const db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: 'demo',
+      repoPath: '/tmp/demo',
+    });
+    const failing = repos.tasks.create({
+      projectId: project.id,
+      name: 'deps',
+      prompt: 'do work',
+    });
+    const healer = repos.tasks.create({
+      projectId: project.id,
+      name: 'self-heal',
+      prompt: 'heal',
+    });
+
+    for (let i = 0; i < 3; i++) {
+      repos.runs.create({
+        projectId: project.id,
+        taskId: healer.id,
+        idempotencyKey: `heal-cap-${i}`,
+        trigger: 'heal',
+        state: RunState.Succeeded,
+      });
+    }
+
+    const created = repos.runs.create({
+      projectId: project.id,
+      taskId: failing.id,
+      idempotencyKey: 'heal-cap-fail',
+      trigger: 'manual',
+      state: RunState.Failed,
+    });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
+
+    const decision = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedTask: failing,
+      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 1 } },
+    });
+
+    expect(decision.shouldEnqueue).toBe(false);
+    expect(decision.reason).toContain('heal cap reached');
+    db.close();
+  });
+
   test('does not enqueue for heal-triggered runs', () => {
     const db = Database.open(':memory:');
     db.migrate();
