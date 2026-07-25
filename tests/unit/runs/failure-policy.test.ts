@@ -44,4 +44,11 @@ describe('parseFailurePolicy', () => {
     controller.abort();
     await expect(sleep(1_000, controller.signal)).rejects.toThrow('aborted');
   });
+
+  test('sleep rejects when aborted during wait', async () => {
+    const controller = new AbortController();
+    const promise = sleep(60_000, controller.signal);
+    controller.abort();
+    await expect(promise).rejects.toThrow('aborted');
+  });
 });

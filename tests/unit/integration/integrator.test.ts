@@ -134,6 +134,29 @@ describe('integration/integrator', () => {
     expect(show.stdout).toContain('merged.txt');
   });
 
+  test('auto-merge reports conflict when merge fails', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+    writeFileSync(join(repoPath, 'conflict.txt'), 'main version\n');
+    await commitAll(repoPath, 'main side');
+    writeFileSync(join(worktreePath, 'conflict.txt'), 'branch version\n');
+
+    const queue = new MergeQueue();
+    const result = await integrate({
+      mode: 'auto-merge',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: branch side',
+      runId: 'run-conflict',
+      mergeQueue: queue,
+    });
+
+    expect(result.conflict).toBe(true);
+    expect(result.prUrl).toBeNull();
+  });
+
   test('await-approval commits without merging', async () => {
     const { repoPath, worktreePath, branchName } = await createRepo();
     writeFileSync(join(worktreePath, 'approval.txt'), 'needs approval');
