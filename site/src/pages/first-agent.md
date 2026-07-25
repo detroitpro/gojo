@@ -126,7 +126,7 @@ agents:
 ```
 
 4. Point a task at that agent and put the natural-language instructions in `promptFile` (Markdown is fine).
-5. Prefer **pull-request** or **await-approval** integration modes on shared repositories until you trust the task.
+5. Prefer **pull-request** integration in `gojo.yaml` on shared repositories until you trust the task. Use **await-approval** via the UI or API when you want a human gate before merge.
 
 Adapters invoke the installed CLIs non-interactively and capture structured output when available. Unsupported or missing CLIs fail detection clearly instead of half-running.
 

@@ -32,12 +32,12 @@ For anything that touches production branches:
 
 ```yaml
 integration:
-  mode: await-approval   # or pull-request
+  mode: pull-request     # commit-only | pull-request | auto-merge in gojo.yaml
   targetBranch: main
   requireAllValidations: true
 ```
 
-Operators approve or reject from the UI / `gojo run approve|reject`. Auto-merge only for narrow, trusted tasks.
+For **await-approval** (commit, then pause for human approve/reject), set integration on the task via the UI or API — it is not a valid `gojo.yaml` mode today. Operators approve or reject from the UI / `gojo run approve|reject`. Auto-merge only for narrow, trusted tasks.
 
 ## Secrets without committing them
 
@@ -54,8 +54,9 @@ Long AI runs often exceed the schedule interval. Prefer:
 ```yaml
 concurrency:
   projectLimit: 1
-  overlapPolicy: skip    # or queue — avoid allow_parallel on the same repo
 ```
+
+Schedule **overlap** (`skip`, `queue`, `cancel_replace`, `allow_parallel`) is configured per schedule in the UI or API. Manifest sync defaults new schedules to `skip`. Avoid `allow_parallel` on the same repo unless tasks are truly independent.
 
 One maintenance task rewriting the lockfile while another runs is how you get invalid “green” results.
 
@@ -131,7 +132,7 @@ Architecture notes reduce “creative” refactors during dependency chores.
 ```bash
 gojo agent detect --output json
 gojo task run <id> --output json
-gojo run logs <run-id> --follow
+gojo run logs <run-id>
 gojo schedule next <schedule-id>
 gojo backup create
 ```

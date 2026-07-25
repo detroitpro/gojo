@@ -17,7 +17,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | Command | Purpose |
 | --- | --- |
 | `gojo setup --username … --password …` | Create the first admin |
-| `gojo server start` | API + scheduler + web UI |
+| `gojo server start` | API + scheduler + web UI (foreground; add `--daemon` to detach) |
 | `gojo server status` | PID / health |
 | `gojo server stop` | Stop via PID file |
 | `gojo server doctor` | Git, disk, DB, agent detection, daemon PATH tools |
@@ -34,7 +34,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo project add <name> <repoPath> [--branch]` | Register a repo |
+| `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
 | `gojo project list\|inspect\|sync\|doctor\|remove` | Manage projects |
 
 ## Agents
@@ -47,14 +47,14 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo task list\|run\|cancel\|retry` | Manual execution |
+| `gojo task list --project <id>\|run\|cancel\|retry` | Manual execution (`list` requires `--project`) |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs
 
 | Command | Purpose |
 | --- | --- |
-| `gojo run list\|inspect\|logs\|diff` | Observe |
+| `gojo run list [--project <id>]\|inspect\|logs\|diff` | Observe (`list` is all runs without `--project`) |
 | `gojo run approve\|reject\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
