@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { parseTimeout, runValidationProfile } from '@/validation/engine';
+import { buildValidationEnv, parseTimeout, runValidationProfile } from '@/validation/engine';
 
 describe('validation/engine', () => {
   let tempDir: string | null = null;
@@ -13,6 +14,14 @@ describe('validation/engine', () => {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = null;
     }
+  });
+
+  test('buildValidationEnv prepends user-local bin directories', () => {
+    const home = homedir();
+    const env = buildValidationEnv({ PATH: '/usr/bin' });
+    expect(env.PATH).toBe(
+      `${join(home, '.bun', 'bin')}:${join(home, '.local', 'bin')}:/usr/bin`,
+    );
   });
 
   test('parseTimeout converts duration strings', () => {

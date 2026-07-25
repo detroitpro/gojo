@@ -1,1 +1,6 @@
-export { parseTimeout, runValidationProfile, type ValidationStepResult } from './engine';
+export {
+  buildValidationEnv,
+  parseTimeout,
+  runValidationProfile,
+  type ValidationStepResult,
+} from './engine';

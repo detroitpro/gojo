@@ -1,3 +1,6 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import { runProcess } from '@/process/supervisor';
 
 export interface ValidationStepResult {
@@ -11,6 +14,17 @@ export interface ValidationStepResult {
 }
 
 const TIMEOUT_PATTERN = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/;
+
+/** Prepend user-local bin dirs so validation finds bun/node under systemd. */
+export function buildValidationEnv(
+  base: Record<string, string | undefined> = process.env,
+): Record<string, string | undefined> {
+  const home = homedir();
+  const prepend = [join(home, '.bun', 'bin'), join(home, '.local', 'bin')].join(':');
+  const current = base.PATH ?? '';
+  const path = current.length > 0 ? `${prepend}:${current}` : prepend;
+  return { ...base, PATH: path };
+}
 
 /** Parse duration strings like "10m", "30s", "1h" into milliseconds. */
 export function parseTimeout(timeout: string): number {
@@ -66,6 +80,7 @@ export async function runValidationProfile(opts: {
       command: 'sh',
       args: ['-c', step.command],
       cwd: opts.cwd,
+      env: buildValidationEnv(),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
