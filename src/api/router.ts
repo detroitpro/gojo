@@ -34,7 +34,7 @@ import {
 } from "./http";
 import { browseRoots, listDirectory } from "@/filesystem/browse";
 
-import { syncProjectFromManifest } from "./project-sync";
+import { syncProjectFromManifest } from "@/app/project-sync";
 import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import {
