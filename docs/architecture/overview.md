@@ -37,7 +37,7 @@ User docs site: Astro in `site/` (not served by the daemon).
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |
 | `secrets/` | Encrypted secret store |
-| `notifications/` | Channels, dispatch, hooks |
+| `notifications/` | Channels, dispatch, hooks (Slack/webhooks + Telegram Bot API) |
 | `backup/` | Backup create/verify/restore |
 | `service/` | systemd / launchd unit install (embeds PATH so tools like bun resolve) |
 | `diagnostics/` | Doctor checks (instance tools + project baseCheckout / validationTools) |

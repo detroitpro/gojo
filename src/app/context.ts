@@ -69,6 +69,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   const workspace = new WorkspaceManager(paths.worktrees);
   const secrets = new SecretStore(db, paths);
   const users = new UserService(db);
+  users.purgeExpiredApiTokens();
   const apiBaseUrl = `http://${instance.bindHost}:${instance.bindPort}/api/v1`;
   const coordinator = new RunCoordinator({
     db,
@@ -82,10 +83,19 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         return null;
       }
       const expiresAt = new Date(Date.now() + AGENT_TOKEN_TTL_MS).toISOString();
-      const { token } = users.createApiTokenForUser(admin.id, `agent-run-${ulid()}`, {
-        expiresAt,
-      });
-      return { token };
+      const { token, record } = users.createApiTokenForUser(
+        admin.id,
+        `agent-run-${ulid()}`,
+        { expiresAt },
+      );
+      return { token, id: record.id };
+    },
+    revokeAgentToken: (tokenId) => {
+      const admin = users.findFirstAdmin();
+      if (!admin) {
+        return;
+      }
+      users.revokeApiToken(admin.id, tokenId);
     },
   });
   const notifications = new NotificationDispatcher(db);

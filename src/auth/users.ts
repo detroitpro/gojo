@@ -231,6 +231,17 @@ export class UserService {
     }));
   }
 
+  /** Delete tokens whose expires_at is in the past. Returns rows removed. */
+  purgeExpiredApiTokens(now = new Date()): number {
+    const result = this.db
+      .connection()
+      .query(
+        "DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at < ?",
+      )
+      .run(now.toISOString());
+    return result.changes;
+  }
+
   revokeApiToken(userId: string, tokenId: string): boolean {
     const result = this.db
       .connection()

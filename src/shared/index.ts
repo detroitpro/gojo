@@ -99,6 +99,8 @@ export {
   NotificationChannelConfigSchema,
   NotificationChannelMapSchema,
   NotificationChannelTypeSchema,
+  isTelegramChannel,
+  isWebhookLikeChannel,
   parseNotificationChannelConfig,
   parseNotificationChannelMap,
   safeParseNotificationChannelConfig,

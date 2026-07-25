@@ -8,6 +8,8 @@ interface ChannelConfigMap {
   [name: string]: {
     type: NotificationChannel["type"];
     webhookUrl?: string;
+    botToken?: string;
+    chatId?: string;
     config?: Record<string, unknown>;
   };
 }
@@ -46,6 +48,8 @@ function resolveChannel(
     config: {
       ...(config.config ?? {}),
       ...(config.webhookUrl !== undefined ? { webhookUrl: config.webhookUrl } : {}),
+      ...(config.botToken !== undefined ? { botToken: config.botToken } : {}),
+      ...(config.chatId !== undefined ? { chatId: String(config.chatId) } : {}),
     },
   };
 }

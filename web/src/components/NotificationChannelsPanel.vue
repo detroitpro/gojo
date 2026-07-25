@@ -32,7 +32,7 @@ const TYPE_HELP: Record<NotificationChannelType, string> = {
   teams:
     "In Teams: channel Connectors → Incoming Webhook → configure → copy the URL.",
   telegram:
-    "Generic HTTPS POST only (not Telegram Bot API). Prefer Slack, Discord, Teams, or a custom webhook.",
+    "Talk to @BotFather to create a bot and copy the token. Send a message to the bot, then open https://api.telegram.org/bot<token>/getUpdates and copy chat.id (groups are negative).",
 };
 
 const props = defineProps<{
@@ -51,6 +51,8 @@ const editingName = ref<string | null>(null);
 const name = ref("");
 const type = ref<NotificationChannelType>("slack");
 const webhookUrl = ref("");
+const botToken = ref("");
+const chatId = ref("");
 const formError = ref("");
 const testMessage = ref("");
 const testOk = ref(false);
@@ -86,6 +88,7 @@ const {
 watch(channelQuery, () => resetChannelPage());
 
 const typeHelp = computed(() => TYPE_HELP[type.value]);
+const isTelegram = computed(() => type.value === "telegram");
 
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -106,12 +109,28 @@ function maskUrl(url: string): string {
   }
 }
 
+function maskToken(token: string): string {
+  if (token.length <= 8) {
+    return "••••";
+  }
+  return `${token.slice(0, 4)}…${token.slice(-4)}`;
+}
+
+function endpointLabel(entry: NotificationChannelEntry): string {
+  if (entry.type === "telegram") {
+    return `chat ${entry.chatId} · ${maskToken(entry.botToken)}`;
+  }
+  return maskUrl(entry.webhookUrl);
+}
+
 function resetForm() {
   formOpen.value = false;
   editingName.value = null;
   name.value = "";
   type.value = "slack";
   webhookUrl.value = "";
+  botToken.value = "";
+  chatId.value = "";
   formError.value = "";
   testMessage.value = "";
   testOk.value = false;
@@ -127,13 +146,35 @@ function openEdit(entry: NotificationChannelEntry) {
   editingName.value = entry.name;
   name.value = entry.name;
   type.value = entry.type;
-  webhookUrl.value = entry.webhookUrl;
+  if (entry.type === "telegram") {
+    botToken.value = entry.botToken;
+    chatId.value = entry.chatId;
+    webhookUrl.value = "";
+  } else {
+    webhookUrl.value = entry.webhookUrl;
+    botToken.value = "";
+    chatId.value = "";
+  }
   formError.value = "";
   testMessage.value = "";
   testOk.value = false;
 }
 
 function currentConfig(): NotificationChannelConfig | null {
+  if (type.value === "telegram") {
+    const token = botToken.value.trim();
+    const chat = chatId.value.trim();
+    if (!token) {
+      formError.value = "Bot token is required";
+      return null;
+    }
+    if (!chat) {
+      formError.value = "Chat ID is required";
+      return null;
+    }
+    return { type: "telegram", botToken: token, chatId: chat };
+  }
+
   const trimmedUrl = webhookUrl.value.trim();
   if (!trimmedUrl.startsWith("https://")) {
     formError.value = "Webhook URL must start with https://";
@@ -170,7 +211,8 @@ async function persist(next: NotificationChannelMap) {
 async function saveChannel() {
   const trimmedName = name.value.trim().toLowerCase();
   if (!trimmedName || !namePattern.test(trimmedName)) {
-    formError.value = "Name must be lowercase letters, numbers, and hyphens (e.g. engineering-slack)";
+    formError.value =
+      "Name must be lowercase letters, numbers, and hyphens (e.g. engineering-slack)";
     return;
   }
 
@@ -192,7 +234,11 @@ async function saveChannel() {
 }
 
 async function removeChannel(channelName: string) {
-  if (!confirm(`Delete channel “${channelName}”? Projects that reference it will stop notifying.`)) {
+  if (
+    !confirm(
+      `Delete channel “${channelName}”? Projects that reference it will stop notifying.`,
+    )
+  ) {
     return;
   }
   const next = { ...channels.value };
@@ -225,6 +271,14 @@ async function sendTest(configOverride?: NotificationChannelConfig) {
 }
 
 async function sendTestForRow(entry: NotificationChannelEntry) {
+  if (entry.type === "telegram") {
+    await sendTest({
+      type: "telegram",
+      botToken: entry.botToken,
+      chatId: entry.chatId,
+    });
+    return;
+  }
   await sendTest({ type: entry.type, webhookUrl: entry.webhookUrl });
 }
 
@@ -252,7 +306,7 @@ defineExpose({ reload });
     </div>
     <div class="panel-body">
       <p class="muted">
-        Channels are endpoints (webhook URLs). Route them per project in
+        Channels deliver run outcomes. Route them per project in
         <span class="mono">gojo.yaml</span>
         via
         <span class="mono">notifications.onSuccess</span>
@@ -260,7 +314,7 @@ defineExpose({ reload });
         <span class="mono">onFailure</span>
         /
         <span class="mono">onDisabled</span>.
-        <a href="https://gojo.dev/notifications" target="_blank" rel="noopener">Learn more</a>
+        Telegram uses the Bot API (token + chat id); Slack/Discord/Teams use webhook URLs.
       </p>
 
       <div v-if="entries.length === 0 && !formOpen" class="muted mt-5">
@@ -288,7 +342,7 @@ defineExpose({ reload });
                 <tr>
                   <th>Name</th>
                   <th>Type</th>
-                  <th>Webhook</th>
+                  <th>Endpoint</th>
                   <th></th>
                 </tr>
               </thead>
@@ -298,7 +352,7 @@ defineExpose({ reload });
                   <td>
                     <span class="badge badge-neutral">{{ entry.type }}</span>
                   </td>
-                  <td class="mono muted">{{ maskUrl(entry.webhookUrl) }}</td>
+                  <td class="mono muted">{{ endpointLabel(entry) }}</td>
                   <td>
                     <button
                       class="btn btn-sm"
@@ -359,7 +413,7 @@ defineExpose({ reload });
               </option>
             </select>
           </div>
-          <div class="field flex-2">
+          <div v-if="!isTelegram" class="field flex-2">
             <label for="channel-url">Webhook URL</label>
             <input
               id="channel-url"
@@ -371,6 +425,32 @@ defineExpose({ reload });
               required
             />
           </div>
+          <template v-else>
+            <div class="field flex-2">
+              <label for="channel-bot-token">Bot token</label>
+              <input
+                id="channel-bot-token"
+                v-model="botToken"
+                class="mono"
+                type="password"
+                autocomplete="off"
+                placeholder="123456:ABC…"
+                :disabled="busy"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="channel-chat-id">Chat ID</label>
+              <input
+                id="channel-chat-id"
+                v-model="chatId"
+                class="mono"
+                placeholder="-1001234567890"
+                :disabled="busy"
+                required
+              />
+            </div>
+          </template>
         </div>
         <p class="muted mt-3">{{ typeHelp }}</p>
         <div v-if="formError" class="alert alert-error mt-4">{{ formError }}</div>
@@ -378,7 +458,7 @@ defineExpose({ reload });
           v-else-if="testMessage"
           class="alert"
           :class="testOk ? 'alert-info' : 'alert-error'"
-                  >
+        >
           {{ testMessage }}
         </div>
         <div class="toolbar mt-4">

@@ -70,7 +70,8 @@ export class RunCoordinator {
   private readonly repos;
   private readonly activeRuns = new Map<string, ActiveRunContext>();
   private readonly apiBaseUrl: string | null;
-  private readonly issueAgentToken: (() => { token: string } | null) | null;
+  private readonly issueAgentToken: (() => { token: string; id: string } | null) | null;
+  private readonly revokeAgentToken: ((tokenId: string) => void) | null;
 
   constructor(deps: {
     db: Database;
@@ -78,7 +79,8 @@ export class RunCoordinator {
     workspace: WorkspaceManager;
     eventBus?: RunEventBus;
     apiBaseUrl?: string;
-    issueAgentToken?: () => { token: string } | null;
+    issueAgentToken?: () => { token: string; id: string } | null;
+    revokeAgentToken?: (tokenId: string) => void;
   }) {
     this.paths = deps.paths;
     this.workspace = deps.workspace;
@@ -86,6 +88,7 @@ export class RunCoordinator {
     this.repos = createRepositories(deps.db);
     this.apiBaseUrl = deps.apiBaseUrl ?? null;
     this.issueAgentToken = deps.issueAgentToken ?? null;
+    this.revokeAgentToken = deps.revokeAgentToken ?? null;
   }
 
   async createRun(input: CreateRunInput): Promise<Run> {
@@ -611,48 +614,54 @@ export class RunCoordinator {
         agentEnv['GOJO_API_TOKEN'] = issued.token;
       }
 
-      const result = await adapter.execute({
-        workspacePath,
-        prompt,
-        env: agentEnv,
-        timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
-        signal,
-        onOutput: (stream, chunk) => {
-          buffers[stream] += chunk;
-          if (flushTimer === null) {
-            flushTimer = setTimeout(flushOutput, 80);
-          }
-        },
-        onAgentEvent: (event) => {
-          if (event.type === 'model') {
-            this.emit('run.agent.model', runId, { model: event.model });
-            this.repos.attempts.update(attemptId, { model: event.model });
-            return;
-          }
-          this.emit('run.agent.tool', runId, {
-            phase: event.phase,
-            callId: event.callId,
-            name: event.name,
-            ...(event.summary !== undefined ? { summary: event.summary } : {}),
-          });
-        },
-      });
+      try {
+        const result = await adapter.execute({
+          workspacePath,
+          prompt,
+          env: agentEnv,
+          timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
+          signal,
+          onOutput: (stream, chunk) => {
+            buffers[stream] += chunk;
+            if (flushTimer === null) {
+              flushTimer = setTimeout(flushOutput, 80);
+            }
+          },
+          onAgentEvent: (event) => {
+            if (event.type === 'model') {
+              this.emit('run.agent.model', runId, { model: event.model });
+              this.repos.attempts.update(attemptId, { model: event.model });
+              return;
+            }
+            this.emit('run.agent.tool', runId, {
+              phase: event.phase,
+              callId: event.callId,
+              name: event.name,
+              ...(event.summary !== undefined ? { summary: event.summary } : {}),
+            });
+          },
+        });
 
-      if (flushTimer !== null) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        flushOutput();
+
+        this.emit('run.agent.finished', runId, {
+          exitCode: result.exitCode,
+          durationMs: Date.now() - startedAt,
+          stdoutBytes: Buffer.byteLength(result.stdout, 'utf8'),
+          stderrBytes: Buffer.byteLength(result.stderr, 'utf8'),
+          usage: result.usage ?? null,
+        });
+
+        return result;
+      } finally {
+        if (issued?.id) {
+          this.revokeAgentToken?.(issued.id);
+        }
       }
-      flushOutput();
-
-      this.emit('run.agent.finished', runId, {
-        exitCode: result.exitCode,
-        durationMs: Date.now() - startedAt,
-        stdoutBytes: Buffer.byteLength(result.stdout, 'utf8'),
-        stderrBytes: Buffer.byteLength(result.stderr, 'utf8'),
-        usage: result.usage ?? null,
-      });
-
-      return result;
     } catch (error) {
       if (flushTimer !== null) {
         clearTimeout(flushTimer);

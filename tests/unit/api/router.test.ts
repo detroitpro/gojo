@@ -142,6 +142,26 @@ describe("api/router", () => {
     const createdBody = (await created.json()) as { data: { id: string; token: string } };
     expect(createdBody.data.token.startsWith("gojo_")).toBe(true);
 
+    // Agent-run tokens are hidden from the Settings list by default.
+    const users = new UserService(ctx!.db);
+    const admin = users.findFirstAdmin();
+    expect(admin).toBeTruthy();
+    users.createApiTokenForUser(admin!.id, "agent-run-01TESTHIDE", {
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const hiddenList = await fetch(`${baseUrl}/api/v1/auth/tokens`, { headers: auth });
+    const hiddenBody = (await hiddenList.json()) as {
+      data: { tokens: Array<{ name: string }> };
+    };
+    expect(hiddenBody.data.tokens.every((t) => !t.name.startsWith("agent-run-"))).toBe(true);
+    const includeAgent = await fetch(`${baseUrl}/api/v1/auth/tokens?includeAgent=1`, {
+      headers: auth,
+    });
+    const includeBody = (await includeAgent.json()) as {
+      data: { tokens: Array<{ name: string }> };
+    };
+    expect(includeBody.data.tokens.some((t) => t.name.startsWith("agent-run-"))).toBe(true);
+
     const revoked = await fetch(`${baseUrl}/api/v1/auth/tokens/${createdBody.data.id}`, {
       method: "DELETE",
       headers: auth,
@@ -281,9 +301,23 @@ describe("api/router", () => {
       headers: auth,
       body: JSON.stringify({
         eng: { type: "webhook", webhookUrl: "https://example.test/hook" },
+        ops: {
+          type: "telegram",
+          botToken: "123456:ABC-DEF",
+          chatId: "-1001234567890",
+        },
       }),
     });
     expect(valid.status).toBe(200);
+
+    const telegramWebhookOnly = await fetch(`${baseUrl}/api/v1/notification-channels`, {
+      method: "PUT",
+      headers: auth,
+      body: JSON.stringify({
+        bad: { type: "telegram", webhookUrl: "https://example.test/hook" },
+      }),
+    });
+    expect(telegramWebhookOnly.status).toBe(400);
 
     let received: unknown = null;
     const webhookServer = Bun.serve({

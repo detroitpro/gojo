@@ -253,17 +253,24 @@ export type NotificationChannelType =
   | "teams"
   | "telegram";
 
-export interface NotificationChannelConfig {
-  type: NotificationChannelType;
-  webhookUrl: string;
-  config?: Record<string, unknown>;
-}
+export type NotificationChannelConfig =
+  | {
+      type: "slack" | "webhook" | "discord" | "teams";
+      webhookUrl: string;
+      config?: Record<string, unknown>;
+    }
+  | {
+      type: "telegram";
+      botToken: string;
+      chatId: string;
+      config?: Record<string, unknown>;
+    };
 
 export type NotificationChannelMap = Record<string, NotificationChannelConfig>;
 
-export interface NotificationChannelEntry extends NotificationChannelConfig {
+export type NotificationChannelEntry = NotificationChannelConfig & {
   name: string;
-}
+};
 
 export interface DirectoryEntry {
   name: string;

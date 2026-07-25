@@ -1,7 +1,7 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Notifications
-description: Configure Slack and webhook channels, route run outcomes from gojo.yaml, and understand delivery retries.
+description: Configure Slack, Telegram, and webhook channels, route run outcomes from gojo.yaml, and understand delivery retries.
 ---
 
 Gojo separates **where** notifications go (instance channels) from **when** they fire (project routing in `gojo.yaml`). Channels stay out of git; routing lives with the project.
@@ -10,13 +10,13 @@ Gojo separates **where** notifications go (instance channels) from **when** they
 
 | Layer | Where | What it stores |
 |-------|-------|----------------|
-| Channels | Instance Settings (or API) | Named endpoints: type + webhook URL |
+| Channels | Instance Settings (or API) | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token + chat id |
 | Routing | `gojo.yaml` → `notifications` | Which channel names fire on success, failure, or schedule auto-disable |
 
 1. A run finishes (`run.finished`).
 2. Gojo reads the project’s `notifications.onSuccess` / `onFailure` (and `onDisabled` if a schedule was auto-disabled).
 3. Those **names** look up channels on the instance.
-4. Delivery is **queued** with retries so a flaky webhook does not turn a successful run into a failure.
+4. Delivery is **queued** with retries so a flaky provider does not turn a successful run into a failure.
 
 ## Create a channel (Settings)
 
@@ -24,23 +24,25 @@ Gojo separates **where** notifications go (instance channels) from **when** they
 2. Scroll to **Notification channels**.
 3. Click **Add channel**.
 4. Set a **Name** (lowercase, hyphens — this is what `gojo.yaml` will reference, e.g. `engineering-slack`).
-5. Pick a **Type** and paste the **Webhook URL**.
+5. Pick a **Type** and fill the fields (webhook URL, or Telegram bot token + chat id).
 6. Click **Send test** — confirm the message arrives.
 7. Click **Save channel**.
 
 You can also **Send test**, **Edit**, or **Delete** from the channel table after saving.
 
-## Get a webhook URL
+## Channel types
 
-| Type | How to get a URL |
+| Type | How to configure |
 |------|------------------|
 | **slack** | Slack App → Incoming Webhooks → Add to workspace → copy webhook URL |
 | **discord** | Channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL |
 | **teams** | Channel → Connectors → Incoming Webhook → configure → copy URL |
 | **webhook** | Any HTTPS endpoint that accepts a JSON `POST` |
-| **telegram** | Generic HTTPS POST only — **not** the Telegram Bot API. Prefer Slack, Discord, Teams, or a custom webhook. |
+| **telegram** | Talk to [@BotFather](https://t.me/BotFather) for a bot token. Message the bot (or add it to a group), then open `https://api.telegram.org/bot<token>/getUpdates` and copy `chat.id` (groups are negative). |
 
-All types POST JSON to `webhookUrl`. Slack wraps the payload as `{ "text": "<json string>" }`; other types send the payload object directly.
+Webhook-like types POST JSON to `webhookUrl`. Slack wraps the payload as `{ "text": "<json string>" }`; other webhook types send the payload object directly.
+
+Telegram uses the Bot API: `sendMessage` with a short human-readable text (project, task, state, run id, error) — not a raw JSON dump.
 
 ## Route runs (`gojo.yaml`)
 
@@ -52,9 +54,9 @@ notifications:
     - engineering-slack
   onFailure:
     - engineering-slack
-    - ops-webhook
+    - ops-telegram
   onDisabled:
-    - ops-webhook
+    - ops-telegram
 ```
 
 Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) so the manifest is loaded.
@@ -69,7 +71,7 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 
 - **Queue:** notifications are written to a local queue and processed on a short interval.
 - **Retries:** up to 5 attempts with backoff (~1s, 2s, 4s, 8s after the first try).
-- **Payload** (example fields):
+- **Payload** (example fields for webhook types):
 
 ```json
 {
@@ -84,7 +86,7 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 
 - **Test sends** include `"test": true`.
 - **Auto-disable** payloads also include `reason`, `scheduleId`, and `consecutiveFailures`.
-- Webhook URLs are **redacted** from error logs (`***`).
+- Webhook URLs and Telegram bot tokens are **redacted** from error logs (`***`).
 
 ## Auto-disable notifications
 
@@ -99,11 +101,11 @@ Pair `onDisabled` with your ops channel so silent schedule death is visible.
 
 | Symptom | Likely cause |
 |---------|----------------|
-| **Send test** fails | Bad URL, non-HTTPS, or the provider rejected the POST (4xx/5xx) |
+| **Send test** fails | Bad URL/token, non-HTTPS webhook, wrong chat id, or the provider rejected the request |
 | Real runs never notify | Channel name in `gojo.yaml` does not match Settings, or project not synced |
 | Only failures notify | `onSuccess` empty or missing |
 | Schedule died quietly | Missing `onDisabled`, or `disableAfterConsecutiveFailedRuns` not set |
-| Telegram “doesn’t work” | Current connector is a generic webhook POST, not Bot API |
+| Telegram 401/404 | Invalid bot token, or the bot has not been started / added to the chat |
 
 ## Related
 

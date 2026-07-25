@@ -37,4 +37,49 @@ describe("shared/notifications", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  test("accepts telegram with botToken and chatId", () => {
+    const result = safeParseNotificationChannelConfig({
+      type: "telegram",
+      botToken: "123456:ABC-DEF",
+      chatId: "-1001234567890",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        type: "telegram",
+        botToken: "123456:ABC-DEF",
+        chatId: "-1001234567890",
+      });
+    }
+  });
+
+  test("coerces numeric telegram chatId to string", () => {
+    const result = safeParseNotificationChannelConfig({
+      type: "telegram",
+      botToken: "123456:ABC",
+      chatId: -1001,
+    });
+    expect(result.success).toBe(true);
+    if (result.success && result.data.type === "telegram") {
+      expect(result.data.chatId).toBe("-1001");
+    }
+  });
+
+  test("rejects telegram that only has webhookUrl", () => {
+    const result = safeParseNotificationChannelConfig({
+      type: "telegram",
+      webhookUrl: "https://example.test/hook",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects slack without webhookUrl", () => {
+    const result = safeParseNotificationChannelConfig({
+      type: "slack",
+      botToken: "nope",
+      chatId: "1",
+    });
+    expect(result.success).toBe(false);
+  });
 });

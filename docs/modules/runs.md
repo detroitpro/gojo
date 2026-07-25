@@ -17,7 +17,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 
 ## Self-healing plumbing
 
-- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID` into agent env.
+- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID` into agent env (`agent-run-*` tokens are short-lived and revoked when the agent attempt finishes; Settings hides them by default).
 - On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only.
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer (not for heal runs / healer task itself; capped per project/hour). Workspace failures still enqueue heal for diagnose-and-report — healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).

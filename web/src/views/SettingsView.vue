@@ -44,6 +44,20 @@ const tokenQuery = ref("");
 const backupQuery = ref("");
 const doctorQuery = ref("");
 
+const daemonPathSummary = computed(() => {
+  const path = doctor.value?.daemonPath?.trim() ?? "";
+  if (!path) {
+    return null;
+  }
+  const entries = path.split(":").filter(Boolean);
+  const bunPath = doctor.value?.tools?.find((tool) => tool.name === "bun")?.path;
+  const bunDir = bunPath?.replace(/\/[^/]+$/, "") ?? "";
+  const hasBunBin =
+    entries.some((entry) => entry.includes("/.bun/bin") || entry.endsWith(".bun/bin")) ||
+    (bunDir.length > 0 && entries.includes(bunDir));
+  return { entryCount: entries.length, hasBunBin };
+});
+
 const filteredTokens = computed(() => {
   const q = tokenQuery.value.trim().toLowerCase();
   if (!q) {
@@ -351,9 +365,15 @@ onMounted(load);
                 </li>
               </ul>
             </div>
-            <div v-if="doctor.daemonPath" class="mono muted mt-3 break-all">
-              PATH={{ doctor.daemonPath }}
-            </div>
+            <details v-if="daemonPathSummary" class="daemon-path mt-5">
+              <summary class="muted">
+                Daemon PATH — {{ daemonPathSummary.entryCount }} entries
+                <span :class="daemonPathSummary.hasBunBin ? 'ok' : 'bad'">
+                  · ~/.bun/bin {{ daemonPathSummary.hasBunBin ? "present" : "missing" }}
+                </span>
+              </summary>
+              <pre class="daemon-path-body mono muted">{{ doctor.daemonPath }}</pre>
+            </details>
             <div class="inline-form mt-5 task-filters">
               <div class="field flex-2">
                 <label for="doctor-agent-search">Search agents</label>

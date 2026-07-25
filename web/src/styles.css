@@ -493,6 +493,9 @@ table.data tr:hover td {
 
 .panel-body {
   padding: var(--space-4) var(--space-5);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .timeline {
@@ -1082,6 +1085,32 @@ table.data tr:hover td {
   color: var(--text-muted);
   font-size: 11px;
   word-break: break-all;
+}
+
+.daemon-path {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.daemon-path summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.daemon-path-body {
+  margin: 0.5rem 0 0;
+  max-width: 100%;
+  max-height: 12rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
 }
 
 .picker-roots {

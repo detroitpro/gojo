@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
-import { NotificationDispatcher, redactSecrets } from "@/notifications/dispatcher";
+import {
+  formatTelegramText,
+  NotificationDispatcher,
+  redactSecrets,
+} from "@/notifications/dispatcher";
 
 describe("notifications/dispatcher", () => {
   let db: Database | null = null;
@@ -100,5 +104,75 @@ describe("notifications/dispatcher", () => {
     await expect(
       dispatcher.deliver({ id: "bad", type: "webhook", config: {} }, { ok: true }),
     ).rejects.toThrow("Missing webhookUrl");
+  });
+
+  test("deliver telegram calls Bot API sendMessage", async () => {
+    const { db: database } = openDb();
+    const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      expect(url).toBe("https://api.telegram.org/bot123:TOKEN/sendMessage");
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        chat_id: string;
+        text: string;
+        disable_web_page_preview: boolean;
+      };
+      expect(body.chat_id).toBe("-1001");
+      expect(body.text).toContain("gojo: Failed");
+      expect(body.text).toContain("demo / nightly");
+      expect(body.disable_web_page_preview).toBe(true);
+      return new Response("{}", { status: 200 });
+    });
+    const dispatcher = new NotificationDispatcher(database, fetchMock as unknown as typeof fetch);
+
+    await dispatcher.deliver(
+      {
+        id: "tg",
+        type: "telegram",
+        config: { botToken: "123:TOKEN", chatId: "-1001" },
+      },
+      {
+        project: "demo",
+        task: "nightly",
+        runId: "01ABC",
+        state: "Failed",
+        error: "boom",
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("telegram delivery redacts bot token in queue errors", async () => {
+    const { db: database, runId } = openDb();
+    const token = "123:SECRETTOKEN";
+    const fetchMock = mock(async () => new Response(`bad ${token}`, { status: 401 }));
+    const dispatcher = new NotificationDispatcher(database, fetchMock as unknown as typeof fetch);
+
+    await dispatcher.enqueue(
+      runId,
+      { id: "tg", type: "telegram", config: { botToken: token, chatId: "42" } },
+      { state: "Failed" },
+    );
+
+    await dispatcher.processQueue();
+    const row = database
+      .connection()
+      .query<{ last_error: string | null }, []>(
+        "SELECT last_error FROM notifications LIMIT 1",
+      )
+      .get();
+    expect(row?.last_error).toContain("401");
+    expect(row?.last_error).not.toContain("SECRETTOKEN");
+  });
+
+  test("formatTelegramText builds a short message", () => {
+    expect(
+      formatTelegramText({
+        project: "gojo",
+        task: "maintain-tests",
+        runId: "01X",
+        state: "Succeeded",
+      }),
+    ).toBe("gojo: Succeeded\ngojo / maintain-tests\nrun 01X");
   });
 });

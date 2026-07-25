@@ -67,6 +67,66 @@ function extractWebhookUrl(channel: NotificationChannel): string {
   return url;
 }
 
+function extractTelegramCreds(channel: NotificationChannel): {
+  botToken: string;
+  chatId: string;
+} {
+  const botToken = channel.config["botToken"];
+  const chatId = channel.config["chatId"];
+  if (typeof botToken !== "string" || botToken.length === 0) {
+    throw new Error(`Missing botToken for notification channel ${channel.id}`);
+  }
+  if (chatId === undefined || chatId === null || String(chatId).length === 0) {
+    throw new Error(`Missing chatId for notification channel ${channel.id}`);
+  }
+  return { botToken, chatId: String(chatId) };
+}
+
+/** Short human text for Telegram (not a raw JSON dump). */
+export function formatTelegramText(payload: unknown): string {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  if (!payload || typeof payload !== "object") {
+    return String(payload);
+  }
+  const record = payload as Record<string, unknown>;
+  const state = typeof record["state"] === "string" ? record["state"] : "notification";
+  const project = typeof record["project"] === "string" ? record["project"] : null;
+  const task = typeof record["task"] === "string" ? record["task"] : null;
+  const runId = typeof record["runId"] === "string" ? record["runId"] : null;
+  const error = typeof record["error"] === "string" ? record["error"] : null;
+  const test = record["test"] === true;
+
+  const lines: string[] = [];
+  lines.push(test ? `gojo test: ${state}` : `gojo: ${state}`);
+  if (project && task) {
+    lines.push(`${project} / ${task}`);
+  } else if (project) {
+    lines.push(project);
+  } else if (task) {
+    lines.push(task);
+  }
+  if (runId && runId !== "test") {
+    lines.push(`run ${runId}`);
+  }
+  if (error) {
+    lines.push(`error: ${error}`);
+  }
+  return lines.join("\n");
+}
+
+function channelSecrets(channel: NotificationChannel): string[] {
+  const secrets: string[] = [];
+  if (typeof channel.config["webhookUrl"] === "string") {
+    secrets.push(channel.config["webhookUrl"]);
+  }
+  if (typeof channel.config["botToken"] === "string") {
+    secrets.push(channel.config["botToken"]);
+  }
+  return secrets;
+}
+
 function serializeChannel(channel: NotificationChannel): string {
   return JSON.stringify({ id: channel.id, type: channel.type, config: channel.config });
 }
@@ -146,10 +206,7 @@ export class NotificationDispatcher {
         processed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const webhookUrl = typeof stored.channel.config["webhookUrl"] === "string"
-          ? stored.channel.config["webhookUrl"]
-          : "";
-        const redacted = redactSecrets(message, [webhookUrl]);
+        const redacted = redactSecrets(message, channelSecrets(stored.channel));
         const attempts = row.attempts + 1;
         const status: NotificationStatus = attempts >= MAX_ATTEMPTS ? "failed" : "pending";
 
@@ -175,6 +232,11 @@ export class NotificationDispatcher {
   }
 
   async deliver(channel: NotificationChannel, payload: unknown): Promise<void> {
+    if (channel.type === "telegram") {
+      await this.deliverTelegram(channel, payload);
+      return;
+    }
+
     const webhookUrl = extractWebhookUrl(channel);
     const body =
       channel.type === "slack"
@@ -191,6 +253,30 @@ export class NotificationDispatcher {
       throw new Error(`Notification delivery failed with status ${response.status}`);
     }
   }
+
+  private async deliverTelegram(
+    channel: NotificationChannel,
+    payload: unknown,
+  ): Promise<void> {
+    const { botToken, chatId } = extractTelegramCreds(channel);
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const response = await this.fetchFn(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: formatTelegramText(payload),
+        disable_web_page_preview: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `Telegram delivery failed with status ${response.status}${detail ? `: ${detail}` : ""}`,
+      );
+    }
+  }
 }
 
-export { redactSecrets, parseStoredChannel };
+export { redactSecrets, parseStoredChannel, channelSecrets };

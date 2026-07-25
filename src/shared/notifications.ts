@@ -8,11 +8,23 @@ export const NotificationChannelTypeSchema = z.enum([
   "telegram",
 ]);
 
-export const NotificationChannelConfigSchema = z.object({
-  type: NotificationChannelTypeSchema,
+const WebhookLikeChannelConfigSchema = z.object({
+  type: z.enum(["slack", "webhook", "discord", "teams"]),
   webhookUrl: z.string().url(),
   config: z.record(z.unknown()).optional(),
 });
+
+const TelegramChannelConfigSchema = z.object({
+  type: z.literal("telegram"),
+  botToken: z.string().min(1),
+  chatId: z.union([z.string().min(1), z.number()]).transform((value) => String(value)),
+  config: z.record(z.unknown()).optional(),
+});
+
+export const NotificationChannelConfigSchema = z.union([
+  WebhookLikeChannelConfigSchema,
+  TelegramChannelConfigSchema,
+]);
 
 export const NotificationChannelMapSchema = z.record(NotificationChannelConfigSchema);
 
@@ -34,4 +46,16 @@ export function parseNotificationChannelConfig(input: unknown): NotificationChan
 
 export function safeParseNotificationChannelConfig(input: unknown) {
   return NotificationChannelConfigSchema.safeParse(input);
+}
+
+export function isTelegramChannel(
+  config: NotificationChannelConfig,
+): config is Extract<NotificationChannelConfig, { type: "telegram" }> {
+  return config.type === "telegram";
+}
+
+export function isWebhookLikeChannel(
+  config: NotificationChannelConfig,
+): config is Extract<NotificationChannelConfig, { webhookUrl: string }> {
+  return config.type !== "telegram";
 }

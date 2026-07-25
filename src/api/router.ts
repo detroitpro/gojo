@@ -270,12 +270,16 @@ export async function handleApiRequest(
     }
     const page = parsePageParamsFromUrl(url);
     const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
-    const all = users.listApiTokens(auth.userId).map((token) => ({
-      id: token.id,
-      name: token.name,
-      createdAt: token.createdAt,
-      expiresAt: token.expiresAt,
-    }));
+    const includeAgent = url.searchParams.get("includeAgent") === "1";
+    const all = users
+      .listApiTokens(auth.userId)
+      .filter((token) => includeAgent || !token.name.startsWith("agent-run-"))
+      .map((token) => ({
+        id: token.id,
+        name: token.name,
+        createdAt: token.createdAt,
+        expiresAt: token.expiresAt,
+      }));
     const filtered = q
       ? all.filter(
           (token) =>
@@ -894,13 +898,22 @@ export async function handleApiRequest(
       return failure("validation_error", message || "Invalid notification channel", 400);
     }
 
+    const channelConfig =
+      parsed.data.type === "telegram"
+        ? {
+            botToken: parsed.data.botToken,
+            chatId: parsed.data.chatId,
+            ...(parsed.data.config ?? {}),
+          }
+        : {
+            webhookUrl: parsed.data.webhookUrl,
+            ...(parsed.data.config ?? {}),
+          };
+
     const channel = {
       id: "test",
       type: parsed.data.type,
-      config: {
-        ...(parsed.data.config ?? {}),
-        webhookUrl: parsed.data.webhookUrl,
-      },
+      config: channelConfig,
     };
 
     const samplePayload = {
@@ -918,7 +931,11 @@ export async function handleApiRequest(
       return success({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const redacted = redactSecrets(message, [parsed.data.webhookUrl]);
+      const secrets =
+        parsed.data.type === "telegram"
+          ? [parsed.data.botToken]
+          : [parsed.data.webhookUrl];
+      const redacted = redactSecrets(message, secrets);
       return failure("delivery_failed", redacted, 502);
     }
   }
