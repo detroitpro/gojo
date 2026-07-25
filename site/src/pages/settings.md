@@ -35,7 +35,7 @@ The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavio
 | `project.defaultBranch` | Target branch for integration |
 | `repository.syncBeforeRun` | Fetch + fast-forward base from origin, then re-sync the manifest before preparing a worktree (required for merged healer PRs to take effect) |
 | `repository.requireCleanBase` | Refuse dirty base clones |
-| `instructions` | Files and notices injected into agent context |
+| `instructions` | `files` + `scheduledRunNotice` prepended to AI task prompts at run time (shell skipped; missing files fail the run) |
 
 Conflicts between manifest and admin overrides should stay visible in audit/history.
 

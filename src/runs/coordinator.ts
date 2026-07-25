@@ -18,7 +18,10 @@ import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
 import type { AgentHandoffReport, HandoffStatus } from '@shared/handoff';
-import { safeParseProjectManifest } from '@shared/manifest';
+import {
+  safeParseProjectManifest,
+  type InstructionsConfig,
+} from '@shared/manifest';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
 import type { Attempt, Project, Run, RunTrigger, Task } from '@/storage/types';
@@ -34,6 +37,11 @@ import {
   type ParsedFailurePolicy,
 } from './failure-policy';
 import { decideHealEnqueue } from './heal';
+import {
+  appendValidationPrompt,
+  appendValidationPromptAsShellComments,
+  assembleAgentPrompt,
+} from './prompt-assembly';
 
 const DEFAULT_AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -238,6 +246,7 @@ export class RunCoordinator {
           workspacePath,
           controller.signal,
           validation.steps ?? [],
+          readInstructions(project),
         );
 
         if (controller.signal.aborted || agentResult.canceled) {
@@ -565,6 +574,7 @@ export class RunCoordinator {
     workspacePath: string,
     signal: AbortSignal,
     validationSteps: Array<{ name: string; command: string; timeout?: string }> = [],
+    instructions?: InstructionsConfig,
   ): Promise<AgentExecuteResult> {
     const adapterName = resolveAdapterName(task, this.repos.agentProfiles);
     const adapter = getAdapter(adapterName);
@@ -594,12 +604,15 @@ export class RunCoordinator {
 
     const startedAt = Date.now();
     try {
-      // Shell adapter executes the prompt as a script; use comments there.
-      // Cursor/Claude (and others) get a markdown gate section.
-      const prompt =
-        adapterName === 'shell'
-          ? appendValidationPromptAsShellComments(task.prompt, validationSteps)
-          : appendValidationPrompt(task.prompt, validationSteps);
+      // Shell: script body + validation comments only (no markdown instructions).
+      // AI adapters: notice + instruction files + task prompt + validation gate.
+      const prompt = assembleAgentPrompt({
+        taskPrompt: task.prompt,
+        adapterName,
+        workspacePath,
+        validationSteps,
+        ...(instructions !== undefined ? { instructions } : {}),
+      });
 
       const agentEnv: Record<string, string> = {
         GOJO_TASK_ID: task.id,
@@ -1024,61 +1037,22 @@ function readSyncBeforeRun(project: Project): boolean {
   return false;
 }
 
+function readInstructions(project: Project): InstructionsConfig | undefined {
+  try {
+    const raw = JSON.parse(project.manifestJson || '{}') as unknown;
+    const parsed = safeParseProjectManifest(raw);
+    if (parsed.success) {
+      return parsed.data.instructions;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
 const VALIDATION_OUTPUT_TAIL_CHARS = 400;
 
-/** Append exact gojo validation commands so agents can self-check against the gate. */
-export function appendValidationPrompt(
-  prompt: string,
-  steps: Array<{ name: string; command: string; timeout?: string }>,
-): string {
-  if (steps.length === 0) {
-    return prompt;
-  }
-
-  const lines = [
-    '',
-    '## Gojo validation (exact commands)',
-    '',
-    'After you finish, gojo will run these validation steps from the worktree root.',
-    'Your changes must pass them. Run them yourself before exiting when practical.',
-    '',
-  ];
-
-  for (const [index, step] of steps.entries()) {
-    const timeout = step.timeout ? ` (timeout ${step.timeout})` : '';
-    lines.push(`${index + 1}. **${step.name}**${timeout}`);
-    lines.push('```');
-    lines.push(step.command);
-    lines.push('```');
-    lines.push('');
-  }
-
-  return `${prompt.trimEnd()}\n${lines.join('\n')}`;
-}
-
-/** Shell adapter executes the prompt as a script — keep validation as comments. */
-export function appendValidationPromptAsShellComments(
-  prompt: string,
-  steps: Array<{ name: string; command: string; timeout?: string }>,
-): string {
-  if (steps.length === 0) {
-    return prompt;
-  }
-
-  const lines = [
-    '',
-    '# Gojo validation (exact commands)',
-    '# After this script exits, gojo will run these from the worktree root.',
-  ];
-
-  for (const [index, step] of steps.entries()) {
-    const timeout = step.timeout ? ` (timeout ${step.timeout})` : '';
-    lines.push(`# ${index + 1}. ${step.name}${timeout}`);
-    lines.push(`# ${step.command}`);
-  }
-
-  return `${prompt.trimEnd()}\n${lines.join('\n')}\n`;
-}
+export { appendValidationPrompt, appendValidationPromptAsShellComments };
 
 /** Build a durable operator-facing message from failed validation steps. */
 export function formatValidationFailureMessage(results: ValidationStepResult[]): string {

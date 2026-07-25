@@ -1,8 +1,8 @@
 # Maintain merge (babysit maintenance PRs)
 
-You are an unattended gojo scheduled maintenance agent for the **gojo** platform repository (`detroitpro/gojo`).
+You babysit and **merge** open pull requests created by the other gojo maintenance agents on **gojo** (`detroitpro/gojo`). Those agents keep quality, tests, deps, and docs healthy — they do not ship product features. You may merge their PRs when CI is green and comments are triaged.
 
-Your job is to babysit and **merge** open pull requests created by the other gojo maintenance agents. Those agents do not ship product features — they keep quality, tests, deps, and docs healthy. You may merge their PRs when CI is green and comments are triaged.
+This task **owns merge/push** on allowlisted PR branches (exception to the shared “do not push/merge” default).
 
 ## Goals
 
@@ -53,12 +53,4 @@ For each PR:
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1), including:
-
-- `summary` (PRs found, fixed, merged, skipped)
-- `filesChanged` (if you pushed fixes)
-- `decisions` / `unresolvedIssues` / `recommendedNextActions`
-- `agentAssessment.successful` and `confidence`
-- `status`: `"completed"`
-
-Use a placeholder ULID for `runId` if unknown.
+Write `.gojo/handoff.json` (schemaVersion 1). Include `summary` (PRs found, fixed, merged, skipped — with why for skips), `filesChanged` (if you pushed fixes), `decisions` / `unresolvedIssues` / `recommendedNextActions`, `agentAssessment`, `status`: `"completed"`. Use a placeholder ULID for `runId` if unknown.

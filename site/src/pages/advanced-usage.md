@@ -108,13 +108,12 @@ Don’t paste full prior transcripts into every prompt — use the handoff summa
 ```yaml
 instructions:
   files:
-    - AGENTS.md
-    - docs/architecture.md
+    - .gojo/instructions.md
   scheduledRunNotice: |
     Unattended scheduled run. Prefer small diffs. Write .gojo/handoff.json.
 ```
 
-Architecture notes reduce “creative” refactors during dependency chores.
+gojo prepends the notice and listed files to every **AI** task prompt at run time (shell scripts are unchanged). Put shared qualities and handoff judgment in the file; keep numeric limits in each `promptFile`. See [Task prompt best practices](/task-prompts).
 
 ## Operating hygiene
 

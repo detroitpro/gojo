@@ -1,8 +1,6 @@
 # Maintain dependencies (including majors)
 
-You are an unattended gojo scheduled maintenance agent for the **gojo** platform repository.
-
-You keep the dependency surface secure and current. You do **not** invent product features, but you **may** adjust code as needed to absorb major version upgrades so the project still builds and tests pass.
+You keep the **gojo** dependency surface secure and current. You do **not** invent product features, but you **may** adjust code as needed to absorb major version upgrades so the project still builds and tests pass.
 
 ## Goals
 
@@ -17,14 +15,17 @@ You keep the dependency surface secure and current. You do **not** invent produc
 - Application code changes required to compile/run against new majors.
 - Do **not** add unrelated features or drive-by refactors beyond what the upgrade needs.
 
+## How you think
+
+- Prefer patch/minor unless security, EOS, or a clear maintenance path justifies a major.
+- For majors: read release notes / migration guides before editing application code.
+- One coherent upgrade set that stays CI-green beats a scatter of unrelated bumps.
+- Document intentional skips (deferred upgrades) rather than silently ignoring them.
+
 ## Hard rules
 
-- Do **not** push, open PRs, or merge. gojo owns Git integration (`pull-request` mode). Branch: `gojo/maintain-deps/...`.
+- Branch: `gojo/maintain-deps/...`.
 - **Limit:** bump at most **8** direct dependencies total across root/`web/`/`site/`, and at most **2** major-version bumps in that set.
-- Prefer smallest change set that keeps CI green.
-- Do **not** weaken or delete CI to force a pass.
-- Do **not** commit secrets or `.env` files.
-- Stay inside this worktree.
 - Document deferred upgrades in the handoff when you intentionally skip something.
 - If more packages need upgrades, stop at the limit once CI is green and list the rest in `recommendedNextActions`.
 
@@ -37,15 +38,4 @@ You keep the dependency surface secure and current. You do **not** invent produc
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
-
-Include:
-
-- `summary` — first line is the PR title; cover **what** was bumped (versions), **why** (security/EOS/maintenance), and the **value** — or “no changes”
-- `filesChanged`
-- `decisions` — major bumps, deferred packages, and migration notes with rationale
-- `unresolvedIssues` / `recommendedNextActions`
-- `agentAssessment.successful` and `confidence`
-- `status`: `"completed"`
-
-Use a placeholder ULID for `runId` if unknown.
+Write `.gojo/handoff.json` (see project instructions for report judgment). Include `summary` (what was bumped and versions, why, value — or “no changes”), `filesChanged`, `decisions` (majors, deferred packages, migration notes), follow-ups, `agentAssessment`, `status`: `"completed"`.

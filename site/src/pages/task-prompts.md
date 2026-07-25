@@ -1,12 +1,38 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Task prompt best practices
-description: How to write gojo task prompts that stay safe unattended — start with hard numeric limits, clear stop conditions, and a handoff.
+description: How to write gojo task prompts that stay safe unattended — shared instructions, hard numeric limits, clear stop conditions, and a handoff.
 ---
 
 Unattended agents drift without bounds. A good `promptFile` is less “do everything useful” and more “do one bounded unit of work, stop, leave a trail.”
 
 Use this with [Your first agent](/first-agent) (pipeline) and [Advanced agent](/advanced-agent) (full AI example). Manifest fields: [Settings](/settings).
+
+## What actually moves the needle
+
+| Layer | Impact | Notes |
+| --- | --- | --- |
+| Numeric Hard rules | Highest | Caps keep the *diff* reviewable; timeouts only stop the process |
+| Shared `instructions` | High | Same qualities on every AI task; cut duplicated boilerplate |
+| How you report (handoff) | High | Thin PRs are a common failure mode — spell out what/why/value |
+| How you think | Moderate | Only 2–4 **role-specific** heuristics that change tradeoffs |
+| Chat “personality” | Low | Skip for unattended cron |
+
+## Shared project instructions
+
+Put cross-task defaults in the manifest so every AI run gets them without copy-paste:
+
+```yaml
+instructions:
+  files:
+    - .gojo/instructions.md
+  scheduledRunNotice: |
+    Unattended scheduled run. Prefer small diffs. Write .gojo/handoff.json.
+```
+
+At run time gojo prepends `scheduledRunNotice`, then each listed file (from the worktree), then your `promptFile`, then the validation gate. Missing listed files fail the run. Shell adapters skip this layer (the prompt is a script).
+
+Use the shared file for code qualities, “no features / no secrets / stay in worktree,” and handoff judgment. Keep **task-specific** goals, scope, numeric limits, and process in the `promptFile`.
 
 ## Start with constrained limits
 
@@ -31,17 +57,31 @@ Platform knobs (timeouts, `projectLimit`, `maxAttemptsPerRun`) are **not** a sub
 
 Structure every AI task prompt the same way:
 
-1. **Role** — who you are, which repo, unattended scheduled run.
+1. **Role** — who you are for this task (thin expertise line is enough).
 2. **Goals** — 3–5 outcomes, not a wishlist.
 3. **Scope** — paths in / paths out.
-4. **Hard rules** — safety + **numeric limits** (non-negotiable).
-5. **Process** — short ordered steps.
-6. **Required handoff** — `.gojo/handoff.json` (schemaVersion 1) with **what / why / value** (see below).
+4. **How you think** (optional) — 2–4 role-specific heuristics only if they change a choice under the limit (skip generic “think step by step”).
+5. **Hard rules** — safety + **numeric limits** (non-negotiable).
+6. **Process** — short ordered steps.
+7. **Required handoff** — `.gojo/handoff.json` with **what / why / value** (see below).
+
+### How you think (when useful)
+
+Good (changes tradeoffs):
+
+```markdown
+## How you think
+- Prefer behavior and edge cases over trivial getters.
+- Prefer patch/minor unless security or EOS justifies a major.
+- One root cause only — do not chase every failure.
+```
+
+Skip ritual personality or “be careful” filler. Shared project instructions already cover universal qualities.
 
 ### Hard rules checklist
 
 - Who owns Git? (Usually: agent does **not** push/merge; gojo `pull-request` / `commit-only` does — unless the task is explicitly a babysitter.)
-- No secrets, no weakening CI, no inventing features.
+- No secrets, no weakening CI, no inventing features (also in shared instructions when you use them).
 - Stay in the worktree.
 - **Explicit caps** (files, packages, tests, PRs, themes).
 - What to do when unfinished work remains (`recommendedNextActions`).
@@ -78,6 +118,7 @@ For long PR descriptions, write markdown under `.gojo/assets/` and reference it 
 | Concern | Prompt limit | Manifest |
 | --- | --- | --- |
 | Diff size / reviewability | Files, tests, packages, themes | — |
+| Shared defaults | — | `instructions.files` / `scheduledRunNotice` |
 | Runtime | “Stop at limit” | Agent `timeout` |
 | Overlap | One theme / one root cause | `concurrency.projectLimit: 1`, `overlapPolicy: skip` |
 | Bad weeks | Deferred list in handoff | `failurePolicy` + optional `selfHeal` |
@@ -87,7 +128,7 @@ See [Advanced usage](/advanced-usage) for concurrency, approvals, and [Self-heal
 
 ## Dogfood reference
 
-This repository’s scheduled maintenance prompts under [`.gojo/tasks/`](https://github.com/detroitpro/gojo/tree/main/.gojo/tasks) use the table above. Copy the pattern; tighten further for riskier repos.
+This repository’s scheduled maintenance prompts under [`.gojo/tasks/`](https://github.com/detroitpro/gojo/tree/main/.gojo/tasks) and shared [`.gojo/instructions.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/instructions.md) use the patterns above. Copy them; tighten further for riskier repos.
 
 ## Related
 

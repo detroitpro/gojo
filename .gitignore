@@ -10,6 +10,7 @@ dist/
 .gojo/*
 !.gojo/tasks/
 !.gojo/tasks/**
+!.gojo/instructions.md
 .gojo-test/
 
 .herenow/

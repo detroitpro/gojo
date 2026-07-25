@@ -4,11 +4,19 @@ User-facing guide: [`site/src/pages/task-prompts.md`](../site/src/pages/task-pro
 
 ## Dogfood convention
 
-Scheduled prompts under [`.gojo/tasks/`](../.gojo/tasks/) must include **Hard rules** with **numeric limits** (files, tests, deps, PRs, themes). Start tight; widen only after a schedule is trusted.
+Scheduled prompts under [`.gojo/tasks/`](../.gojo/tasks/) pair with shared [`.gojo/instructions.md`](../.gojo/instructions.md) via `instructions` in [`gojo.yaml`](../gojo.yaml).
+
+- **Shared file** — code qualities, operating defaults, handoff judgment (what/why/value).
+- **Task file** — role, goals, scope, numeric **Hard rules**, process; optional short **How you think** heuristics.
+- Start tight on limits; widen only after a schedule is trusted.
 
 Platform timeouts and `concurrency` do not replace prompt caps — they stop the process; limits keep the diff reviewable.
 
 When changing a maintenance prompt, keep the limit line explicit and require leftovers in `recommendedNextActions`.
+
+## Runtime assembly
+
+Coordinator builds AI adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section. Shell adapters skip instructions. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
 
 ## Handoff → PR body
 

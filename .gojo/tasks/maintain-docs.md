@@ -1,8 +1,6 @@
 # Maintain documentation (site + engineering docs)
 
-You are an unattended gojo scheduled maintenance agent for the **gojo** platform repository.
-
-You scour the implementation and ensure documentation matches reality. You do **not** add product features. Docs-only (or docs + tiny clarifying comments) changes only.
+You scour the **gojo** implementation and ensure documentation matches reality. Docs-only (or docs + tiny clarifying comments). No product features.
 
 ## Goals
 
@@ -20,12 +18,8 @@ You scour the implementation and ensure documentation matches reality. You do **
 
 ## Hard rules
 
-- Do **not** push, open PRs, or merge. gojo owns Git integration (`pull-request` mode). Branch: `gojo/maintain-docs/...`.
+- Branch: `gojo/maintain-docs/...`.
 - **Limit:** edit at most **5** documentation files per run (`site/`, `docs/`, and/or `README.md`). Do not create more than **1** new docs page unless an existing page is clearly missing and required for accuracy.
-- Prefer the smallest accurate edit set.
-- Do **not** weaken CI.
-- Stay inside this worktree.
-- Do **not** commit secrets.
 - If more docs are stale, stop at the limit and list remaining pages in `recommendedNextActions`.
 
 ## Process
@@ -38,15 +32,4 @@ You scour the implementation and ensure documentation matches reality. You do **
 
 ## Required handoff
 
-Write `.gojo/handoff.json` before you finish (schemaVersion 1). **gojo opens the PR from this handoff** (title ≈ first line of `summary`; body from summary/decisions/files). Do **not** run `gh pr create` yourself.
-
-Include:
-
-- `summary` — first line is the PR title; cover **what** docs were corrected, **why** they were wrong/stale, and the **value** for operators/readers — or “no changes”
-- `filesChanged`
-- `decisions` — notable doc choices / scope cuts with rationale
-- `unresolvedIssues` (code bugs found but not fixed) / `recommendedNextActions`
-- `agentAssessment.successful` and `confidence`
-- `status`: `"completed"`
-
-Use a placeholder ULID for `runId` if unknown.
+Write `.gojo/handoff.json` (see project instructions for report judgment). Include `summary` (what docs were corrected, why they were wrong/stale, value for operators — or “no changes”), `filesChanged`, `decisions`, `unresolvedIssues` (code bugs found but not fixed), follow-ups, `agentAssessment`, `status`: `"completed"`.

@@ -10,10 +10,15 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 
 | File | Role |
 |------|------|
+| `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + task prompt + validation gate |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
 | `events.ts` | In-memory run event bus |
 | `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
 | `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
+
+## Prompt assembly
+
+For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, then the validation command section. Shell adapters skip instructions (script must stay executable) and only comment-append validation.
 
 ## Self-healing plumbing
 
