@@ -32,12 +32,12 @@ For anything that touches production branches:
 
 ```yaml
 integration:
-  mode: await-approval   # or pull-request
+  mode: pull-request
   targetBranch: main
   requireAllValidations: true
 ```
 
-Operators approve or reject from the UI / `gojo run approve|reject`. Auto-merge only for narrow, trusted tasks.
+Use `pull-request` in `gojo.yaml` so merges wait on human review. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted tasks.
 
 ## Secrets without committing them
 
@@ -131,10 +131,12 @@ Architecture notes reduce “creative” refactors during dependency chores.
 ```bash
 gojo agent detect --output json
 gojo task run <id> --output json
-gojo run logs <run-id> --follow
+gojo run logs <run-id>
 gojo schedule next <schedule-id>
 gojo backup create
 ```
+
+`run logs` prints the stored event history (snapshot). For live tailing, use the Runs UI or `GET /api/v1/runs/<id>/events` (SSE).
 
 Script against `--output json` for chatops or custom dashboards; the HTTP API mirrors the same operations.
 
