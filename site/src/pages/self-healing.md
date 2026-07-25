@@ -144,7 +144,7 @@ See this repo’s [`.gojo/tasks/self-heal.md`](https://github.com/detroitpro/goj
 | --- | --- |
 | Heal does not re-heal | Runs with `trigger: heal` never enqueue another healer |
 | Healer excluded | If the failing task **is** the healer, no heal is enqueued |
-| Cap | At most a few heal runs per project per hour |
+| Cap | At most **3** heal runs per project per hour |
 
 ## Lifecycle sketch
 

@@ -91,7 +91,7 @@ Commit the manifest and script to the repo.
 
 In the UI: **Projects → Sync**, then run the **touch-note** task.
 
-From the CLI (after `project list` / `task list`):
+From the CLI (after `project list` / `task list --project <id>`):
 
 ```bash
 bun run gojo project sync <project-id>
@@ -126,7 +126,7 @@ agents:
 ```
 
 4. Point a task at that agent and put the natural-language instructions in `promptFile` (Markdown is fine).
-5. Prefer **pull-request** or **await-approval** integration modes on shared repositories until you trust the task.
+5. Prefer **pull-request** integration on shared repositories until you trust the task (`await-approval` exists at runtime but is not valid in `gojo.yaml` yet).
 
 Adapters invoke the installed CLIs non-interactively and capture structured output when available. Unsupported or missing CLIs fail detection clearly instead of half-running.
 

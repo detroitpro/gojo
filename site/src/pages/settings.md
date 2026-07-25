@@ -69,8 +69,8 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 | --- | --- |
 | **Cron + timezone** | When the task should fire (DST-aware) |
 | **Enabled** | Pause without deleting history |
-| **Overlap policy** | skip / queue / cancel-replace / allow parallel |
-| **Missed-run policy** | What to do after downtime |
+| **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` (schedule row in SQLite; defaults to `skip`) |
+| **Missed-run policy** | `skip` / `run_once` / `run_all` / `run_latest` after downtime |
 | **Retries / backoff** | Distinguish infra blips from real task failure |
 | **Disable after N failures** | Auto-stop noisy schedules and notify |
 
@@ -86,13 +86,13 @@ Empty profile = pass (useful for pure analysis). Failed required steps fail the 
 
 ## Integration modes
 
-| Mode | Behavior |
-| --- | --- |
-| **none** | No commit required; reporting only |
-| **commit-only** | Commit on the run branch; do not merge |
-| **pull-request** | Push branch and open a PR (`gh` when available, else a local placeholder URL) |
-| **await-approval** | Commit, then wait for operator approve/reject |
-| **auto-merge** | Merge into the target under the project merge lock after checks |
+| Mode | In `gojo.yaml`? | Behavior |
+| --- | --- | --- |
+| *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime) |
+| **commit-only** | yes | Commit on the run branch; do not merge |
+| **pull-request** | yes | Push branch and open a PR (`gh` when available, else a local placeholder URL) |
+| **auto-merge** | yes | Merge into the target under the project merge lock after checks |
+| **await-approval** | no (runtime/API only today) | Commit, then wait for operator approve/reject in the UI or via `gojo run approve\|reject` |
 
 Agents should not `git push origin main`. The **merge queue** serializes integration and re-checks the target branch.
 

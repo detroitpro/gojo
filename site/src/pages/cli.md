@@ -34,7 +34,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo project add <name> <repoPath> [--branch]` | Register a repo |
+| `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
 | `gojo project list\|inspect\|sync\|doctor\|remove` | Manage projects |
 
 ## Agents
@@ -47,7 +47,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo task list\|run\|cancel\|retry` | Manual execution |
+| `gojo task list --project <id>\|run\|cancel\|retry` | Manual execution (`list` requires `--project`) |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs
@@ -55,7 +55,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | Command | Purpose |
 | --- | --- |
 | `gojo run list\|inspect\|logs\|diff` | Observe |
-| `gojo run approve\|reject\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
+| `gojo run approve\|reject [--reason]\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 
