@@ -342,6 +342,18 @@ onMounted(load);
               database=<span :class="doctor.database ? 'ok' : 'bad'">{{ doctor.database }}</span>
             </div>
             <div class="mono muted mt-3">home={{ doctor.home }}</div>
+            <div v-if="doctor.tools?.length" class="mt-5">
+              <div class="muted">Tools (daemon PATH)</div>
+              <ul class="mt-2">
+                <li v-for="tool in doctor.tools" :key="tool.name" class="mono">
+                  <span :class="tool.found ? 'ok' : 'bad'">{{ tool.name }}</span>
+                  <span class="muted"> — {{ tool.found ? tool.path ?? "found" : "missing" }}</span>
+                </li>
+              </ul>
+            </div>
+            <div v-if="doctor.daemonPath" class="mono muted mt-3 break-all">
+              PATH={{ doctor.daemonPath }}
+            </div>
             <div class="inline-form mt-5 task-filters">
               <div class="field flex-2">
                 <label for="doctor-agent-search">Search agents</label>

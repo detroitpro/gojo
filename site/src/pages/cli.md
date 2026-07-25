@@ -20,13 +20,13 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo server start` | API + scheduler + web UI |
 | `gojo server status` | PID / health |
 | `gojo server stop` | Stop via PID file |
-| `gojo server doctor` | Git, disk, DB, agent detection |
+| `gojo server doctor` | Git, disk, DB, agent detection, daemon PATH tools |
 
 ## Service
 
 | Command | Purpose |
 | --- | --- |
-| `gojo service install` | systemd / launchd unit (rewrites ExecStart for this binary) |
+| `gojo service install` | systemd / launchd unit (ExecStart + PATH for this binary) |
 | `gojo service start\|stop\|restart\|status\|logs` | Lifecycle |
 | `gojo service uninstall` | Remove unit |
 

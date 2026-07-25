@@ -104,7 +104,30 @@ export async function fetch(
   await execGitOrThrow(cwd, ['fetch', remote], 'fetch');
 }
 
-/** Fast-forward a local branch to match remote/branch when possible. */
+/** Resolve the SHA of `remote/branch` (after fetch). */
+export async function resolveRemoteTrackingRef(
+  cwd: string,
+  branch: string,
+  remote = 'origin',
+): Promise<string> {
+  const remoteRef = `${remote}/${branch}`;
+  const result = await execGit(cwd, ['rev-parse', '--verify', remoteRef]);
+  if (result.exitCode !== 0) {
+    throw new GitError(
+      `Unable to resolve ${remoteRef}`,
+      result.exitCode,
+      result.stdout,
+      result.stderr,
+    );
+  }
+  return result.stdout;
+}
+
+/**
+ * Fetch and best-effort fast-forward a local branch to match remote/branch.
+ * Never fails solely because the checked-out working tree is dirty — the remote
+ * tracking ref is enough for worktree prep.
+ */
 export async function fetchAndFastForwardBranch(
   cwd: string,
   branch: string,
@@ -122,18 +145,14 @@ export async function fetchAndFastForwardBranch(
   }
   // Fallback: merge --ff-only while on the branch (or update-ref when detached).
   const remoteRef = `${remote}/${branch}`;
-  const show = await execGit(cwd, ['rev-parse', '--verify', remoteRef]);
-  if (show.exitCode !== 0) {
-    throw new GitError(
-      `Unable to resolve ${remoteRef} after fetch`,
-      show.exitCode,
-      show.stdout,
-      show.stderr,
-    );
-  }
+  await resolveRemoteTrackingRef(cwd, branch, remote);
   const current = await execGit(cwd, ['branch', '--show-current']);
   if (current.exitCode === 0 && current.stdout === branch) {
-    await mergeFastForward(cwd, remoteRef);
+    // Best-effort: dirty/diverged primary checkouts must not block runs.
+    const merge = await execGit(cwd, ['merge', '--ff-only', remoteRef]);
+    if (merge.exitCode !== 0) {
+      return;
+    }
     return;
   }
   // Force local branch tip to remote when not checked out (safe for gojo worktrees).

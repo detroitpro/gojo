@@ -9,6 +9,7 @@ import {
   hasRemote,
   removeWorktree,
   deleteBranch,
+  resolveRemoteTrackingRef,
 } from '@/git/git';
 
 export interface PrepareAttemptInput {
@@ -20,6 +21,11 @@ export interface PrepareAttemptInput {
   attemptNumber?: number;
   /** When true, fetch + fast-forward baseBranch from origin before branching. */
   syncBeforeRun?: boolean;
+  /**
+   * When true (or when syncBeforeRun is true), branch from origin/<baseBranch>
+   * so a dirty primary checkout cannot block worktree prep.
+   */
+  useRemoteBase?: boolean;
 }
 
 export interface PrepareAttemptResult {
@@ -88,8 +94,23 @@ export class WorkspaceManager {
   }
 
   async prepareAttempt(input: PrepareAttemptInput): Promise<PrepareAttemptResult> {
+    const preferRemote = Boolean(input.syncBeforeRun || input.useRemoteBase);
+
     if (input.syncBeforeRun) {
+      // Best-effort local ff; never blocks on a dirty primary checkout.
       await this.syncBaseBranch(input.repoPath, input.baseBranch);
+    }
+
+    let startPoint = input.baseBranch;
+    let startingCommit: string | null = null;
+
+    if (preferRemote && (await hasRemote(input.repoPath))) {
+      // Branch worktrees from the remote tracking tip so operator dirt is irrelevant.
+      startPoint = `origin/${input.baseBranch}`;
+      startingCommit = await resolveRemoteTrackingRef(
+        input.repoPath,
+        input.baseBranch,
+      );
     }
 
     const attemptNumber = input.attemptNumber ?? 1;
@@ -101,13 +122,15 @@ export class WorkspaceManager {
     );
     const worktreePath = this.buildWorktreePath(branchName);
 
-    const baseRef = await execGit(input.repoPath, ['rev-parse', input.baseBranch]);
-    if (baseRef.exitCode !== 0) {
-      throw new Error(`Unable to resolve base branch: ${input.baseBranch}`);
+    if (startingCommit == null) {
+      const baseRef = await execGit(input.repoPath, ['rev-parse', startPoint]);
+      if (baseRef.exitCode !== 0) {
+        throw new Error(`Unable to resolve base branch: ${startPoint}`);
+      }
+      startingCommit = baseRef.stdout;
     }
-    const startingCommit = baseRef.stdout;
 
-    await createBranch(input.repoPath, branchName, input.baseBranch);
+    await createBranch(input.repoPath, branchName, startPoint);
     await addWorktree(input.repoPath, worktreePath, branchName);
     this.worktrees.set(worktreePath, {
       repoPath: input.repoPath,

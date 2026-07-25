@@ -51,7 +51,11 @@ export const openApiDocument = {
       post: { summary: "Sync project manifest" },
     },
     "/api/v1/projects/{id}/doctor": {
-      get: { summary: "Project health checks" },
+      get: {
+        summary: "Project health checks",
+        description:
+          "Includes baseCheckout (dirty files / behind origin) and validationTools resolved under the daemon PATH.",
+      },
     },
     "/api/v1/agents": {
       get: { summary: "List and detect agents" },
@@ -153,7 +157,11 @@ export const openApiDocument = {
       patch: { summary: "Update instance settings" },
     },
     "/api/v1/instance/doctor": {
-      get: { summary: "Instance diagnostics" },
+      get: {
+        summary: "Instance diagnostics",
+        description:
+          "Includes daemonPath and tools (git/bun/gh/sh) resolved under the daemon environment.",
+      },
     },
     "/api/v1/instance/pause": {
       post: { summary: "Pause instance" },

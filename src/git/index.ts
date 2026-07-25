@@ -10,6 +10,7 @@ export {
   diffNameOnly,
   execGit,
   fetch,
+  fetchAndFastForwardBranch,
   getBranch,
   getHead,
   GitError,
@@ -19,6 +20,7 @@ export {
   push,
   rebase,
   removeWorktree,
+  resolveRemoteTrackingRef,
   statusPorcelain,
 } from './git';
 export type { GitExecResult } from './git';

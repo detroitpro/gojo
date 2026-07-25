@@ -30,17 +30,17 @@ User docs site: Astro in `site/` (not served by the daemon).
 | `agents/` | Adapter registry and implementations |
 | `scheduler/` | Cron, overlap, disable policies |
 | `runs/` | Run coordinator, events, inspect |
-| `workspace/` | Worktree paths and attempt prep/cleanup |
-| `git/` | Git subprocess helpers |
-| `validation/` | Validation profile execution |
+| `workspace/` | Worktree paths and attempt prep/cleanup (prefers `origin/<base>` when syncing) |
+| `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
+| `validation/` | Validation profile execution (inherits daemon PATH) |
 | `integration/` | Integration modes + merge queue |
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |
 | `secrets/` | Encrypted secret store |
 | `notifications/` | Channels, dispatch, hooks |
 | `backup/` | Backup create/verify/restore |
-| `service/` | systemd / launchd unit install |
-| `diagnostics/` | Doctor checks |
+| `service/` | systemd / launchd unit install (embeds PATH so tools like bun resolve) |
+| `diagnostics/` | Doctor checks (instance tools + project baseCheckout / validationTools) |
 | `process/` | Subprocess supervision |
 | `filesystem/` | Host browse helpers for UI |
 | `shared/` | Manifest, handoff, IDs, run states |

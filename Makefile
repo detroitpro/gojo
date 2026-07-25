@@ -1,7 +1,7 @@
 # gojo — common developer entrypoints
 # Prefer `make check` before opening/pushing a PR (same gate as CI).
 
-.PHONY: help check typecheck test coverage build build-web build-site install install-cli \
+.PHONY: help check typecheck test coverage doctor build build-web build-site install install-cli \
 	dev dev-web dev-site service-install service-status service-start service-stop service-restart
 
 help: ## Show targets
@@ -22,6 +22,9 @@ test: ## Daemon unit/integration tests
 
 coverage: ## Daemon tests with coverage report
 	bun test --coverage --coverage-reporter=text
+
+doctor: ## Preflight: instance + project doctors via gojo CLI
+	@bash scripts/doctor.sh
 
 # ---------------------------------------------------------------------------
 # Build

@@ -379,7 +379,7 @@ export async function handleApiRequest(
     }
 
     if (method === "GET" && action === "doctor") {
-      return success(projectDoctor(project));
+      return success(await projectDoctor(project, ctx.repos));
     }
 
     if (method === "POST" && action === "sync") {

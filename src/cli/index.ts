@@ -198,7 +198,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         if (!project) {
           die("project not found", format);
         }
-        printOutput(format, projectDoctor(project));
+        printOutput(format, await projectDoctor(project, ctx.repos));
         break;
       }
       case "remove": {

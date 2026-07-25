@@ -6,6 +6,21 @@ export interface ServiceInstallOptions {
   home: string;
   execPath: string;
   args?: string[];
+  /** PATH for the daemon process. Defaults to install-time PATH or a sensible fallback. */
+  path?: string;
+}
+
+/** Fallback when install-time PATH is empty (systemd `%h` = user home). */
+export const DEFAULT_SERVICE_PATH =
+  "%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin";
+
+/** Resolve PATH written into the service unit. */
+export function resolveServicePath(envPath = process.env["PATH"]): string {
+  const trimmed = envPath?.trim();
+  if (trimmed && trimmed.length > 0) {
+    return trimmed;
+  }
+  return DEFAULT_SERVICE_PATH;
 }
 
 export interface ServiceInstallResult {
@@ -23,6 +38,7 @@ function shellQuote(value: string): string {
 export function renderSystemdUnit(options: ServiceInstallOptions): string {
   const parts = [options.execPath, ...(options.args ?? [])].map(shellQuote);
   const execStart = parts.join(" ");
+  const path = resolveServicePath(options.path);
   return `[Unit]
 Description=Gojo agent orchestration server
 After=network.target
@@ -30,6 +46,7 @@ After=network.target
 [Service]
 Type=simple
 Environment=GOJO_HOME=${shellQuote(options.home)}
+Environment=PATH=${shellQuote(path)}
 ExecStart=${execStart}
 Restart=on-failure
 RestartSec=5
@@ -45,6 +62,7 @@ export function renderLaunchdPlist(options: ServiceInstallOptions): string {
   const argsXml = programArgs
     .map((arg) => `    <string>${escapeXml(arg)}</string>`)
     .join("\n");
+  const path = resolveServicePath(options.path);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -60,6 +78,8 @@ ${argsXml}
   <dict>
     <key>GOJO_HOME</key>
     <string>${escapeXml(options.home)}</string>
+    <key>PATH</key>
+    <string>${escapeXml(path)}</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

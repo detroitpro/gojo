@@ -166,10 +166,19 @@ describe("api/router", () => {
     const doctor = await fetch(`${baseUrl}/api/v1/instance/doctor`, { headers: auth });
     expect(doctor.status).toBe(200);
     const doctorBody = (await doctor.json()) as {
-      data: { git: boolean; disk: boolean; database: boolean; home: string };
+      data: {
+        git: boolean;
+        disk: boolean;
+        database: boolean;
+        home: string;
+        daemonPath: string;
+        tools: Array<{ name: string; found: boolean }>;
+      };
     };
     expect(doctorBody.data.disk).toBe(true);
     expect(doctorBody.data.database).toBe(true);
+    expect(typeof doctorBody.data.daemonPath).toBe("string");
+    expect(doctorBody.data.tools.some((t) => t.name === "bun")).toBe(true);
 
     const projectResponse = await fetch(`${baseUrl}/api/v1/projects`, {
       method: "POST",
@@ -184,6 +193,17 @@ describe("api/router", () => {
       { headers: auth },
     );
     expect(projectDoctor.status).toBe(200);
+    const projectDoctorBody = (await projectDoctor.json()) as {
+      data: {
+        projectId: string;
+        repoExists: boolean;
+        baseCheckout: { clean: boolean; dirtyFiles: string[] };
+        validationTools: unknown[];
+      };
+    };
+    expect(projectDoctorBody.data.repoExists).toBe(true);
+    expect(projectDoctorBody.data.baseCheckout).toBeTruthy();
+    expect(Array.isArray(projectDoctorBody.data.validationTools)).toBe(true);
 
     const agentTest = await fetch(`${baseUrl}/api/v1/agents/shell/test`, {
       method: "POST",

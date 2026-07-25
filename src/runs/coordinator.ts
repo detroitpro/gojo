@@ -198,7 +198,10 @@ export class RunCoordinator {
           runId: run.id,
           taskName: task.name,
           attemptNumber,
+          // Coordinator already synced above when configured; still prefer origin/
+          // so a dirty primary checkout cannot block worktree creation.
           syncBeforeRun: false,
+          useRemoteBase: syncBeforeRun,
         });
 
         workspacePath = workspace.worktreePath;
@@ -349,7 +352,10 @@ export class RunCoordinator {
       const message = error instanceof Error ? error.message : String(error);
       const current = this.repos.runs.findById(runId);
       if (current && !isTerminal(current.state)) {
-        return this.failRun(current, message);
+        // Throws during Preparing are almost always workspace prep / base sync.
+        const phase =
+          current.state === RunState.Preparing ? 'workspace' : 'other';
+        return this.failRun(current, message, { phase });
       }
       throw error;
     } finally {
@@ -695,7 +701,7 @@ export class RunCoordinator {
       project?: Project;
       task?: Task;
       failurePolicy?: ParsedFailurePolicy;
-      phase?: 'agent' | 'validation' | 'integration' | 'other';
+      phase?: 'agent' | 'validation' | 'integration' | 'workspace' | 'other';
       exitCode?: number | null;
       validationResults?: ValidationStepResult[];
     },

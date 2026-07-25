@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { platform } from "node:os";
 
 import {
+  DEFAULT_SERVICE_PATH,
   renderLaunchdPlist,
   renderSystemdUnit,
   resolveServiceLaunch,
+  resolveServicePath,
   serviceControl,
 } from "@/service/install";
 
@@ -56,7 +58,22 @@ describe("renderSystemdUnit", () => {
     expect(unit).toContain("ExecStart=/home/me/.local/bin/gojo server start --home /home/me/.gojo");
     expect(unit).not.toMatch(/^ExecStart=bun(\s|$)/m);
     expect(unit).toContain("Environment=GOJO_HOME=/home/me/.gojo");
+    expect(unit).toMatch(/^Environment=PATH=/m);
     expect(unit).toContain("WantedBy=default.target");
+  });
+
+  test("embeds install-time PATH (or fallback) so validation finds bun", () => {
+    const unit = renderSystemdUnit({
+      home: "/home/me/.gojo",
+      execPath: "/home/me/.local/bin/gojo",
+      args: ["server", "start", "--home", "/home/me/.gojo"],
+      path: "/home/me/.bun/bin:/usr/bin:/bin",
+    });
+    expect(unit).toContain("Environment=PATH=/home/me/.bun/bin:/usr/bin:/bin");
+
+    expect(resolveServicePath("")).toBe(DEFAULT_SERVICE_PATH);
+    expect(resolveServicePath("   ")).toBe(DEFAULT_SERVICE_PATH);
+    expect(resolveServicePath("/custom/bin")).toBe("/custom/bin");
   });
 
   test("quotes paths with spaces", () => {
@@ -94,11 +111,14 @@ describe("renderLaunchdPlist", () => {
       home: "/Users/me/.gojo",
       execPath: "/Users/me/.local/bin/gojo",
       args: ["server", "start", "--home", "/Users/me/.gojo"],
+      path: "/Users/me/.bun/bin:/usr/bin:/bin",
     });
     expect(plist).toContain("<string>/Users/me/.local/bin/gojo</string>");
     expect(plist).toContain("<string>server</string>");
     expect(plist).toContain("<string>start</string>");
     expect(plist).toContain("<string>/Users/me/.gojo</string>");
+    expect(plist).toContain("<key>PATH</key>");
+    expect(plist).toContain("<string>/Users/me/.bun/bin:/usr/bin:/bin</string>");
     expect(plist).not.toContain("<string>bun</string>");
   });
 });

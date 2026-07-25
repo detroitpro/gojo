@@ -1,0 +1,141 @@
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  firstCommandToken,
+  projectDoctor,
+  resolveTool,
+  validationToolsForTasks,
+} from "@/diagnostics/doctor";
+import {
+  commitAll,
+  configLocal,
+  execGit,
+  initRepo,
+} from "@/git/git";
+import type { Task } from "@/storage/types";
+
+describe("diagnostics/doctor helpers", () => {
+  test("firstCommandToken extracts the binary", () => {
+    expect(firstCommandToken("bun run typecheck")).toBe("bun");
+    expect(firstCommandToken("  bash scripts/with-bun.sh typecheck")).toBe("bash");
+    expect(firstCommandToken("")).toBe("");
+  });
+
+  test("resolveTool finds bun on PATH and relative scripts in cwd", () => {
+    const bun = resolveTool("bun");
+    expect(bun.found).toBe(true);
+    expect(bun.path).toBeTruthy();
+
+    const missing = resolveTool("definitely-not-a-gojo-binary-xyz");
+    expect(missing.found).toBe(false);
+
+    const dir = mkdtempSync(join(tmpdir(), "gojo-doctor-tool-"));
+    try {
+      writeFileSync(join(dir, "wrapper.sh"), "#!/bin/sh\n", { mode: 0o755 });
+      const rel = resolveTool("./wrapper.sh", dir);
+      expect(rel.found).toBe(true);
+      expect(rel.path).toBe(join(dir, "wrapper.sh"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("validationToolsForTasks reports missing binaries", () => {
+    const tasks = [
+      {
+        id: "t1",
+        projectId: "p1",
+        name: "maintain-tests",
+        enabled: true,
+        validationProfileJson: JSON.stringify({
+          steps: [
+            { name: "typecheck", command: "bun run typecheck" },
+            { name: "missing-bin", command: "definitely-not-a-gojo-binary-xyz --help" },
+          ],
+        }),
+      },
+      {
+        id: "t2",
+        projectId: "p1",
+        name: "disabled",
+        enabled: false,
+        validationProfileJson: JSON.stringify({
+          steps: [{ name: "x", command: "bun test" }],
+        }),
+      },
+    ] as Task[];
+
+    const tools = validationToolsForTasks(tasks, process.cwd());
+    expect(tools).toHaveLength(2);
+    expect(tools[0]?.binary).toBe("bun");
+    expect(tools[0]?.found).toBe(true);
+    expect(tools[1]?.found).toBe(false);
+    expect(tools[1]?.task).toBe("maintain-tests");
+  });
+});
+
+describe("diagnostics/projectDoctor", () => {
+  test("reports dirty base checkout and validation tools", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "gojo-doctor-proj-"));
+    try {
+      const repoPath = join(tempDir, "repo");
+      mkdirSync(repoPath, { recursive: true });
+      await initRepo(repoPath);
+      await configLocal(repoPath, "user.email", "test@example.com");
+      await configLocal(repoPath, "user.name", "Gojo Test");
+      writeFileSync(join(repoPath, "README.md"), "# doc\n");
+      writeFileSync(join(repoPath, "gojo.yaml"), "project:\n  name: demo\n");
+      await commitAll(repoPath, "initial");
+      writeFileSync(join(repoPath, "dirty.txt"), "uncommitted\n");
+
+      const project = {
+        id: "01PROJECTDOCTORTEST000001",
+        name: "demo",
+        repoPath,
+        defaultBranch: "main",
+        remoteUrl: null,
+        manifestJson: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const repos = {
+        tasks: {
+          listByProject: () =>
+            [
+              {
+                id: "t1",
+                projectId: project.id,
+                name: "maintain-tests",
+                enabled: true,
+                validationProfileJson: JSON.stringify({
+                  steps: [{ name: "typecheck", command: "bun run typecheck" }],
+                }),
+              },
+            ] as Task[],
+        },
+      };
+
+      const result = await projectDoctor(project as never, repos as never);
+      expect(result.repoExists).toBe(true);
+      expect(result.manifest).toBe(true);
+      expect(result.baseCheckout.clean).toBe(false);
+      expect(result.baseCheckout.dirtyFiles.some((f) => f.includes("dirty.txt"))).toBe(
+        true,
+      );
+      expect(result.validationTools).toHaveLength(1);
+      expect(result.validationTools[0]?.found).toBe(true);
+
+      // Clean tree after removing the dirty file.
+      rmSync(join(repoPath, "dirty.txt"));
+      const clean = await projectDoctor(project as never, repos as never);
+      expect(clean.baseCheckout.clean).toBe(true);
+      expect((await execGit(repoPath, ["status", "--porcelain"])).stdout).toBe("");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

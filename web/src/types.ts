@@ -180,10 +180,32 @@ export interface CreatedApiToken extends ApiTokenInfo {
   token: string;
 }
 
+export interface ProjectBaseCheckout {
+  clean: boolean;
+  dirtyFiles: string[];
+  behindOrigin: number | null;
+}
+
+export interface ProjectValidationToolCheck {
+  task: string;
+  step: string;
+  binary: string;
+  found: boolean;
+  path?: string;
+}
+
 export interface ProjectDoctorResult {
   projectId: string;
   repoExists: boolean;
   manifest: boolean;
+  baseCheckout: ProjectBaseCheckout;
+  validationTools: ProjectValidationToolCheck[];
+}
+
+export interface DoctorToolCheck {
+  name: string;
+  found: boolean;
+  path?: string;
 }
 
 export interface InstanceDoctorResult {
@@ -192,6 +214,8 @@ export interface InstanceDoctorResult {
   database: boolean;
   agents: AgentInfo[];
   home: string;
+  daemonPath: string;
+  tools: DoctorToolCheck[];
 }
 
 export interface AgentTestResult {

@@ -1,2 +1,14 @@
-export { instanceDoctor, projectDoctor } from "./doctor";
-export type { InstanceDoctorResult, ProjectDoctorResult } from "./doctor";
+export {
+  firstCommandToken,
+  instanceDoctor,
+  projectDoctor,
+  resolveTool,
+  validationToolsForTasks,
+} from "./doctor";
+export type {
+  DoctorToolCheck,
+  InstanceDoctorResult,
+  ProjectBaseCheckout,
+  ProjectDoctorResult,
+  ProjectValidationToolCheck,
+} from "./doctor";

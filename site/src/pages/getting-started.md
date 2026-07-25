@@ -63,7 +63,7 @@ gojo server status
 gojo server doctor
 ```
 
-`doctor` verifies Git, disk, the database, and which agent adapters are installed.
+`doctor` verifies Git, disk, the database, agent adapters, and whether tools like `bun` / `gh` resolve under the daemon's PATH. Project doctor also reports a dirty primary checkout and missing validation binaries.
 
 ## Add a project
 
@@ -100,7 +100,7 @@ gojo service install
 gojo service start
 ```
 
-Linux uses `systemd`; macOS uses `launchd`. Logs: `gojo service logs`.
+Linux uses `systemd`; macOS uses `launchd`. The unit embeds your install-time `PATH` (so validation can find `bun` under a non-login service). Re-run `gojo service install` after changing tool locations. Logs: `gojo service logs`.
 
 ## Where data lives
 

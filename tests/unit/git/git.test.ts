@@ -11,12 +11,14 @@ import {
   createOrphanSafe,
   diffNameOnly,
   execGit,
+  fetchAndFastForwardBranch,
   getBranch,
   getHead,
   GitError,
   initRepo,
   isRepo,
   removeWorktree,
+  resolveRemoteTrackingRef,
   statusPorcelain,
 } from '@/git/git';
 
@@ -107,5 +109,40 @@ describe('git/git', () => {
     await expect(
       createBranch(repo, 'invalid branch name', 'HEAD'),
     ).rejects.toBeInstanceOf(GitError);
+  });
+
+  test('fetchAndFastForwardBranch is best-effort when checked-out branch is dirty', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'gojo-git-ff-'));
+    const barePath = join(tempDir, 'remote.git');
+    const seed = join(tempDir, 'seed');
+    const repo = join(tempDir, 'repo');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(seed, { recursive: true });
+
+    await initRepo(seed);
+    await configLocal(seed, 'user.email', 'test@example.com');
+    await configLocal(seed, 'user.name', 'Gojo Test');
+    writeFileSync(join(seed, 'README.md'), '# a\n');
+    await commitAll(seed, 'initial');
+    await execGit(tempDir, ['clone', '--bare', seed, barePath]);
+    await execGit(tempDir, ['clone', barePath, repo]);
+    await configLocal(repo, 'user.email', 'test@example.com');
+    await configLocal(repo, 'user.name', 'Gojo Test');
+
+    const pusher = join(tempDir, 'pusher');
+    await execGit(tempDir, ['clone', barePath, pusher]);
+    await configLocal(pusher, 'user.email', 'test@example.com');
+    await configLocal(pusher, 'user.name', 'Gojo Test');
+    writeFileSync(join(pusher, 'README.md'), '# remote\n');
+    await commitAll(pusher, 'advance');
+    await execGit(pusher, ['push', 'origin', 'main']);
+    const remoteSha = (await execGit(pusher, ['rev-parse', 'HEAD'])).stdout;
+
+    writeFileSync(join(repo, 'README.md'), '# dirty local\n');
+
+    await expect(fetchAndFastForwardBranch(repo, 'main')).resolves.toBeUndefined();
+    expect(await resolveRemoteTrackingRef(repo, 'main')).toBe(remoteSha);
+    // Local working tree left alone.
+    expect(await statusPorcelain(repo)).toContain('README.md');
   });
 });

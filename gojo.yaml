@@ -29,22 +29,22 @@ validationProfiles:
   typecheck:
     steps:
       - name: typecheck
-        command: bun run typecheck
+        command: bash scripts/with-bun.sh bun run typecheck
         timeout: 5m
   # Typecheck + unit/integration tests. Coverage % is never a fail gate.
   daemon-unit:
     steps:
       - name: typecheck
-        command: bun run typecheck
+        command: bash scripts/with-bun.sh bun run typecheck
         timeout: 5m
       - name: test
-        command: bun test
+        command: bash scripts/with-bun.sh bun test
         timeout: 15m
   # Same pass/fail as daemon-unit, plus an informational coverage report.
   daemon-test:
     steps:
       - name: typecheck
-        command: bun run typecheck
+        command: bash scripts/with-bun.sh bun run typecheck
         timeout: 5m
       - name: test-coverage
         command: bash scripts/daemon-coverage.sh
@@ -57,7 +57,7 @@ validationProfiles:
   docs-build:
     steps:
       - name: site-build
-        command: bun run --cwd site build
+        command: bash scripts/with-bun.sh bun run --cwd site build
         timeout: 5m
       - name: handoff-exists
         command: test -f .gojo/handoff.json

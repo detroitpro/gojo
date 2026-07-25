@@ -266,6 +266,45 @@ onMounted(() => {
           manifest=
           <span :class="doctorResult.manifest ? 'ok' : 'bad'">{{ doctorResult.manifest }}</span>
         </div>
+        <div v-if="doctorResult.baseCheckout" class="mt-3">
+          baseCheckout.clean=
+          <span :class="doctorResult.baseCheckout.clean ? 'ok' : 'bad'">{{
+            doctorResult.baseCheckout.clean
+          }}</span>
+          <span class="muted">
+            behindOrigin={{ doctorResult.baseCheckout.behindOrigin ?? "—" }}
+          </span>
+          <ul v-if="doctorResult.baseCheckout.dirtyFiles.length" class="mt-2">
+            <li
+              v-for="file in doctorResult.baseCheckout.dirtyFiles.slice(0, 12)"
+              :key="file"
+              class="muted"
+            >
+              {{ file }}
+            </li>
+            <li
+              v-if="doctorResult.baseCheckout.dirtyFiles.length > 12"
+              class="muted"
+            >
+              … +{{ doctorResult.baseCheckout.dirtyFiles.length - 12 }} more
+            </li>
+          </ul>
+        </div>
+        <div v-if="doctorResult.validationTools?.length" class="mt-5">
+          <div class="muted">Validation tools</div>
+          <ul class="mt-2">
+            <li
+              v-for="tool in doctorResult.validationTools"
+              :key="`${tool.task}:${tool.step}:${tool.binary}`"
+            >
+              <span :class="tool.found ? 'ok' : 'bad'">{{ tool.binary }}</span>
+              <span class="muted">
+                — {{ tool.task }} / {{ tool.step
+                }}{{ tool.found ? "" : " (missing under daemon PATH)" }}
+              </span>
+            </li>
+          </ul>
+        </div>
         <div class="muted mt-3">projectId={{ doctorResult.projectId }}</div>
       </div>
     </section>
