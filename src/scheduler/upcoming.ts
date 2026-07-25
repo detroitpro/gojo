@@ -51,9 +51,9 @@ export function listUpcomingSchedules(
   const page = listSchedulesPage(db, {
     limit: MAX_SCHEDULES,
     offset: 0,
-    projectId: input.projectId,
-    enabled: input.enabled,
-    q: input.q,
+    ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+    ...(input.q !== undefined ? { q: input.q } : {}),
   });
 
   const schedules: UpcomingScheduleSeries[] = page.items.map((schedule) => {
