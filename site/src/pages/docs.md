@@ -20,3 +20,27 @@ description: Guides and reference for operating gojo — from first shell task t
 - [Concepts](/concepts) — success ownership, worktrees, runs, handoffs
 - [CLI](/cli) — command map
 - [FAQ](/faq) — common questions after adding a project
+
+## UI tour
+
+After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430](http://127.0.0.1:7430).
+
+![gojo dashboard](/images/ui-dashboard.png)
+
+**Dashboard** — counts, recent runs, and pause/resume for the scheduler.
+
+![gojo projects](/images/ui-projects.png)
+
+**Projects** — register Git repos, sync manifests, run doctor.
+
+![gojo runs list](/images/ui-runs.png)
+
+**Runs** — filterable history across projects, with state and trigger.
+
+![gojo schedules](/images/ui-schedules.png)
+
+**Schedules** — human-readable cron, relative next fire, and a future-runs timeline.
+
+![gojo run detail](/images/ui-run-detail.png)
+
+**Run detail** — phase timeline, token/cost estimate, and the activity feed for a single attempt.

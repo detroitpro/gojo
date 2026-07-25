@@ -269,6 +269,48 @@ When done, report: gojo home path used, admin username chosen (not the password)
     </div>
   </section>
 
+  <section class="band" id="product">
+    <div class="section">
+      <h2>The ops console</h2>
+      <p class="section-lead">
+        A local web UI for projects, schedules, live runs, and audit — same control surface as the
+        CLI, bound to localhost by default.
+      </p>
+      <figure class="shot">
+        <img
+          src={href("/images/ui-dashboard.png")}
+          alt="gojo dashboard showing project, task, schedule, and recent run counts"
+          width="1440"
+          height="900"
+          loading="lazy"
+        />
+        <figcaption>Dashboard — scheduler ops overview and recent runs</figcaption>
+      </figure>
+      <div class="shot-grid">
+        <figure class="shot">
+          <img
+            src={href("/images/ui-schedules.png")}
+            alt="gojo schedules view with future-runs timeline and human-readable cron"
+            width="1440"
+            height="900"
+            loading="lazy"
+          />
+          <figcaption>Schedules — future-runs timeline and next-fire labels</figcaption>
+        </figure>
+        <figure class="shot">
+          <img
+            src={href("/images/ui-run-detail.png")}
+            alt="gojo run detail with phase timeline, cost, and activity feed"
+            width="1440"
+            height="900"
+            loading="lazy"
+          />
+          <figcaption>Run detail — phase timeline, usage, and activity</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
   <section class="band" id="ask-your-agent">
     <div class="section">
       <h2>Ask your agent to install gojo</h2>

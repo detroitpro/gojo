@@ -56,6 +56,8 @@ gojo server start
 
 Open **http://127.0.0.1:7430** (default). The server binds to localhost unless you change instance settings.
 
+![gojo dashboard after login](/images/ui-dashboard.png)
+
 Useful checks:
 
 ```bash
@@ -71,6 +73,8 @@ gojo server doctor
 2. Enter a short name (or leave it blank and let Browse fill it).
 3. Click **Browse…** and pick the repository folder on the host machine.
 4. Click **Add project**.
+
+![gojo projects view](/images/ui-projects.png)
 
 You can also do this from the CLI:
 
