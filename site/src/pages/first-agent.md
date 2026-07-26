@@ -72,7 +72,7 @@ cat > .gojo/handoff.json <<'JSON'
   "status": "completed",
   "summary": "Created NOTES.md",
   "startingCommit": "unknown",
-  "resultCommit": null,
+  "resultCommit": "unknown",
   "filesChanged": ["NOTES.md"],
   "validation": { "passed": true, "steps": [] },
   "decisions": [],
