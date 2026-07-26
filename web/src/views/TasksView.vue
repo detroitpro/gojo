@@ -3,10 +3,11 @@ import { onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listProjects, listTasks, runTask } from "@/api";
-import StateBadge from "@/components/StateBadge.vue";
+import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { Project } from "@/types";
 
 const route = useRoute();
@@ -60,13 +61,6 @@ async function runNow(id: string) {
   } finally {
     busyId.value = null;
   }
-}
-
-function fmtTime(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  return new Date(value).toLocaleString();
 }
 
 watch(
@@ -155,12 +149,13 @@ onMounted(() => {
     </div>
     <template v-else>
       <div class="table-wrap">
-        <table class="data">
+        <table class="data tasks-table">
           <thead>
             <tr>
               <th>Name</th>
               <th>Project</th>
-              <th>Last run</th>
+              <th class="tasks-col-runs">Recent runs</th>
+              <th class="tasks-col-rate">Success</th>
               <th>Enabled</th>
               <th>Agent</th>
               <th>Created</th>
@@ -191,14 +186,11 @@ onMounted(() => {
                 <div>{{ task.projectName || "—" }}</div>
                 <div class="mono muted text-sm">{{ task.projectId.slice(0, 10) }}…</div>
               </td>
-              <td>
-                <template v-if="task.lastRunId && task.lastRunState">
-                  <RouterLink :to="`/runs/${task.lastRunId}`" class="last-run-link">
-                    <StateBadge :state="task.lastRunState" />
-                  </RouterLink>
-                  <div class="mono muted text-sm">{{ fmtTime(task.lastRunCreatedAt) }}</div>
-                </template>
-                <span v-else class="muted">—</span>
+              <td class="tasks-col-runs">
+                <RunHistoryStrip :runs="task.recentRuns ?? []" />
+              </td>
+              <td class="tasks-col-rate mono">
+                {{ formatRunSuccessRate(task.recentRuns ?? []) }}
               </td>
               <td>{{ task.enabled ? "yes" : "no" }}</td>
               <td>
@@ -232,3 +224,18 @@ onMounted(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.tasks-table :deep(th.tasks-col-runs),
+.tasks-table :deep(td.tasks-col-runs) {
+  width: 9.5rem;
+  text-align: right;
+}
+
+.tasks-table :deep(th.tasks-col-rate),
+.tasks-table :deep(td.tasks-col-rate) {
+  width: 5.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+</style>

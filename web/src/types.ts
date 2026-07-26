@@ -290,6 +290,8 @@ export interface Task {
   lastRunId?: string | null;
   lastRunState?: string | null;
   lastRunCreatedAt?: string | null;
+  /** Present on list API: up to 5 recent runs, oldest → newest. */
+  recentRuns?: DashboardOverviewRun[];
 }
 
 export interface ApiTokenInfo {
