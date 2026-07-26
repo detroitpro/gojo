@@ -25,14 +25,14 @@
     "bun": ">=1.2.0"
   },
   "dependencies": {
-    "croner": "^9.0.0",
+    "croner": "^10.0.1",
     "cronstrue": "3.24.0",
-    "ulid": "^2.3.0",
-    "yaml": "^2.7.0",
-    "zod": "^3.24.2"
+    "ulid": "^3.0.2",
+    "yaml": "^2.9.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3"
   }
 }
