@@ -144,6 +144,7 @@ See this repo’s [`.gojo/tasks/self-heal.md`](https://github.com/detroitpro/goj
 | --- | --- |
 | Heal does not re-heal | Runs with `trigger: heal` never enqueue another healer |
 | Healer excluded | If the failing task **is** the healer, no heal is enqueued |
+| Preflight / infra | Runs that never started (`startedAt` null) or hit an invalid state transition are skipped — no healer for workspace prep or daemon infra failures |
 | Cap | At most **3** heal runs per project per hour |
 
 ## Lifecycle sketch

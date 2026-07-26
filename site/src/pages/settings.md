@@ -58,7 +58,7 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 | --- | --- |
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/task-prompts) |
 | `validationProfile` | Ordered checks after the agent exits |
-| `concurrency` / overlap | How overlapping triggers behave |
+| `concurrency` | Stored on the task row at sync (`projectLimit`, `overlapPolicy: skip \| queue \| cancel`) — **not enforced by the coordinator yet**; overlap today is per **schedule** row (see below) |
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
 | `selfHeal` | Optional `{ task, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |
@@ -69,8 +69,8 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 | --- | --- |
 | **Cron + timezone** | When the task should fire (DST-aware) |
 | **Enabled** | Pause without deleting history |
-| **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` (schedule row in SQLite; defaults to `skip`) |
-| **Missed-run policy** | `skip` / `run_once` / `run_all` / `run_latest` after downtime |
+| **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` — per schedule row in SQLite (defaults to `skip`); enforced by the scheduler; **not** in `gojo.yaml` today |
+| **Missed-run policy** | `skip` / `run_once` / `run_all` / `run_latest` after downtime — same storage as overlap (defaults to `skip` at create; scheduler falls back to `run_latest` only when the stored value is invalid) |
 | **Retries / backoff** | Distinguish infra blips from real task failure |
 | **Disable after N failures** | Auto-stop noisy schedules and notify |
 

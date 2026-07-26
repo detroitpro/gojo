@@ -4,9 +4,20 @@
 
 ## Responsibility
 
-Evaluate cron/schedules, overlap policies, retries, and auto-disable. **Create or trigger runs**—do not execute agents.
+Evaluate cron/schedules, overlap policies, missed-run catch-up, retries, and auto-disable. **Create or trigger runs**—do not execute agents.
 
 Includes cron helpers, disable/outcome recording, and policy checks.
+
+## Schedule-row policies (SQLite)
+
+Each schedule stores policies the tick loop reads (not synced from `gojo.yaml` today):
+
+| Field | Values | Default at create |
+| --- | --- | --- |
+| `overlapPolicy` | `skip`, `queue`, `cancel_replace`, `allow_parallel` | `skip` |
+| `missedRunPolicy` | `skip`, `run_once`, `run_all`, `run_latest` | `skip` |
+
+Overlap counts active/queued runs **for that schedule** before calling `onTrigger`. Task `concurrencyJson` from the manifest is separate and is not read here.
 
 ## May call
 
