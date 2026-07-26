@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import {
   disableSchedule,
@@ -19,9 +20,17 @@ import {
 } from "@/lib/schedule-format";
 import type { Project, Schedule, SchedulesUpcomingResult } from "@/types";
 
+const route = useRoute();
+const router = useRouter();
+
+function queryParam(key: string): string {
+  const value = route.query[key];
+  return typeof value === "string" ? value : "";
+}
+
 const projects = ref<Project[]>([]);
-const projectFilter = ref("");
-const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
+const projectFilter = ref(queryParam("projectId"));
+const enabledFilter = ref<"all" | "enabled" | "disabled">("enabled");
 const query = ref("");
 const busyId = ref<string | null>(null);
 const horizonHours = ref(168);
@@ -102,6 +111,30 @@ watch([projectFilter, enabledFilter, query, horizonHours], () => {
   void loadUpcoming();
 });
 
+watch(
+  () => route.query.projectId,
+  (projectId) => {
+    const next = typeof projectId === "string" ? projectId : "";
+    if (next !== projectFilter.value) {
+      projectFilter.value = next;
+    }
+  },
+);
+
+watch(projectFilter, (value) => {
+  const current = queryParam("projectId");
+  if (value === current) {
+    return;
+  }
+  const nextQuery = { ...route.query } as Record<string, string>;
+  if (value) {
+    nextQuery.projectId = value;
+  } else {
+    delete nextQuery.projectId;
+  }
+  void router.replace({ query: nextQuery });
+});
+
 onMounted(() => {
   void loadProjects();
   void load();
@@ -124,11 +157,44 @@ onMounted(() => {
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 
     <section class="panel mb-7">
-      <div class="panel-header">
-        Future runs
-        <div class="schedules-horizon">
-          <label class="muted" for="sched-horizon">Horizon</label>
-          <select id="sched-horizon" v-model.number="horizonHours" class="select">
+      <div class="panel-header schedules-panel-header">
+        <span>Future runs</span>
+        <div class="filter-bar schedules-toolbar">
+          <select
+            id="sched-chart-project"
+            v-model="projectFilter"
+            class="select"
+            aria-label="Project"
+          >
+            <option value="">All projects</option>
+            <option v-for="project in projects" :key="project.id" :value="project.id">
+              {{ project.name }}
+            </option>
+          </select>
+          <select
+            id="sched-chart-enabled"
+            v-model="enabledFilter"
+            class="select"
+            aria-label="Enabled"
+          >
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+            <option value="all">All</option>
+          </select>
+          <input
+            id="sched-chart-search"
+            v-model="query"
+            class="input filter-bar-search"
+            type="search"
+            placeholder="Name, task, cron…"
+            aria-label="Search"
+          />
+          <select
+            id="sched-horizon"
+            v-model.number="horizonHours"
+            class="select"
+            aria-label="Horizon"
+          >
             <option :value="24">24 hours</option>
             <option :value="168">7 days</option>
             <option :value="720">30 days</option>
@@ -150,38 +216,36 @@ onMounted(() => {
       </div>
     </section>
 
-    <div class="inline-form mb-7 task-filters">
-      <div class="field">
-        <label for="sched-project-filter">Project</label>
-        <select id="sched-project-filter" v-model="projectFilter">
-          <option value="">All projects</option>
-          <option v-for="project in projects" :key="project.id" :value="project.id">
-            {{ project.name }}
-          </option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="sched-enabled-filter">Enabled</label>
-        <select id="sched-enabled-filter" v-model="enabledFilter">
-          <option value="all">All</option>
-          <option value="enabled">Enabled</option>
-          <option value="disabled">Disabled</option>
-        </select>
-      </div>
-      <div class="field flex-2">
-        <label for="sched-search">Search</label>
-        <input
-          id="sched-search"
-          v-model="query"
-          class="input"
-          type="search"
-          placeholder="Name, task, cron…"
-        />
-      </div>
-      <div class="field task-filter-count">
-        <label>&nbsp;</label>
-        <span class="muted">{{ total }} schedule{{ total === 1 ? "" : "s" }}</span>
-      </div>
+    <div class="filter-bar mb-7">
+      <select
+        id="sched-table-project"
+        v-model="projectFilter"
+        class="select"
+        aria-label="Project"
+      >
+        <option value="">All projects</option>
+        <option v-for="project in projects" :key="`table-${project.id}`" :value="project.id">
+          {{ project.name }}
+        </option>
+      </select>
+      <select
+        id="sched-table-enabled"
+        v-model="enabledFilter"
+        class="select"
+        aria-label="Enabled"
+      >
+        <option value="enabled">Enabled</option>
+        <option value="disabled">Disabled</option>
+        <option value="all">All</option>
+      </select>
+      <input
+        id="sched-table-search"
+        v-model="query"
+        class="input filter-bar-search"
+        type="search"
+        placeholder="Name, task, cron…"
+        aria-label="Search"
+      />
     </div>
 
     <div v-if="loading && schedules.length === 0" class="empty">Loading…</div>

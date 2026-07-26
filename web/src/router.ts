@@ -5,6 +5,7 @@ import AppShell from "./components/AppShell.vue";
 import AgentsView from "./views/AgentsView.vue";
 import DashboardView from "./views/DashboardView.vue";
 import LoginView from "./views/LoginView.vue";
+import ProjectDetailView from "./views/ProjectDetailView.vue";
 import ProjectsView from "./views/ProjectsView.vue";
 import RunDetailView from "./views/RunDetailView.vue";
 import RunsView from "./views/RunsView.vue";
@@ -27,6 +28,7 @@ const router = createRouter({
       children: [
         { path: "", name: "dashboard", component: DashboardView },
         { path: "projects", name: "projects", component: ProjectsView },
+        { path: "projects/:id", name: "project-detail", component: ProjectDetailView },
         { path: "tasks", name: "tasks", component: TasksView },
         { path: "runs", name: "runs", component: RunsView },
         { path: "runs/:id", name: "run-detail", component: RunDetailView },

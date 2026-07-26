@@ -26,15 +26,36 @@ export interface User {
   role: string;
 }
 
-export interface Project {
+export interface ProjectSummaryCounts {
+  taskCount: number;
+  enabledTaskCount: number;
+  scheduleCount: number;
+  enabledScheduleCount: number;
+  hasManifest: boolean;
+}
+
+export interface Project extends ProjectSummaryCounts {
   id: string;
   name: string;
   repoPath: string;
   remoteUrl: string | null;
   defaultBranch: string;
-  manifestJson: string;
+  /** Present on detail/get; omitted from list responses. */
+  manifestJson?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectSyncResult {
+  manifestPath: string | null;
+  agentProfiles: number;
+  tasks: number;
+  schedules: number;
+}
+
+export interface ProjectSyncResponse {
+  project: Project;
+  sync: ProjectSyncResult;
 }
 
 export interface Run {
@@ -193,6 +214,7 @@ export interface ProjectValidationToolCheck {
   binary: string;
   found: boolean;
   path?: string;
+  shellBuiltin?: boolean;
 }
 
 export interface ProjectDoctorResult {

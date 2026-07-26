@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import {
@@ -9,18 +9,26 @@ import {
   listProjects,
   syncProject,
 } from "@/api";
+import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
-import type { Project, ProjectDoctorResult } from "@/types";
+import {
+  computeProjectHealth,
+  type ProjectHealthSummary,
+} from "@/lib/project-manifest";
+import type { Project } from "@/types";
 
 const query = ref("");
 const busyId = ref<string | null>(null);
 const pickerOpen = ref(false);
-const doctorResult = ref<ProjectDoctorResult | null>(null);
-const doctorProjectName = ref("");
 const name = ref("");
 const repoPath = ref("");
+const notice = ref("");
+const removeTarget = ref<Project | null>(null);
+const healthById = ref<Record<string, ProjectHealthSummary>>({});
+const healthLoading = ref(false);
 
 const {
   page,
@@ -56,11 +64,85 @@ function onPicked(path: string) {
   pickerOpen.value = false;
 }
 
+function configSummary(project: Project): string {
+  if (!project.hasManifest && project.taskCount === 0) {
+    return "Not synced";
+  }
+  return `${project.enabledTaskCount}/${project.taskCount} tasks · ${project.enabledScheduleCount}/${project.scheduleCount} schedules`;
+}
+
+function healthFor(project: Project): ProjectHealthSummary {
+  return (
+    healthById.value[project.id] ?? {
+      score: null,
+      level: project.hasManifest ? "warn" : "missing",
+      label: project.hasManifest ? "…" : "No manifest",
+    }
+  );
+}
+
+function healthBadgeClass(level: ProjectHealthSummary["level"]): string {
+  if (level === "ok") {
+    return "badge-success";
+  }
+  if (level === "missing") {
+    return "badge-neutral";
+  }
+  return "badge-warn";
+}
+
+function rowActions(project: Project): ActionMenuItem[] {
+  return [
+    {
+      id: "open",
+      label: "Open",
+      to: { name: "project-detail", params: { id: project.id } },
+    },
+    {
+      id: "sync",
+      label: "Sync",
+      disabled: busyId.value === project.id,
+    },
+    {
+      id: "remove",
+      label: "Remove",
+      danger: true,
+      disabled: busyId.value === project.id,
+    },
+  ];
+}
+
+async function refreshHealth(list: Project[]) {
+  if (list.length === 0) {
+    healthById.value = {};
+    return;
+  }
+  healthLoading.value = true;
+  const next: Record<string, ProjectHealthSummary> = { ...healthById.value };
+  await Promise.all(
+    list.map(async (project) => {
+      try {
+        const doctor = await getProjectDoctor(project.id);
+        next[project.id] = computeProjectHealth(project, doctor);
+      } catch {
+        next[project.id] = {
+          score: null,
+          level: "warn",
+          label: "Unavailable",
+        };
+      }
+    }),
+  );
+  healthById.value = next;
+  healthLoading.value = false;
+}
+
 async function addProject() {
   if (!name.value.trim() || !repoPath.value.trim()) {
     return;
   }
   error.value = "";
+  notice.value = "";
   try {
     await createProject({ name: name.value.trim(), repoPath: repoPath.value.trim() });
     name.value = "";
@@ -71,12 +153,23 @@ async function addProject() {
   }
 }
 
-async function sync(id: string) {
-  busyId.value = id;
+async function sync(project: Project) {
+  busyId.value = project.id;
   error.value = "";
+  notice.value = "";
   try {
-    await syncProject(id);
+    const result = await syncProject(project.id);
+    const leaf = result.sync.manifestPath
+      ? result.sync.manifestPath.split(/[/\\]/).slice(-1)[0]
+      : "no manifest";
+    notice.value = `${project.name}: synced from ${leaf} — ${result.sync.agentProfiles} agents, ${result.sync.tasks} tasks, ${result.sync.schedules} schedules`;
     await load();
+    const doctor = await getProjectDoctor(project.id);
+    const refreshed = projects.value.find((row) => row.id === project.id) ?? result.project;
+    healthById.value = {
+      ...healthById.value,
+      [project.id]: computeProjectHealth(refreshed, doctor),
+    };
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
   } finally {
@@ -84,31 +177,27 @@ async function sync(id: string) {
   }
 }
 
-async function doctor(project: Project) {
-  busyId.value = project.id;
-  error.value = "";
-  doctorResult.value = null;
-  try {
-    doctorResult.value = await getProjectDoctor(project.id);
-    doctorProjectName.value = project.name;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Doctor failed";
-  } finally {
-    busyId.value = null;
+function onAction(project: Project, actionId: string) {
+  if (actionId === "sync") {
+    void sync(project);
+  } else if (actionId === "remove") {
+    removeTarget.value = project;
   }
 }
 
-async function remove(project: Project) {
-  if (!confirm(`Remove project “${project.name}”? This does not delete the git repo.`)) {
+async function confirmRemove() {
+  const project = removeTarget.value;
+  if (!project) {
     return;
   }
   busyId.value = project.id;
   error.value = "";
+  notice.value = "";
   try {
     await deleteProject(project.id);
-    if (doctorResult.value?.projectId === project.id) {
-      doctorResult.value = null;
-    }
+    removeTarget.value = null;
+    const { [project.id]: _removed, ...rest } = healthById.value;
+    healthById.value = rest;
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Remove failed";
@@ -116,6 +205,14 @@ async function remove(project: Project) {
     busyId.value = null;
   }
 }
+
+watch(
+  projects,
+  (list) => {
+    void refreshHealth(list);
+  },
+  { deep: true },
+);
 
 onMounted(() => {
   void load();
@@ -127,34 +224,38 @@ onMounted(() => {
     <header class="page-header">
       <div>
         <h1>Projects</h1>
-        <div class="subtitle">Git repositories under orchestration</div>
+        <div class="subtitle">Registered repositories — sync manifests, check health, open details</div>
       </div>
       <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
+    <div v-if="notice" class="alert alert-success">{{ notice }}</div>
 
     <form class="inline-form" @submit.prevent="addProject">
       <div class="field">
-        <label for="name">Name</label>
-        <input id="name" v-model="name" placeholder="my-service" required />
+        <label for="project-name">Name</label>
+        <input id="project-name" v-model="name" class="input" required placeholder="my-app" />
       </div>
-      <div class="field path-field">
-        <label for="repo">Repo path</label>
+      <div class="field flex-2">
+        <label for="project-path">Repository path</label>
         <div class="path-input-row">
           <input
-            id="repo"
+            id="project-path"
             v-model="repoPath"
-            class="mono"
-            placeholder="Browse to a git repository…"
-            readonly
+            class="input"
             required
+            readonly
+            placeholder="Browse to a git checkout…"
             @click="pickerOpen = true"
           />
-          <button class="btn" type="button" @click="pickerOpen = true">Browse…</button>
+          <button class="btn" type="button" @click="pickerOpen = true">Browse</button>
         </div>
       </div>
-      <button class="btn btn-primary" type="submit" :disabled="!repoPath">Add project</button>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" type="submit">Add project</button>
+      </div>
     </form>
 
     <DirectoryPicker
@@ -193,6 +294,11 @@ onMounted(() => {
               <th>Name</th>
               <th>Repo path</th>
               <th>Branch</th>
+              <th>Config</th>
+              <th>
+                Health
+                <span v-if="healthLoading" class="muted text-sm"> …</span>
+              </th>
               <th>Updated</th>
               <th></th>
             </tr>
@@ -201,7 +307,7 @@ onMounted(() => {
             <tr v-for="project in projects" :key="project.id">
               <td>
                 <RouterLink
-                  :to="{ name: 'tasks', query: { projectId: project.id } }"
+                  :to="{ name: 'project-detail', params: { id: project.id } }"
                   class="entity-name"
                 >
                   {{ project.name }}
@@ -210,35 +316,20 @@ onMounted(() => {
               </td>
               <td class="mono muted">{{ project.repoPath }}</td>
               <td class="mono">{{ project.defaultBranch }}</td>
-              <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
+              <td class="muted">{{ configSummary(project) }}</td>
               <td>
-                <div class="toolbar">
-                  <RouterLink :to="`/projects#${project.id}`" class="btn btn-sm">Inspect</RouterLink>
-                  <button
-                    class="btn btn-sm"
-                    type="button"
-                    :disabled="busyId === project.id"
-                    @click="sync(project.id)"
-                  >
-                    Sync
-                  </button>
-                  <button
-                    class="btn btn-sm"
-                    type="button"
-                    :disabled="busyId === project.id"
-                    @click="doctor(project)"
-                  >
-                    Doctor
-                  </button>
-                  <button
-                    class="btn btn-sm btn-danger"
-                    type="button"
-                    :disabled="busyId === project.id"
-                    @click="remove(project)"
-                  >
-                    Remove
-                  </button>
-                </div>
+                <span class="badge" :class="healthBadgeClass(healthFor(project).level)">
+                  {{ healthFor(project).label }}
+                </span>
+              </td>
+              <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
+              <td class="actions-cell">
+                <ActionMenu
+                  :items="rowActions(project)"
+                  :disabled="busyId === project.id"
+                  :label="`Actions for ${project.name}`"
+                  @select="(id) => onAction(project, id)"
+                />
               </td>
             </tr>
           </tbody>
@@ -253,71 +344,22 @@ onMounted(() => {
       />
     </template>
 
-    <section v-if="doctorResult" class="panel mt-7">
-      <div class="panel-header">Doctor — {{ doctorProjectName }}</div>
-      <div class="panel-body mono">
-        <div>
-          repoExists=
-          <span :class="doctorResult.repoExists ? 'ok' : 'bad'">{{
-            doctorResult.repoExists
-          }}</span>
-        </div>
-        <div>
-          manifest=
-          <span :class="doctorResult.manifest ? 'ok' : 'bad'">{{ doctorResult.manifest }}</span>
-        </div>
-        <div v-if="doctorResult.baseCheckout" class="mt-3">
-          baseCheckout.clean=
-          <span :class="doctorResult.baseCheckout.clean ? 'ok' : 'bad'">{{
-            doctorResult.baseCheckout.clean
-          }}</span>
-          <span class="muted">
-            behindOrigin={{ doctorResult.baseCheckout.behindOrigin ?? "—" }}
-          </span>
-          <ul v-if="doctorResult.baseCheckout.dirtyFiles.length" class="mt-2">
-            <li
-              v-for="file in doctorResult.baseCheckout.dirtyFiles.slice(0, 12)"
-              :key="file"
-              class="muted"
-            >
-              {{ file }}
-            </li>
-            <li
-              v-if="doctorResult.baseCheckout.dirtyFiles.length > 12"
-              class="muted"
-            >
-              … +{{ doctorResult.baseCheckout.dirtyFiles.length - 12 }} more
-            </li>
-          </ul>
-        </div>
-        <div v-if="doctorResult.validationTools?.length" class="mt-5">
-          <div class="muted">Validation tools</div>
-          <ul class="mt-2">
-            <li
-              v-for="tool in doctorResult.validationTools"
-              :key="`${tool.task}:${tool.step}:${tool.binary}`"
-            >
-              <span :class="tool.found ? 'ok' : 'bad'">{{ tool.binary }}</span>
-              <span class="muted">
-                — {{ tool.task }} / {{ tool.step
-                }}{{ tool.found ? "" : " (missing under daemon PATH)" }}
-              </span>
-            </li>
-          </ul>
-        </div>
-        <div class="muted mt-3">projectId={{ doctorResult.projectId }}</div>
-      </div>
-    </section>
-
-    <section v-if="projects.length" id="inspect" class="panel mt-7">
-      <div class="panel-header">Inspect</div>
-      <div class="panel-body">
-        <p class="muted">Select a project row or use the hash anchor to view manifest JSON.</p>
-        <details v-for="project in projects" :key="project.id" :id="project.id">
-          <summary class="mono">{{ project.name }} — {{ project.id.slice(0, 12) }}…</summary>
-          <pre class="pre-block">{{ project.manifestJson || "{}" }}</pre>
-        </details>
-      </div>
-    </section>
+    <ConfirmDialog
+      :open="Boolean(removeTarget)"
+      title="Remove project?"
+      confirm-label="Remove project"
+      danger
+      @close="removeTarget = null"
+      @confirm="confirmRemove"
+    >
+      <p>
+        Unregister <strong>{{ removeTarget?.name }}</strong> from gojo. Scheduled work for this
+        project stops, and gojo’s local history for it is removed.
+      </p>
+      <p class="muted mt-3">
+        This does <strong>not</strong> delete the git repository at
+        <span class="mono">{{ removeTarget?.repoPath }}</span>.
+      </p>
+    </ConfirmDialog>
   </div>
 </template>

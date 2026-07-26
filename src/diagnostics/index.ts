@@ -1,6 +1,7 @@
 export {
   firstCommandToken,
   instanceDoctor,
+  primaryValidationTool,
   projectDoctor,
   resolveTool,
   validationToolsForTasks,

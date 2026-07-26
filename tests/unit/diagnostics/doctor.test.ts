@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   firstCommandToken,
+  primaryValidationTool,
   projectDoctor,
   resolveTool,
   validationToolsForTasks,
@@ -22,6 +23,21 @@ describe("diagnostics/doctor helpers", () => {
     expect(firstCommandToken("bun run typecheck")).toBe("bun");
     expect(firstCommandToken("  bash scripts/with-bun.sh typecheck")).toBe("bash");
     expect(firstCommandToken("")).toBe("");
+  });
+
+  test("primaryValidationTool skips shell builtins like cd/test", () => {
+    expect(primaryValidationTool("cd backend && yarn lint:check")).toEqual({
+      binary: "yarn",
+      shellBuiltin: false,
+    });
+    expect(primaryValidationTool("test -f .gojo/handoff.json")).toEqual({
+      binary: "test",
+      shellBuiltin: true,
+    });
+    expect(primaryValidationTool("bun run typecheck")).toEqual({
+      binary: "bun",
+      shellBuiltin: false,
+    });
   });
 
   test("resolveTool finds bun on PATH and relative scripts in cwd", () => {
@@ -54,6 +70,8 @@ describe("diagnostics/doctor helpers", () => {
           steps: [
             { name: "typecheck", command: "bun run typecheck" },
             { name: "missing-bin", command: "definitely-not-a-gojo-binary-xyz --help" },
+            { name: "lint", command: "cd backend && yarn lint:check" },
+            { name: "handoff", command: "test -f .gojo/handoff.json" },
           ],
         }),
       },
@@ -69,11 +87,15 @@ describe("diagnostics/doctor helpers", () => {
     ] as Task[];
 
     const tools = validationToolsForTasks(tasks, process.cwd());
-    expect(tools).toHaveLength(2);
+    expect(tools).toHaveLength(4);
     expect(tools[0]?.binary).toBe("bun");
     expect(tools[0]?.found).toBe(true);
     expect(tools[1]?.found).toBe(false);
     expect(tools[1]?.task).toBe("maintain-tests");
+    expect(tools[2]?.binary).toBe("yarn");
+    expect(tools[3]?.binary).toBe("test");
+    expect(tools[3]?.found).toBe(true);
+    expect(tools[3]?.shellBuiltin).toBe(true);
   });
 });
 

@@ -30,6 +30,10 @@ A **project** is a registered Git repository path plus runtime state in SQLite.
 
 The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: agents, tasks, validation profiles, schedules, notifications. **Sync** upserts by name into the database and **soft-disables** tasks and schedules missing from the manifest (rows are kept for history). Prefer frequency-free keys — put cadence in `cron` / `timezone` only (see [Task prompts](/task-prompts)).
 
+### Projects UI
+
+In the web UI, **Projects** is a list of registered repos. **Open** a project for overview, health (doctor checklist), and a structured view of the synced manifest (not a raw JSON dump). **Sync** reloads the manifest and shows counts (agents / tasks / schedules). **Remove** unregisters the project from gojo — it does **not** delete the git working tree (you confirm in a dialog first).
+
 | Area | Meaning |
 | --- | --- |
 | `project.defaultBranch` | Target branch for integration |

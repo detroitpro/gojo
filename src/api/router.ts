@@ -39,6 +39,7 @@ import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import {
   listProjectsPage,
+  toProjectDetailRow,
   listRunsPage,
   listSchedulesPage,
   listTasksPage,
@@ -361,7 +362,7 @@ export async function handleApiRequest(
       ...(body.remoteUrl !== undefined ? { remoteUrl: body.remoteUrl } : {}),
     });
 
-    return success({ project }, 201);
+    return success({ project: toProjectDetailRow(ctx.db, project) }, 201);
   }
 
   const projectMatch = pathname.match(/^\/api\/v1\/projects\/([^/]+)(?:\/(.+))?$/);
@@ -374,7 +375,7 @@ export async function handleApiRequest(
     }
 
     if (method === "GET" && !action) {
-      return success({ project });
+      return success({ project: toProjectDetailRow(ctx.db, project) });
     }
 
     if (method === "DELETE" && !action) {
@@ -388,7 +389,11 @@ export async function handleApiRequest(
 
     if (method === "POST" && action === "sync") {
       const result = syncProjectFromManifest(ctx.repos, project);
-      return success({ project: ctx.repos.projects.findById(projectId), sync: result });
+      const refreshed = ctx.repos.projects.findById(projectId);
+      return success({
+        project: refreshed ? toProjectDetailRow(ctx.db, refreshed) : null,
+        sync: result,
+      });
     }
   }
 

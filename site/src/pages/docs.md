@@ -31,7 +31,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos, sync manifests, run doctor.
+**Projects** — register Git repos, open a project for health and structured config, sync manifests.
 
 ![gojo runs list](/images/ui-runs.png)
 

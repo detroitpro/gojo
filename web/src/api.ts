@@ -15,6 +15,7 @@ import type {
   NotificationChannelMap,
   Project,
   ProjectDoctorResult,
+  ProjectSyncResponse,
   Run,
   RunArtifactsResult,
   RunDiffResult,
@@ -265,14 +266,17 @@ export async function getProject(id: string): Promise<Project> {
   return data.project;
 }
 
-export async function syncProject(id: string): Promise<Project> {
-  const { data } = await request<{ project: Project | null }>(`/projects/${id}/sync`, {
-    method: "POST",
-  });
+export async function syncProject(id: string): Promise<ProjectSyncResponse> {
+  const { data } = await request<ProjectSyncResponse & { project: Project | null }>(
+    `/projects/${id}/sync`,
+    {
+      method: "POST",
+    },
+  );
   if (!data.project) {
     throw new ApiError("not_found", "Project not found after sync", 404);
   }
-  return data.project;
+  return { project: data.project, sync: data.sync };
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

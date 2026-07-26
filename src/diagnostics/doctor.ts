@@ -29,6 +29,8 @@ export interface ProjectValidationToolCheck {
   binary: string;
   found: boolean;
   path?: string;
+  /** True when the step only uses shell builtins (available via `sh -c`). */
+  shellBuiltin?: boolean;
 }
 
 export interface ProjectDoctorResult {
@@ -71,6 +73,61 @@ export function firstCommandToken(command: string): string {
     return "";
   }
   return trimmed.split(/\s+/)[0] ?? "";
+}
+
+/** Shell builtins always available when validation runs via `sh -c` — not PATH binaries. */
+const SHELL_BUILTINS = new Set([
+  "cd",
+  "test",
+  "[",
+  "true",
+  "false",
+  "echo",
+  "printf",
+  ":",
+  ".",
+  "source",
+  "export",
+  "unset",
+  "set",
+  "shift",
+  "pwd",
+  "read",
+  "exit",
+  "return",
+  "eval",
+  "exec",
+  "command",
+  "builtin",
+  "local",
+  "declare",
+  "typeset",
+  "readonly",
+  "wait",
+  "trap",
+]);
+
+/**
+ * Pick the external tool a validation step needs.
+ * Skips preamble builtins so `cd backend && yarn lint` checks `yarn`, not `cd`.
+ */
+export function primaryValidationTool(command: string): {
+  binary: string;
+  shellBuiltin: boolean;
+} {
+  const segments = command.split(/(?:&&|\|\||;|\|)/);
+  for (const segment of segments) {
+    const token = firstCommandToken(segment);
+    if (!token) {
+      continue;
+    }
+    if (SHELL_BUILTINS.has(token)) {
+      continue;
+    }
+    return { binary: token, shellBuiltin: false };
+  }
+  const only = firstCommandToken(command);
+  return { binary: only || "sh", shellBuiltin: true };
 }
 
 /** Resolve a binary under the current process env (daemon PATH). */
@@ -127,7 +184,17 @@ export function validationToolsForTasks(
       continue;
     }
     for (const step of parseValidationSteps(task.validationProfileJson)) {
-      const binary = firstCommandToken(step.command);
+      const { binary, shellBuiltin } = primaryValidationTool(step.command);
+      if (shellBuiltin) {
+        out.push({
+          task: task.name,
+          step: step.name,
+          binary,
+          found: true,
+          shellBuiltin: true,
+        });
+        continue;
+      }
       const resolved = resolveTool(binary, repoPath);
       out.push({
         task: task.name,

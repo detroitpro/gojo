@@ -52,6 +52,23 @@ export type ScheduleListRow = Schedule & {
   cronDescription: string;
 };
 
+export type ProjectSummaryCounts = {
+  taskCount: number;
+  enabledTaskCount: number;
+  scheduleCount: number;
+  enabledScheduleCount: number;
+  hasManifest: boolean;
+};
+
+/** List row: summary counts, no heavy manifest blob. */
+export type ProjectListRow = Omit<Project, "manifestJson"> &
+  ProjectSummaryCounts & {
+    manifestJson?: undefined;
+  };
+
+/** Detail row: full project + summary counts. */
+export type ProjectDetailRow = Project & ProjectSummaryCounts;
+
 type SqlRunRow = {
   id: string;
   project_id: string;
@@ -122,10 +139,71 @@ function buildWhere(
   params.push(value);
 }
 
+function manifestIsPresent(manifestJson: string | null | undefined): boolean {
+  const trimmed = (manifestJson ?? "").trim();
+  return trimmed.length > 0 && trimmed !== "{}";
+}
+
+export function projectSummaryFor(
+  db: Database,
+  projectId: string,
+): ProjectSummaryCounts | null {
+  const sqlite = db.connection();
+  const row = sqlite
+    .query<
+      {
+        manifest_json: string;
+        task_count: number;
+        enabled_task_count: number;
+        schedule_count: number;
+        enabled_schedule_count: number;
+      },
+      [string]
+    >(
+      `SELECT
+         p.manifest_json AS manifest_json,
+         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count,
+         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.enabled = 1) AS enabled_task_count,
+         (SELECT COUNT(*) FROM schedules s
+            INNER JOIN tasks t ON t.id = s.task_id
+            WHERE t.project_id = p.id) AS schedule_count,
+         (SELECT COUNT(*) FROM schedules s
+            INNER JOIN tasks t ON t.id = s.task_id
+            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count
+       FROM projects p
+       WHERE p.id = ?`,
+    )
+    .get(projectId);
+  if (!row) {
+    return null;
+  }
+  return {
+    taskCount: row.task_count,
+    enabledTaskCount: row.enabled_task_count,
+    scheduleCount: row.schedule_count,
+    enabledScheduleCount: row.enabled_schedule_count,
+    hasManifest: manifestIsPresent(row.manifest_json),
+  };
+}
+
+export function toProjectDetailRow(
+  db: Database,
+  project: Project,
+): ProjectDetailRow {
+  const summary = projectSummaryFor(db, project.id) ?? {
+    taskCount: 0,
+    enabledTaskCount: 0,
+    scheduleCount: 0,
+    enabledScheduleCount: 0,
+    hasManifest: manifestIsPresent(project.manifestJson),
+  };
+  return { ...project, ...summary };
+}
+
 export function listProjectsPage(
   db: Database,
   input: ListProjectsPageInput,
-): PaginatedList<Project> {
+): PaginatedList<ProjectListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [];
   const params: SQLQueryBindings[] = [];
@@ -134,7 +212,7 @@ export function listProjectsPage(
     buildWhere(
       clauses,
       params,
-      `(name LIKE ? ESCAPE '\\' OR repo_path LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')`,
+      `(p.name LIKE ? ESCAPE '\\' OR p.repo_path LIKE ? ESCAPE '\\' OR p.id LIKE ? ESCAPE '\\')`,
       likePattern(q),
     );
     params.push(likePattern(q), likePattern(q));
@@ -143,18 +221,55 @@ export function listProjectsPage(
   const total =
     sqlite
       .query<{ count: number }, SQLQueryBindings[]>(
-        `SELECT COUNT(*) AS count FROM projects ${where}`,
+        `SELECT COUNT(*) AS count FROM projects p ${where}`,
       )
       .get(...params)?.count ?? 0;
 
+  type ProjectListSqlRow = Parameters<typeof mapProject>[0] & {
+    task_count: number;
+    enabled_task_count: number;
+    schedule_count: number;
+    enabled_schedule_count: number;
+  };
+
   const rows = sqlite
     .query(
-      `SELECT * FROM projects ${where} ORDER BY created_at LIMIT ? OFFSET ?`,
+      `SELECT
+         p.id, p.name, p.repo_path, p.remote_url, p.default_branch,
+         p.manifest_json, p.created_at, p.updated_at,
+         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count,
+         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.enabled = 1) AS enabled_task_count,
+         (SELECT COUNT(*) FROM schedules s
+            INNER JOIN tasks t ON t.id = s.task_id
+            WHERE t.project_id = p.id) AS schedule_count,
+         (SELECT COUNT(*) FROM schedules s
+            INNER JOIN tasks t ON t.id = s.task_id
+            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count
+       FROM projects p
+       ${where}
+       ORDER BY p.created_at
+       LIMIT ? OFFSET ?`,
     )
-    .all(...params, input.limit, input.offset) as Parameters<typeof mapProject>[0][];
+    .all(...params, input.limit, input.offset) as ProjectListSqlRow[];
 
   return {
-    items: rows.map(mapProject),
+    items: rows.map((row) => {
+      const project = mapProject(row);
+      return {
+        id: project.id,
+        name: project.name,
+        repoPath: project.repoPath,
+        remoteUrl: project.remoteUrl,
+        defaultBranch: project.defaultBranch,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        taskCount: row.task_count,
+        enabledTaskCount: row.enabled_task_count,
+        scheduleCount: row.schedule_count,
+        enabledScheduleCount: row.enabled_schedule_count,
+        hasManifest: manifestIsPresent(row.manifest_json),
+      };
+    }),
     total,
     limit: input.limit,
     offset: input.offset,

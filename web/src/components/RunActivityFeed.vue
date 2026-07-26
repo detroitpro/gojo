@@ -98,8 +98,8 @@ function statusClass(item: ActivityItem): string {
 
 <template>
   <div class="activity-panel">
-    <div class="activity-filters">
-      <select v-model="kindFilter" class="select">
+    <div class="filter-bar activity-filters">
+      <select v-model="kindFilter" class="select" aria-label="Kind">
         <option value="all">All kinds</option>
         <option value="lifecycle">Lifecycle</option>
         <option value="agent">Agent</option>
@@ -111,11 +111,12 @@ function statusClass(item: ActivityItem): string {
       </select>
       <input
         v-model="query"
-        class="input"
+        class="input filter-bar-search"
         type="search"
         placeholder="Filter activity…"
+        aria-label="Search"
       />
-      <span class="muted">{{ total }} events</span>
+      <span class="muted filter-bar-count">{{ total }} events</span>
     </div>
 
     <ul v-if="pageItems.length" class="activity-feed">

@@ -88,12 +88,13 @@ gojo project list
 Adding a project only registers the repo path. Next:
 
 1. **Add a `gojo.yaml`** (or `.gojo/project.yaml`) in the repository if you don’t have one yet — see [Your first agent](/first-agent).
-2. Click **Sync** (or `gojo project sync <project-id>`) so gojo loads tasks, agents, and schedules from the manifest.
-3. Open **Agents** and confirm at least **shell** is installed (always available).
-4. Run a task from **Tasks** / CLI, or wait for a schedule to fire.
-5. Watch the run under **Runs** — live state, logs, and handoff when it finishes.
+2. Click **Sync** on the list or project detail (or `gojo project sync <project-id>`). Sync reads the manifest and upserts agents, tasks, and schedules by name; removed entries are soft-disabled. It does not change git.
+3. **Open** the project to see health (path, manifest, dirty checkout, validation tools) and a structured config view.
+4. Open **Agents** and confirm at least **shell** is installed (always available).
+5. Run a task from **Tasks** / CLI, or wait for a schedule to fire.
+6. Watch the run under **Runs** — live state, logs, and handoff when it finishes.
 
-If Sync finds no manifest, you’ll have zero tasks until you create one in the repo or via the API/CLI.
+If Sync finds no manifest, you’ll have zero tasks until you create one in the repo or via the API/CLI. **Remove** only unregisters the project from gojo; your git checkout stays on disk.
 
 ## Run as a background service
 
