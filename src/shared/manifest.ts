@@ -84,6 +84,18 @@ export const TaskIntegrationSchema = z.object({
   prLogin: z.string().min(1).optional(),
   /** Tea `--remote` for host discovery. Ignored for `gh`. Default at runtime: `origin`. */
   prRemote: z.string().min(1).optional(),
+  /**
+   * After a successful `tea` PR create, enable Forgejo “merge when checks succeed”
+   * via the pulls merge API. Requires `prApiUrl`, `prRepo`, and
+   * `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN` in the daemon environment.
+   */
+  prAutoMerge: z.boolean().optional(),
+  /** Forgejo/Gitea base URL (e.g. `http://192.168.5.251:3001`). */
+  prApiUrl: z.string().url().optional(),
+  /** Forgejo repo slug `owner/name`. */
+  prRepo: z.string().min(3).optional(),
+  /** Merge style for auto-merge (`Do` field). Default: squash. */
+  prMergeStyle: z.enum(['squash', 'merge', 'rebase']).optional(),
 });
 
 export type TaskIntegration = z.infer<typeof TaskIntegrationSchema>;

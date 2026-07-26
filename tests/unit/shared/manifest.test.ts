@@ -178,12 +178,20 @@ describe('ProjectManifest', () => {
             prTool: 'tea',
             prLogin: 'home',
             prRemote: 'origin',
+            prAutoMerge: true,
+            prApiUrl: 'http://192.168.5.251:3001',
+            prRepo: 'detroitpro/rhystic-gaming',
+            prMergeStyle: 'squash',
           },
         },
       },
     });
     expect(manifest.tasks['dependency-maintenance']?.integration?.prTool).toBe('tea');
     expect(manifest.tasks['dependency-maintenance']?.integration?.prLogin).toBe('home');
+    expect(manifest.tasks['dependency-maintenance']?.integration?.prAutoMerge).toBe(true);
+    expect(manifest.tasks['dependency-maintenance']?.integration?.prRepo).toBe(
+      'detroitpro/rhystic-gaming',
+    );
   });
 
   test('rejects invalid integration.prTool', () => {

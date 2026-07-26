@@ -90,7 +90,7 @@ Empty profile = pass (useful for pure analysis). Failed required steps fail the 
 | --- | --- | --- |
 | *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime) |
 | **commit-only** | yes | Commit on the run branch; do not merge |
-| **pull-request** | yes | Push branch and open a PR via `integration.prTool` (`gh` or `tea`; default `gh`). Missing CLI / create failure → run **fails** with `local://pr/<branch>` recorded on the attempt |
+| **pull-request** | yes | Push branch and open a PR via `integration.prTool` (`gh` or `tea`; default `gh`). Missing CLI / create failure → run **fails** with `local://pr/<branch>` recorded on the attempt. With `prTool: tea` + `prAutoMerge: true` (+ `prApiUrl` / `prRepo`), enable Forgejo merge-when-checks-succeed using `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN` in the daemon environment (warning only if the token/API call fails). |
 | **auto-merge** | yes | Merge into the target under the project merge lock after checks |
 | **await-approval** | no (runtime/API only today) | Commit, then wait for operator approve/reject in the UI or via `gojo run approve\|reject` |
 

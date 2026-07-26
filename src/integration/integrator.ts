@@ -7,6 +7,10 @@ import {
   statusPorcelain,
 } from '@/git/git';
 import {
+  enableForgejoAutoMerge,
+  type ForgejoMergeStyle,
+} from '@/integration/forgejo-auto-merge';
+import {
   buildPrCreateInvocation,
   extractPrUrl,
   normalizePrTool,
@@ -42,6 +46,11 @@ export interface IntegrateOptions {
   prLogin?: string;
   /** Tea `--remote` when `prTool` is `tea` (default `origin` if omitted). */
   prRemote?: string;
+  /** Enable Forgejo merge-when-checks-succeed after tea PR create. */
+  prAutoMerge?: boolean;
+  prApiUrl?: string;
+  prRepo?: string;
+  prMergeStyle?: ForgejoMergeStyle;
   mergeQueue?: MergeQueue;
 }
 
@@ -55,6 +64,8 @@ export interface IntegrateResult {
    * Null for modes that do not open PRs.
    */
   prCreated: boolean | null;
+  /** Non-null when prAutoMerge was requested but could not be enabled. */
+  prAutoMergeError?: string | null;
 }
 
 const defaultMergeQueue = new MergeQueue();
@@ -196,7 +207,25 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
       });
 
       if (createdUrl) {
-        return { commitSha, prUrl: createdUrl, conflict: false, prCreated: true };
+        let prAutoMergeError: string | null = null;
+        if (opts.prAutoMerge && tool === 'tea') {
+          prAutoMergeError = await enableForgejoAutoMerge({
+            prUrl: createdUrl,
+            apiUrl: opts.prApiUrl ?? '',
+            repo: opts.prRepo ?? '',
+            ...(opts.prMergeStyle ? { mergeStyle: opts.prMergeStyle } : {}),
+          });
+        } else if (opts.prAutoMerge && tool !== 'tea') {
+          prAutoMergeError = 'prAutoMerge is only supported with prTool: tea';
+        }
+
+        return {
+          commitSha,
+          prUrl: createdUrl,
+          conflict: false,
+          prCreated: true,
+          prAutoMergeError,
+        };
       }
 
       return {
@@ -204,6 +233,7 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
         prUrl: `local://pr/${opts.branchName}`,
         conflict: false,
         prCreated: false,
+        prAutoMergeError: null,
       };
     }
 

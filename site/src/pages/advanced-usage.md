@@ -34,11 +34,18 @@ For anything that touches production branches:
 integration:
   mode: pull-request
   targetBranch: main
-  prTool: gh # or tea for Gitea/Forgejo; optional prLogin / prRemote for tea
+  prTool: tea # or gh
+  prLogin: home
+  prRemote: origin
+  # Optional Forgejo auto-merge after create (daemon needs FORGEJO_TOKEN / GOJO_FORGEJO_TOKEN):
+  prAutoMerge: true
+  prApiUrl: http://192.168.5.251:3001
+  prRepo: detroitpro/rhystic-gaming
+  prMergeStyle: squash
   requireAllValidations: true
 ```
 
-Use `pull-request` in `gojo.yaml` so merges wait on human review. Set `prTool: tea` (and usually `prLogin`) for Forgejo/Gitea hosts. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted tasks.
+Use `pull-request` in `gojo.yaml` so merges wait on review or CI. Set `prTool: tea` (and usually `prLogin`) for Forgejo/Gitea hosts. `prAutoMerge` schedules merge when checks succeed (same idea as Rhystic `make pr`); it does not bypass CI. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted tasks.
 
 ## Secrets without committing them
 

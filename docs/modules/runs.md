@@ -31,6 +31,8 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 
 `pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the task manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
 
+When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo’s pulls merge API with `merge_when_checks_succeed: true` (requires `prApiUrl`, `prRepo`, and daemon env `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN`). Auto-merge failures do **not** fail the run; they are recorded on the handoff as `unresolvedIssues` (`prAutoMerge: …`).
+
 ## May call
 
 - `workspace/`, `git/`

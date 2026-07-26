@@ -57,6 +57,10 @@ interface IntegrationConfig {
   prTool?: 'gh' | 'tea';
   prLogin?: string;
   prRemote?: string;
+  prAutoMerge?: boolean;
+  prApiUrl?: string;
+  prRepo?: string;
+  prMergeStyle?: 'squash' | 'merge' | 'rebase';
 }
 
 interface ActiveRunContext {
@@ -542,6 +546,14 @@ export class RunCoordinator {
       ...(input.integration.prTool ? { prTool: input.integration.prTool } : {}),
       ...(input.integration.prLogin ? { prLogin: input.integration.prLogin } : {}),
       ...(input.integration.prRemote ? { prRemote: input.integration.prRemote } : {}),
+      ...(input.integration.prAutoMerge !== undefined
+        ? { prAutoMerge: input.integration.prAutoMerge }
+        : {}),
+      ...(input.integration.prApiUrl ? { prApiUrl: input.integration.prApiUrl } : {}),
+      ...(input.integration.prRepo ? { prRepo: input.integration.prRepo } : {}),
+      ...(input.integration.prMergeStyle
+        ? { prMergeStyle: input.integration.prMergeStyle }
+        : {}),
       mergeQueue: this.mergeQueue,
     });
 
@@ -965,7 +977,11 @@ export class RunCoordinator {
     project: Project,
     task: Task,
     validationResults: ValidationStepResult[],
-    integrationResult?: { commitSha: string | null; prUrl: string | null },
+    integrationResult?: {
+      commitSha: string | null;
+      prUrl: string | null;
+      prAutoMergeError?: string | null;
+    },
   ): Promise<void> {
     const artifactDir = join(this.paths.artifacts, run.id);
     mkdirSync(artifactDir, { recursive: true });
@@ -1023,13 +1039,25 @@ export class RunCoordinator {
       ? resolveAttemptHandoff(attempt, workspacePath)
       : parseAttemptHandoffJson(attempt);
     const merged = mergeAgentHandoff(platformHandoff, agentHandoff);
+    const autoMergeWarning = integrationResult?.prAutoMergeError?.trim();
+    const withAutoMergeNote: AgentHandoffReport = autoMergeWarning
+      ? {
+          ...merged,
+          unresolvedIssues: [
+            ...merged.unresolvedIssues,
+            `prAutoMerge: ${autoMergeWarning}`,
+          ],
+        }
+      : merged;
     const materialized = materializeHandoffAssets(
       workspacePath,
       artifactDir,
       readHandoffAssets(agentHandoff),
     );
     const handoff: AgentHandoffReport =
-      materialized.length > 0 ? { ...merged, assets: materialized } : merged;
+      materialized.length > 0
+        ? { ...withAutoMergeNote, assets: materialized }
+        : withAutoMergeNote;
 
     const artifactPath = join(artifactDir, 'handoff.json');
     writeFileSync(artifactPath, JSON.stringify(handoff, null, 2), 'utf8');
