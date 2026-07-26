@@ -4,15 +4,27 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
   deleteProject,
+  getDashboardImpact,
   getProject,
   getProjectDoctor,
   listTasks,
   syncProject,
 } from "@/api";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import {
+  formatMergeRate,
+  impactCountLabel,
+  verificationBadgeClass,
+} from "@/lib/impact-format";
 import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
-import type { Project, ProjectDoctorResult, ProjectSyncResult, Task } from "@/types";
+import type {
+  DashboardImpact,
+  Project,
+  ProjectDoctorResult,
+  ProjectSyncResult,
+  Task,
+} from "@/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,7 +39,74 @@ const error = ref("");
 const notice = ref("");
 const removeOpen = ref(false);
 
+type ImpactRange = "30d" | "90d" | "all";
+const impact = ref<DashboardImpact | null>(null);
+const impactRange = ref<ImpactRange>("30d");
+/** Task ids whose impact rows are hidden; empty = all visible. */
+const hiddenTaskIds = ref<Set<string>>(new Set());
+
 const projectId = computed(() => route.params.id as string);
+
+function impactFrom(range: ImpactRange): string | undefined {
+  if (range === "all") {
+    return undefined;
+  }
+  const days = range === "30d" ? 30 : 90;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+const impactTasks = computed(() => {
+  const items = impact.value?.recentItems ?? [];
+  const byId = new Map<string, string>();
+  for (const item of items) {
+    if (!byId.has(item.taskId)) {
+      byId.set(item.taskId, item.taskName);
+    }
+  }
+  return [...byId.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
+
+const visibleImpactItems = computed(() => {
+  const items = impact.value?.recentItems ?? [];
+  if (hiddenTaskIds.value.size === 0) {
+    return items;
+  }
+  return items.filter((item) => !hiddenTaskIds.value.has(item.taskId));
+});
+
+function isTaskVisible(taskId: string): boolean {
+  return !hiddenTaskIds.value.has(taskId);
+}
+
+function toggleTaskVisibility(taskId: string) {
+  const next = new Set(hiddenTaskIds.value);
+  if (next.has(taskId)) {
+    next.delete(taskId);
+  } else {
+    next.add(taskId);
+  }
+  hiddenTaskIds.value = next;
+}
+
+async function loadImpact() {
+  try {
+    const from = impactFrom(impactRange.value);
+    impact.value = await getDashboardImpact({
+      projectId: projectId.value,
+      ...(from ? { from } : {}),
+    });
+    // Drop hide state for tasks no longer present in this range.
+    const known = new Set(impactTasks.value.map((task) => task.id));
+    const next = new Set([...hiddenTaskIds.value].filter((id) => known.has(id)));
+    if (next.size !== hiddenTaskIds.value.size) {
+      hiddenTaskIds.value = next;
+    }
+  } catch {
+    impact.value = null;
+  }
+}
 
 const manifest = computed(() => parseManifestView(project.value?.manifestJson));
 
@@ -115,11 +194,18 @@ async function confirmRemove() {
 watch(projectId, () => {
   lastSync.value = null;
   notice.value = "";
+  hiddenTaskIds.value = new Set();
   void load();
+  void loadImpact();
+});
+
+watch(impactRange, () => {
+  void loadImpact();
 });
 
 onMounted(() => {
   void load();
+  void loadImpact();
 });
 </script>
 
@@ -208,6 +294,120 @@ onMounted(() => {
               :to="{ name: 'runs', query: { projectId: project.id } }"
               >Runs</RouterLink
             >
+          </div>
+        </div>
+      </section>
+
+      <section v-if="impact" class="panel mb-7">
+        <div class="panel-header impact-header">
+          <span>Impact</span>
+          <select
+            id="project-impact-range"
+            v-model="impactRange"
+            class="select"
+            aria-label="Impact time range"
+          >
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="all">Lifetime</option>
+          </select>
+        </div>
+        <div class="panel-body">
+          <div class="stats-row impact-stats">
+            <div class="stat">
+              <div class="label">Merged</div>
+              <div class="value ok">{{ impact.totals.mergedRuns }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">PRs open</div>
+              <div class="value">{{ impact.totals.prsOpen }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Merge rate</div>
+              <div class="value">{{ formatMergeRate(impact.totals.mergeRate) }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Commits</div>
+              <div class="value">{{ impact.totals.commits }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Succeeded runs</div>
+              <div class="value">{{ impact.totals.succeededRuns }}</div>
+            </div>
+          </div>
+
+          <div
+            v-if="impact.categories.length > 0"
+            class="stats-row impact-stats impact-category-stats"
+          >
+            <div
+              v-for="entry in impact.categories"
+              :key="`${entry.category}-${entry.verification}`"
+              class="stat"
+              :title="`${entry.verification} (trust level)`"
+            >
+              <div class="label">
+                {{ impactCountLabel(entry.category, entry.verification) }}
+              </div>
+              <div class="value">{{ entry.count }}</div>
+            </div>
+          </div>
+          <div v-else class="muted text-sm impact-empty">
+            No impact items recorded in this range
+          </div>
+
+          <div v-if="impactTasks.length > 0" class="impact-task-toggles">
+            <span class="muted text-sm">Tasks</span>
+            <label
+              v-for="task in impactTasks"
+              :key="task.id"
+              class="impact-task-toggle"
+            >
+              <input
+                type="checkbox"
+                :checked="isTaskVisible(task.id)"
+                @change="toggleTaskVisibility(task.id)"
+              />
+              {{ task.name }}
+            </label>
+          </div>
+
+          <div v-if="visibleImpactItems.length > 0" class="table-wrap impact-recent">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Subject</th>
+                  <th>Summary</th>
+                  <th>Trust</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in visibleImpactItems" :key="item.id">
+                  <td>
+                    <RouterLink
+                      :to="{ name: 'run-detail', params: { id: item.runId } }"
+                      class="entity-name"
+                    >
+                      {{ item.taskName }}
+                    </RouterLink>
+                  </td>
+                  <td class="mono">{{ item.subject }}</td>
+                  <td>{{ item.summary }}</td>
+                  <td>
+                    <span class="badge" :class="verificationBadgeClass(item.verification)">
+                      {{ item.verification }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div
+            v-else-if="impact.recentItems.length > 0"
+            class="muted text-sm impact-empty"
+          >
+            All tasks are hidden — turn a task back on to see its impact items
           </div>
         </div>
       </section>
@@ -437,3 +637,44 @@ onMounted(() => {
     </ConfirmDialog>
   </div>
 </template>
+
+<style scoped>
+.impact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.impact-stats {
+  margin-bottom: 0;
+}
+
+.impact-category-stats {
+  margin-top: 1rem;
+}
+
+.impact-empty {
+  margin-top: 1rem;
+}
+
+.impact-task-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.impact-task-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.impact-recent {
+  margin-top: 1rem;
+}
+</style>
