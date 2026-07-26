@@ -195,27 +195,27 @@ tasks:
       backoff: exponential
 
 schedules:
-  self-heal-daily:
+  self-heal:
     task: self-heal
     cron: "0 7 * * *"
     timezone: America/Detroit
-  maintain-quality-weekly:
+  maintain-quality:
     task: maintain-quality
     cron: "0 2 * * 5"
     timezone: America/Detroit
-  maintain-tests-weekly:
+  maintain-tests:
     task: maintain-tests
     cron: "0 2 * * 6"
     timezone: America/Detroit
-  maintain-deps-weekly:
+  maintain-deps:
     task: maintain-deps
     cron: "0 2 * * 0"
     timezone: America/Detroit
-  maintain-docs-weekly:
+  maintain-docs:
     task: maintain-docs
     cron: "0 4 * * 0"
     timezone: America/Detroit
-  maintain-merge-daily:
+  maintain-merge:
     task: maintain-merge
     cron: "0 6 * * *"
     timezone: America/Detroit

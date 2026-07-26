@@ -28,7 +28,7 @@ bun run gojo backup restore <archive>
 
 A **project** is a registered Git repository path plus runtime state in SQLite.
 
-The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: agents, tasks, validation profiles, schedules, notifications. **Sync** copies that desired state into the database. The database remains authoritative for runs and schedule counters.
+The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: agents, tasks, validation profiles, schedules, notifications. **Sync** upserts by name into the database and **soft-disables** tasks and schedules missing from the manifest (rows are kept for history). Prefer frequency-free keys — put cadence in `cron` / `timezone` only (see [Task prompts](/task-prompts)).
 
 | Area | Meaning |
 | --- | --- |

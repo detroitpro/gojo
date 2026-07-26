@@ -134,7 +134,7 @@ Adapters invoke the installed CLIs non-interactively and capture structured outp
 
 ```yaml
 schedules:
-  nightly-note:
+  touch-note:
     task: touch-note
     cron: "0 3 * * *"
     timezone: America/Detroit

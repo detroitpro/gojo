@@ -76,7 +76,7 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 ```json
 {
   "project": "demo",
-  "task": "nightly-deps",
+  "task": "maintain-deps",
   "runId": "01J…",
   "state": "Failed",
   "error": "validation failed",

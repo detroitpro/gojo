@@ -89,7 +89,7 @@ tasks:
       backoff: exponential
 
 schedules:
-  weekly-dependencies:
+  dependency-maintenance:
     task: dependency-maintenance
     cron: "0 3 * * 1"
     timezone: America/Detroit

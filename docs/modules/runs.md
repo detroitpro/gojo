@@ -23,7 +23,7 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 ## Self-healing plumbing
 
 - Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_TASK_ID`, and `GOJO_PROJECT_ID` into agent env (`agent-run-*` tokens are short-lived and revoked when the agent attempt finishes; Settings hides them by default).
-- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only.
+- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts tasks/schedules by name and **soft-disables** tasks and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer task itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).
 

@@ -127,6 +127,7 @@ export function syncProjectFromManifest(
     }
   }
 
+  const desiredSchedules = new Set<string>();
   let schedules = 0;
   if (manifest.schedules) {
     for (const [name, scheduleConfig] of Object.entries(manifest.schedules)) {
@@ -161,7 +162,17 @@ export function syncProjectFromManifest(
           disableAfter,
         });
       }
+      desiredSchedules.add(`${taskId}:${name}`);
       schedules += 1;
+    }
+  }
+
+  // Soft-disable schedules removed/renamed in the manifest (mirror tasks).
+  for (const task of repos.tasks.listByProject(project.id)) {
+    for (const schedule of repos.schedules.listByTask(task.id)) {
+      if (schedule.enabled && !desiredSchedules.has(`${schedule.taskId}:${schedule.name}`)) {
+        repos.schedules.update(schedule.id, { enabled: false });
+      }
     }
   }
 

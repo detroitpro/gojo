@@ -87,7 +87,7 @@ tasks:
       backoff: exponential
 
 schedules:
-  weekly-dependencies:
+  dependency-maintenance:
     task: dependency-maintenance
     cron: "0 3 * * 1"
     timezone: America/Detroit
@@ -116,7 +116,7 @@ describe('ProjectManifest', () => {
     expect(manifest.agents['reviewer']?.readOnly).toBe(true);
     expect(manifest.validationProfiles['standard']?.steps).toHaveLength(4);
     expect(manifest.tasks['dependency-maintenance']?.integration?.mode).toBe('pull-request');
-    expect(manifest.schedules?.['weekly-dependencies']?.cron).toBe('0 3 * * 1');
+    expect(manifest.schedules?.['dependency-maintenance']?.cron).toBe('0 3 * * 1');
     expect(manifest.notifications?.onFailure).toEqual([
       'engineering-slack',
       'operations-teams',

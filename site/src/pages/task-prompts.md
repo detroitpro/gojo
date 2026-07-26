@@ -18,6 +18,24 @@ Use this with [Your first agent](/first-agent) (pipeline) and [Advanced agent](/
 | How you think | Moderate | Only 2–4 **role-specific** heuristics that change tradeoffs |
 | Chat “personality” | Low | Skip for unattended cron |
 
+## Name tasks without cadence
+
+Task and schedule keys in `gojo.yaml` are durable identities (sync matches by name). **Do not** put frequency in the key (`maintain-deps-weekly`, `nightly-note`). Cadence belongs only in `cron` / `timezone`, which you can change without renaming.
+
+```yaml
+# Good — key is the work; cron is the cadence
+tasks:
+  maintain-deps:
+    # ...
+schedules:
+  maintain-deps:
+    task: maintain-deps
+    cron: "0 2 * * 0"
+    timezone: America/Detroit
+```
+
+When one schedule maps to one task, use the **same key** for both. Project sync soft-disables tasks and schedules that disappear from the manifest (rows stay for history).
+
 ## Shared project instructions
 
 Put cross-task defaults in the manifest so every AI run gets them without copy-paste:

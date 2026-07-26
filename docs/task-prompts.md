@@ -9,6 +9,7 @@ Scheduled prompts under [`.gojo/tasks/`](../.gojo/tasks/) pair with shared [`.go
 - **Shared file** — code qualities, operating defaults, handoff judgment (what/why/value).
 - **Task file** — role, goals, scope, numeric **Hard rules**, process; optional short **How you think** heuristics.
 - Start tight on limits; widen only after a schedule is trusted.
+- **Keys:** task (and schedule) YAML map keys are durable identities — do **not** encode cadence (`daily` / `weekly` / `nightly`). Put frequency only in `cron` / `timezone`. Prefer schedule key = task key when there is one schedule per task. Sync soft-disables removed/renamed schedule names (same as tasks).
 
 Platform timeouts and `concurrency` do not replace prompt caps — they stop the process; limits keep the diff reviewable.
 
