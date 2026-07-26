@@ -33,6 +33,15 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 
 When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo’s pulls merge API with `merge_when_checks_succeed: true` (requires `prApiUrl`, `prRepo`, and daemon env `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN`). Auto-merge failures do **not** fail the run; they are recorded on the handoff as `unresolvedIssues` (`prAutoMerge: …`).
 
+## Impact accounting
+
+After integration the coordinator persists two canonical record sets (accounting failures never fail the run):
+
+- **`run_integrations`** (one row per run) — mode, provider (`forgejo` for tea, `github` for gh), PR number/URL, commit SHA, and a status independent of run state: `open` / `merged` / `closed` / `committed` / `conflict` / `failed`. Direct `auto-merge` persists `merged` immediately; `pull-request` persists `open` with a `next_check_at` so the integration-status reconciler (`integration/status-reconciler.ts`, invoked from the scheduler tick) can observe the external merge/close later. “Automation merged” metrics count `merged` integration rows — never `RunState.Succeeded`.
+- **`run_impact_items`** (unique per `(run, category, subject)`) — built by `impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema.
+
+The agent handoff is runtime-validated (`normalizeAgentHandoff`, schema v1/v2) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`.
+
 ## May call
 
 - `workspace/`, `git/`

@@ -518,6 +518,90 @@ describe("api/router", () => {
     expect(upcomingBody.data.schedules[0]!.color).toMatch(/^#/);
     expect(upcomingBody.data.schedules[0]!.fires.length).toBeGreaterThan(0);
   });
+
+  test("dashboard impact analytics and run detail expose canonical records", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = { Authorization: `Bearer ${token}` };
+
+    const project = ctx!.repos.projects.create({
+      name: "impact-demo",
+      repoPath: tempDir ?? "/tmp/demo",
+    });
+    const task = ctx!.repos.tasks.create({
+      projectId: project.id,
+      name: "deps",
+      prompt: "run",
+    });
+    const run = ctx!.repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "impact-key",
+      trigger: "manual",
+    });
+    ctx!.db
+      .connection()
+      .query("UPDATE runs SET state = 'succeeded' WHERE id = ?")
+      .run(run.id);
+    ctx!.repos.runIntegrations.upsertForRun({
+      runId: run.id,
+      mode: "pull-request",
+      provider: "forgejo",
+      prNumber: 9,
+      prUrl: "http://forge.local/x/pulls/9",
+      status: "merged",
+      mergedAt: new Date().toISOString(),
+    });
+    ctx!.repos.runImpactItems.replaceForRun(run.id, null, [
+      {
+        category: "dependency-update",
+        subject: "left-pad",
+        summary: "bumped",
+        source: "agent",
+        verification: "corroborated",
+      },
+    ]);
+
+    const impact = await fetch(
+      `${baseUrl}/api/v1/dashboard/impact?projectId=${project.id}`,
+      { headers: auth },
+    );
+    expect(impact.status).toBe(200);
+    const impactBody = (await impact.json()) as {
+      data: {
+        totals: { mergedRuns: number; mergeRate: number | null };
+        categories: Array<{ category: string; verification: string; count: number }>;
+        recentItems: Array<{ subject: string; runId: string }>;
+      };
+    };
+    expect(impactBody.data.totals.mergedRuns).toBe(1);
+    expect(impactBody.data.totals.mergeRate).toBe(1);
+    expect(impactBody.data.categories).toEqual([
+      { category: "dependency-update", verification: "corroborated", count: 1 },
+    ]);
+    expect(impactBody.data.recentItems[0]!.subject).toBe("left-pad");
+
+    // Filters that exclude the run drop it from every aggregate.
+    const empty = await fetch(
+      `${baseUrl}/api/v1/dashboard/impact?to=2000-01-01T00:00:00.000Z`,
+      { headers: auth },
+    );
+    const emptyBody = (await empty.json()) as {
+      data: { totals: { mergedRuns: number; mergeRate: number | null } };
+    };
+    expect(emptyBody.data.totals.mergedRuns).toBe(0);
+    expect(emptyBody.data.totals.mergeRate).toBeNull();
+
+    const detail = await fetch(`${baseUrl}/api/v1/runs/${run.id}`, { headers: auth });
+    expect(detail.status).toBe(200);
+    const detailBody = (await detail.json()) as {
+      data: {
+        impactItems: Array<{ subject: string }>;
+        integration: { status: string; prUrl: string } | null;
+      };
+    };
+    expect(detailBody.data.impactItems).toHaveLength(1);
+    expect(detailBody.data.integration?.status).toBe("merged");
+  });
 });
 
 

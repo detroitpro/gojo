@@ -25,7 +25,7 @@ Every decision should converge on these:
 Unless the task explicitly owns merge/push (e.g. maintain-merge):
 
 - Do **not** push, open PRs, or merge. gojo `pull-request` / `commit-only` integration owns Git.
-- Write `.gojo/handoff.json` (schemaVersion 1) before you finish. **gojo opens the PR from this handoff** (`integration.prTool`, default `gh`). Do **not** run `gh pr create` / `tea pulls create` yourself.
+- Write `.gojo/handoff.json` (schemaVersion 2) before you finish. **gojo opens the PR from this handoff** (`integration.prTool`, default `gh`). Do **not** run `gh pr create` / `tea pulls create` yourself.
 - Use a placeholder ULID for `runId` if unknown.
 
 ## How you report (handoff judgment)
@@ -37,3 +37,27 @@ The PR title/body come from the handoff. Reviewers should not need the raw agent
 - `filesChanged` — accurate when you edited the tree; empty when diagnose-only / no PR.
 - `unresolvedIssues` / `recommendedNextActions` — deferred work after hitting the numeric limit, or operator follow-ups.
 - `agentAssessment.successful` + `confidence`, and `status`: `"completed"`.
+
+## Impact claims (`impact.items`, schema v2)
+
+Report concrete outcomes so the dashboard can account for them. Rules:
+
+- **One item per concrete subject.** A dependency update names one package per item; a bug fix names one issue/subject per item. Never submit aggregate totals ("updated 5 deps" is five items).
+- Allowed `category` values: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`.
+- `subject` — the package name, issue id, doc path, or module. `summary` — one sentence of what changed.
+- `evidence.files` — files you actually changed for this item (claims whose evidence matches the real diff are marked corroborated). Optional `evidence.validationSteps` and `evidence.references` (issue/PR URLs).
+- `confidence` — 0 to 1. Do **not** claim speculative or duplicate impact; unverifiable claims stay labeled "claimed" on the dashboard.
+
+```json
+"impact": {
+  "items": [
+    {
+      "category": "dependency-update",
+      "subject": "croner",
+      "summary": "Upgraded croner 8.1.0 -> 9.0.2",
+      "confidence": 0.9,
+      "evidence": { "files": ["package.json", "bun.lock"] }
+    }
+  ]
+}
+```

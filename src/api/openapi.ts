@@ -159,6 +159,13 @@ export const openApiDocument = {
           "Projects with enabled tasks and up to five recent runs each (oldest to newest).",
       },
     },
+    "/api/v1/dashboard/impact": {
+      get: {
+        summary: "Automation impact analytics",
+        description:
+          "Auditable impact accounting aggregated in SQL: merged automation runs, PR states, merge rate, impact counts by category and verification level (claimed/corroborated/verified), and recent impact items. Query params: projectId, from, to (ISO run creation bounds).",
+      },
+    },
     "/api/v1/instance": {
       get: { summary: "Instance settings" },
       patch: { summary: "Update instance settings" },

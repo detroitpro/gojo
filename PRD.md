@@ -972,7 +972,7 @@ Each completed attempt should produce a normalized handoff document:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runId": "01K123ABC",
   "status": "completed",
   "summary": "Updated three dependencies and corrected two incompatible API calls.",
@@ -1009,6 +1009,21 @@ Each completed attempt should produce a normalized handoff document:
     "successful": true,
     "confidence": 0.86
   },
+  "impact": {
+    "items": [
+      {
+        "category": "dependency-update",
+        "subject": "croner",
+        "summary": "Upgraded croner 8.1.0 -> 9.0.2",
+        "confidence": 0.9,
+        "evidence": {
+          "files": ["package.json", "pnpm-lock.yaml"],
+          "validationSteps": ["test"],
+          "references": []
+        }
+      }
+    ]
+  },
   "assets": [
     {
       "role": "pr-body",
@@ -1027,6 +1042,18 @@ Optional `assets` attach files or inline blobs for downstream use. Roles:
 * `report` / `attachment` — stored under run artifacts for humans and later agents
 
 Prefer workspace-relative `path` for large markdown; use `content` for small inline text. At least one of `path` or `content` is required. gojo materializes assets into `$GOJO_HOME/artifacts/<runId>/assets/` when writing `handoff.json`.
+
+### Impact accounting (schema v2)
+
+Schema v2 adds optional `impact.items`: one structured claim per **concrete subject** (one package, one issue id, one doc page). Agents must not submit aggregate totals or speculative/duplicate claims. Categories: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`.
+
+The platform assigns trust levels rather than accepting claims at face value:
+
+* **verified** — machine-detected from the observed diff (dependency manifests, docs, test files), or an agent claim matching a platform fact
+* **corroborated** — agent claim whose `evidence.files` intersect the actual changed files
+* **claimed** — everything else (typical for subjective categories such as `bug-prevention`)
+
+Schema v1 handoffs (no `impact`) remain valid; invalid impact metadata is dropped with a recorded normalization warning and never fails otherwise valid work. Merge outcomes are tracked separately from run success: a run counts as "merged automation" only when its integration record reaches `merged` (direct auto-merge, or PR merge observed by the reconciler) — never because the run succeeded.
 
 The platform should provide future agents with:
 

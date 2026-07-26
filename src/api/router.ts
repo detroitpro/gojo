@@ -38,6 +38,7 @@ import { syncProjectFromManifest } from "@/app/project-sync";
 import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import { getDashboardOverview } from "@/storage/dashboard-overview";
+import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
   listProjectsPage,
   toProjectDetailRow,
@@ -723,7 +724,12 @@ export async function handleApiRequest(
       return failure("not_found", "Run not found", 404);
     }
     const attempts = ctx.repos.attempts.listByRun(runId);
-    return success({ run: enrichRun(ctx, run), attempts });
+    return success({
+      run: enrichRun(ctx, run),
+      attempts,
+      impactItems: ctx.repos.runImpactItems.listByRun(runId),
+      integration: ctx.repos.runIntegrations.findByRun(runId),
+    });
   }
 
   if (method === "POST" && runActionMatch) {
@@ -788,6 +794,16 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/dashboard/overview") {
     return success(getDashboardOverview(ctx.db));
+  }
+
+  if (method === "GET" && pathname === "/api/v1/dashboard/impact") {
+    return success(
+      getDashboardImpact(ctx.db, {
+        projectId: url.searchParams.get("projectId"),
+        from: url.searchParams.get("from"),
+        to: url.searchParams.get("to"),
+      }),
+    );
   }
 
   if (method === "GET" && pathname === "/api/v1/instance") {

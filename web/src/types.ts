@@ -182,6 +182,82 @@ export interface DashboardOverview {
   projects: DashboardOverviewProject[];
 }
 
+export interface DashboardImpactTotals {
+  succeededRuns: number;
+  prsOpened: number;
+  prsOpen: number;
+  mergedRuns: number;
+  closedUnmerged: number;
+  commits: number;
+  mergeRate: number | null;
+}
+
+export interface DashboardImpactCategoryCount {
+  category: string;
+  verification: string;
+  count: number;
+}
+
+export interface DashboardImpactRecentItem {
+  id: string;
+  runId: string;
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  taskName: string;
+  category: string;
+  subject: string;
+  summary: string;
+  source: string;
+  verification: string;
+  confidence: number | null;
+  createdAt: string;
+}
+
+export interface DashboardImpact {
+  totals: DashboardImpactTotals;
+  categories: DashboardImpactCategoryCount[];
+  recentItems: DashboardImpactRecentItem[];
+}
+
+export interface RunImpactItem {
+  id: string;
+  runId: string;
+  attemptId: string | null;
+  category: string;
+  subject: string;
+  summary: string;
+  source: string;
+  verification: string;
+  confidence: number | null;
+  evidenceJson: string;
+  createdAt: string;
+}
+
+export interface RunIntegration {
+  id: string;
+  runId: string;
+  attemptId: string | null;
+  mode: string;
+  provider: string | null;
+  apiUrl: string | null;
+  repo: string | null;
+  prNumber: number | null;
+  prUrl: string | null;
+  status: string;
+  autoMergeRequested: boolean;
+  commitSha: string | null;
+  openedAt: string | null;
+  mergedAt: string | null;
+  closedAt: string | null;
+  checkCount: number;
+  lastCheckedAt: string | null;
+  nextCheckAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InstanceInfo {
   bindHost: string;
   bindPort: number;

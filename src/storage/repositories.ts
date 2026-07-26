@@ -11,7 +11,11 @@ import type {
   CreateAttemptInput,
   CreateAuditEventInput,
   CreateProjectInput,
+  RunImpactItem,
+  RunImpactItemDraft,
+  RunIntegration,
   SecretRecord,
+  UpsertRunIntegrationInput,
   UpsertSecretInput,
   CreateRunInput,
   CreateScheduleInput,
@@ -23,6 +27,7 @@ import type {
   UpdateAttemptInput,
   UpdateProjectInput,
   UpdateRunInput,
+  UpdateRunIntegrationInput,
   UpdateScheduleInput,
   UpdateTaskInput,
 } from "./types";
@@ -285,6 +290,86 @@ function mapAgentProfile(row: AgentProfileRow): AgentProfile {
   };
 }
 
+interface RunImpactItemRow {
+  id: string;
+  run_id: string;
+  attempt_id: string | null;
+  category: string;
+  subject: string;
+  summary: string;
+  source: RunImpactItem["source"];
+  verification: RunImpactItem["verification"];
+  confidence: number | null;
+  evidence_json: string;
+  created_at: string;
+}
+
+function mapRunImpactItem(row: RunImpactItemRow): RunImpactItem {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    attemptId: row.attempt_id,
+    category: row.category,
+    subject: row.subject,
+    summary: row.summary,
+    source: row.source,
+    verification: row.verification,
+    confidence: row.confidence,
+    evidenceJson: row.evidence_json,
+    createdAt: row.created_at,
+  };
+}
+
+interface RunIntegrationRow {
+  id: string;
+  run_id: string;
+  attempt_id: string | null;
+  mode: string;
+  provider: string | null;
+  api_url: string | null;
+  repo: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  status: RunIntegration["status"];
+  auto_merge_requested: number;
+  commit_sha: string | null;
+  opened_at: string | null;
+  merged_at: string | null;
+  closed_at: string | null;
+  check_count: number;
+  last_checked_at: string | null;
+  next_check_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapRunIntegration(row: RunIntegrationRow): RunIntegration {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    attemptId: row.attempt_id,
+    mode: row.mode,
+    provider: row.provider,
+    apiUrl: row.api_url,
+    repo: row.repo,
+    prNumber: row.pr_number,
+    prUrl: row.pr_url,
+    status: row.status,
+    autoMergeRequested: boolFromInt(row.auto_merge_requested),
+    commitSha: row.commit_sha,
+    openedAt: row.opened_at,
+    mergedAt: row.merged_at,
+    closedAt: row.closed_at,
+    checkCount: row.check_count,
+    lastCheckedAt: row.last_checked_at,
+    nextCheckAt: row.next_check_at,
+    lastError: row.last_error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export interface ProjectRepository {
   create(input: CreateProjectInput): Project;
   findById(id: string): Project | null;
@@ -363,6 +448,25 @@ export interface SecretRepository {
   list(): SecretRecord[];
 }
 
+export interface RunImpactItemRepository {
+  /** Idempotently replace all impact items for a run (safe on retries). */
+  replaceForRun(
+    runId: string,
+    attemptId: string | null,
+    items: RunImpactItemDraft[],
+  ): RunImpactItem[];
+  listByRun(runId: string): RunImpactItem[];
+}
+
+export interface RunIntegrationRepository {
+  /** One canonical integration outcome per run; upsert keyed on run_id. */
+  upsertForRun(input: UpsertRunIntegrationInput): RunIntegration;
+  findByRun(runId: string): RunIntegration | null;
+  /** Nonterminal rows due for reconciliation, oldest check first. */
+  listDue(nowIso: string, limit: number): RunIntegration[];
+  update(id: string, input: UpdateRunIntegrationInput): RunIntegration | null;
+}
+
 export interface Repositories {
   projects: ProjectRepository;
   tasks: TaskRepository;
@@ -372,6 +476,8 @@ export interface Repositories {
   audit: AuditRepository;
   secrets: SecretRepository;
   agentProfiles: AgentProfileRepository;
+  runImpactItems: RunImpactItemRepository;
+  runIntegrations: RunIntegrationRepository;
 }
 
 export function createRepositories(db: Database): Repositories {
@@ -1204,6 +1310,202 @@ export function createRepositories(db: Database): Repositories {
     },
   };
 
+  const runImpactItems: RunImpactItemRepository = {
+    replaceForRun(runId, attemptId, items) {
+      return db.transaction(() => {
+        sqlite.query("DELETE FROM run_impact_items WHERE run_id = ?").run(runId);
+
+        const created: RunImpactItem[] = [];
+        for (const item of items) {
+          const id = ulid();
+          const createdAt = nowIso();
+          const evidenceJson = item.evidenceJson ?? "{}";
+          sqlite
+            .query(
+              `INSERT INTO run_impact_items (
+                id, run_id, attempt_id, category, subject, summary,
+                source, verification, confidence, evidence_json, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(run_id, category, subject) DO NOTHING`,
+            )
+            .run(
+              id,
+              runId,
+              attemptId,
+              item.category,
+              item.subject,
+              item.summary,
+              item.source,
+              item.verification,
+              item.confidence ?? null,
+              evidenceJson,
+              createdAt,
+            );
+          const row = sqlite
+            .query<RunImpactItemRow, [string]>("SELECT * FROM run_impact_items WHERE id = ?")
+            .get(id);
+          if (row) {
+            created.push(mapRunImpactItem(row));
+          }
+        }
+        return created;
+      });
+    },
+
+    listByRun(runId) {
+      const rows = sqlite
+        .query<RunImpactItemRow, [string]>(
+          "SELECT * FROM run_impact_items WHERE run_id = ? ORDER BY category, subject",
+        )
+        .all(runId);
+      return rows.map(mapRunImpactItem);
+    },
+  };
+
+  const runIntegrations: RunIntegrationRepository = {
+    upsertForRun(input) {
+      const now = nowIso();
+      const existing = this.findByRun(input.runId);
+
+      if (existing) {
+        sqlite
+          .query(
+            `UPDATE run_integrations SET
+              attempt_id = ?, mode = ?, provider = ?, api_url = ?, repo = ?,
+              pr_number = ?, pr_url = ?, status = ?, auto_merge_requested = ?,
+              commit_sha = ?, opened_at = ?, merged_at = ?, closed_at = ?,
+              next_check_at = ?, updated_at = ?
+            WHERE id = ?`,
+          )
+          .run(
+            input.attemptId ?? existing.attemptId,
+            input.mode,
+            input.provider ?? existing.provider,
+            input.apiUrl ?? existing.apiUrl,
+            input.repo ?? existing.repo,
+            input.prNumber ?? existing.prNumber,
+            input.prUrl ?? existing.prUrl,
+            input.status,
+            intFromBool(input.autoMergeRequested ?? existing.autoMergeRequested),
+            input.commitSha ?? existing.commitSha,
+            input.openedAt ?? existing.openedAt,
+            input.mergedAt ?? existing.mergedAt,
+            input.closedAt ?? existing.closedAt,
+            input.nextCheckAt !== undefined ? input.nextCheckAt : existing.nextCheckAt,
+            now,
+            existing.id,
+          );
+        return this.findByRun(input.runId) ?? existing;
+      }
+
+      const id = ulid();
+      sqlite
+        .query(
+          `INSERT INTO run_integrations (
+            id, run_id, attempt_id, mode, provider, api_url, repo,
+            pr_number, pr_url, status, auto_merge_requested, commit_sha,
+            opened_at, merged_at, closed_at, check_count,
+            last_checked_at, next_check_at, last_error, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?)`,
+        )
+        .run(
+          id,
+          input.runId,
+          input.attemptId ?? null,
+          input.mode,
+          input.provider ?? null,
+          input.apiUrl ?? null,
+          input.repo ?? null,
+          input.prNumber ?? null,
+          input.prUrl ?? null,
+          input.status,
+          intFromBool(input.autoMergeRequested ?? false),
+          input.commitSha ?? null,
+          input.openedAt ?? null,
+          input.mergedAt ?? null,
+          input.closedAt ?? null,
+          input.nextCheckAt ?? null,
+          now,
+          now,
+        );
+
+      const row = sqlite
+        .query<RunIntegrationRow, [string]>("SELECT * FROM run_integrations WHERE id = ?")
+        .get(id);
+      if (!row) {
+        throw new Error("Failed to insert run integration");
+      }
+      return mapRunIntegration(row);
+    },
+
+    findByRun(runId) {
+      const row = sqlite
+        .query<RunIntegrationRow, [string]>(
+          "SELECT * FROM run_integrations WHERE run_id = ?",
+        )
+        .get(runId);
+      return row ? mapRunIntegration(row) : null;
+    },
+
+    listDue(nowIso, limit) {
+      const rows = sqlite
+        .query<RunIntegrationRow, [string, number]>(
+          `SELECT * FROM run_integrations
+           WHERE status IN ('open', 'unknown')
+             AND next_check_at IS NOT NULL
+             AND next_check_at <= ?
+           ORDER BY next_check_at ASC
+           LIMIT ?`,
+        )
+        .all(nowIso, limit);
+      return rows.map(mapRunIntegration);
+    },
+
+    update(id, input) {
+      const row = sqlite
+        .query<RunIntegrationRow, [string]>("SELECT * FROM run_integrations WHERE id = ?")
+        .get(id);
+      if (!row) {
+        return null;
+      }
+      const existing = mapRunIntegration(row);
+      const next: RunIntegration = {
+        ...existing,
+        status: input.status ?? existing.status,
+        mergedAt: input.mergedAt !== undefined ? input.mergedAt : existing.mergedAt,
+        closedAt: input.closedAt !== undefined ? input.closedAt : existing.closedAt,
+        checkCount: input.checkCount ?? existing.checkCount,
+        lastCheckedAt:
+          input.lastCheckedAt !== undefined ? input.lastCheckedAt : existing.lastCheckedAt,
+        nextCheckAt:
+          input.nextCheckAt !== undefined ? input.nextCheckAt : existing.nextCheckAt,
+        lastError: input.lastError !== undefined ? input.lastError : existing.lastError,
+        updatedAt: nowIso(),
+      };
+
+      sqlite
+        .query(
+          `UPDATE run_integrations SET
+            status = ?, merged_at = ?, closed_at = ?, check_count = ?,
+            last_checked_at = ?, next_check_at = ?, last_error = ?, updated_at = ?
+          WHERE id = ?`,
+        )
+        .run(
+          next.status,
+          next.mergedAt,
+          next.closedAt,
+          next.checkCount,
+          next.lastCheckedAt,
+          next.nextCheckAt,
+          next.lastError,
+          next.updatedAt,
+          id,
+        );
+
+      return next;
+    },
+  };
+
   return {
     projects,
     tasks,
@@ -1213,5 +1515,7 @@ export function createRepositories(db: Database): Repositories {
     audit,
     secrets,
     agentProfiles,
+    runImpactItems,
+    runIntegrations,
   };
 }

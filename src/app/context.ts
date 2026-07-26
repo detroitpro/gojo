@@ -11,6 +11,7 @@ import { ensureLayout, resolvePaths, type GojoPaths } from "@/config/paths";
 import { UserService } from "@/auth/users";
 import { NotificationDispatcher } from "@/notifications/dispatcher";
 import { wireNotificationHooks } from "@/notifications/hooks";
+import { IntegrationStatusReconciler } from "@/integration/status-reconciler";
 import { RunCoordinator } from "@/runs/coordinator";
 import { RunEventBus, RunEventHistory } from "@/runs/events";
 import { Scheduler } from "@/scheduler/scheduler";
@@ -100,11 +101,13 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   });
   const notifications = new NotificationDispatcher(db);
   const leaseHolderId = ulid();
+  const integrationReconciler = new IntegrationStatusReconciler({ db });
 
   const scheduler = new Scheduler({
     db,
     leaseHolderId,
     isPaused: () => isInstancePaused(db),
+    reconcileIntegrations: (now) => integrationReconciler.reconcile(now),
     onTrigger: async (scheduleId, fireAt) => {
       const schedule = repos.schedules.findById(scheduleId);
       if (!schedule || !schedule.enabled) {

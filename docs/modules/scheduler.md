@@ -19,10 +19,15 @@ Each schedule stores policies the tick loop reads (not synced from `gojo.yaml` t
 
 Overlap counts active/queued runs **for that schedule** before calling `onTrigger`. Task `concurrencyJson` from the manifest is separate and is not read here.
 
+## Integration-outcome reconciliation hook
+
+Each tick optionally invokes the injected `reconcileIntegrations(now)` callback (wired to `integration/status-reconciler.ts` in `app/context.ts`). The scheduler only invokes it — batching, exponential backoff, and Forgejo/GitHub specifics live in the integration module. It runs even while the instance is paused because it is a passive read of external PR state.
+
 ## May call
 
 - `storage/` for schedules and run records
 - Run creation APIs / coordinator entrypoints that only **enqueue** work
+- The injected integration-status reconciliation callback (invoke-only)
 
 ## Must not
 

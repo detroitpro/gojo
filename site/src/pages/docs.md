@@ -27,7 +27,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, pause/resume, and per-project tables of enabled tasks with a last-five-runs strip.
+**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and trust-labeled impact claims), and per-project tables of enabled tasks with a last-five-runs strip.
 
 ![gojo projects](/images/ui-projects.png)
 
@@ -43,4 +43,4 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo run detail](/images/ui-run-detail.png)
 
-**Run detail** — phase timeline, token/cost estimate, and the activity feed for a single attempt.
+**Run detail** — phase timeline, token/cost estimate, the activity feed for a single attempt, and the run's canonical impact items and integration outcome (PR merged/closed status) backing the dashboard numbers.

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -184,6 +184,45 @@ CREATE TABLE IF NOT EXISTS scheduler_leases (
   holder TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS run_impact_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  attempt_id TEXT REFERENCES attempts(id) ON DELETE SET NULL,
+  category TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL,
+  verification TEXT NOT NULL DEFAULT 'claimed',
+  confidence REAL,
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  UNIQUE(run_id, category, subject)
+);
+
+CREATE TABLE IF NOT EXISTS run_integrations (
+  id TEXT PRIMARY KEY NOT NULL,
+  run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+  attempt_id TEXT REFERENCES attempts(id) ON DELETE SET NULL,
+  mode TEXT NOT NULL,
+  provider TEXT,
+  api_url TEXT,
+  repo TEXT,
+  pr_number INTEGER,
+  pr_url TEXT,
+  status TEXT NOT NULL DEFAULT 'unknown',
+  auto_merge_requested INTEGER NOT NULL DEFAULT 0,
+  commit_sha TEXT,
+  opened_at TEXT,
+  merged_at TEXT,
+  closed_at TEXT,
+  check_count INTEGER NOT NULL DEFAULT 0,
+  last_checked_at TEXT,
+  next_check_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `;
 
 /** Incremental migrations applied when an older schema_migrations version is present. */
@@ -208,6 +247,48 @@ ALTER TABLE attempts ADD COLUMN agent_duration_ms INTEGER;
 ALTER TABLE attempts ADD COLUMN pr_url TEXT;
 `,
   },
+  {
+    version: 4,
+    sql: `
+CREATE TABLE IF NOT EXISTS run_impact_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  attempt_id TEXT REFERENCES attempts(id) ON DELETE SET NULL,
+  category TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL,
+  verification TEXT NOT NULL DEFAULT 'claimed',
+  confidence REAL,
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  UNIQUE(run_id, category, subject)
+);
+CREATE TABLE IF NOT EXISTS run_integrations (
+  id TEXT PRIMARY KEY NOT NULL,
+  run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+  attempt_id TEXT REFERENCES attempts(id) ON DELETE SET NULL,
+  mode TEXT NOT NULL,
+  provider TEXT,
+  api_url TEXT,
+  repo TEXT,
+  pr_number INTEGER,
+  pr_url TEXT,
+  status TEXT NOT NULL DEFAULT 'unknown',
+  auto_merge_requested INTEGER NOT NULL DEFAULT 0,
+  commit_sha TEXT,
+  opened_at TEXT,
+  merged_at TEXT,
+  closed_at TEXT,
+  check_count INTEGER NOT NULL DEFAULT 0,
+  last_checked_at TEXT,
+  next_check_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`,
+  },
 ];
 
 export const EXPECTED_TABLES = [
@@ -227,4 +308,6 @@ export const EXPECTED_TABLES = [
   "secrets",
   "instance_settings",
   "scheduler_leases",
+  "run_impact_items",
+  "run_integrations",
 ] as const;

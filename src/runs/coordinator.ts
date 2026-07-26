@@ -13,18 +13,36 @@ import { readHandoffIfPresent } from '@/agents/handoff-file';
 import { syncProjectFromManifest } from '@/app/project-sync';
 import type { GojoPaths } from '@/config/paths';
 import { diffNameOnly, execGit } from '@/git/git';
-import { integrate, type IntegrationMode } from '@/integration/integrator';
+import {
+  integrate,
+  type IntegrateResult,
+  type IntegrationMode,
+} from '@/integration/integrator';
 import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
+import { extractPrNumber, initialNextCheckAt } from '@/integration/status-reconciler';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
-import type { AgentHandoffReport, HandoffStatus } from '@shared/handoff';
+import {
+  extractHandoffImpactItems,
+  HANDOFF_SCHEMA_VERSION,
+  normalizeAgentHandoff,
+  type AgentHandoffReport,
+  type HandoffStatus,
+} from '@shared/handoff';
 import {
   safeParseProjectManifest,
   type InstructionsConfig,
 } from '@shared/manifest';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
-import type { Attempt, Project, Run, RunTrigger, Task } from '@/storage/types';
+import type {
+  Attempt,
+  Project,
+  Run,
+  RunIntegrationStatus,
+  RunTrigger,
+  Task,
+} from '@/storage/types';
 import { runValidationProfile, type ValidationStepResult } from '@/validation/engine';
 import { WorkspaceManager } from '@/workspace/manager';
 
@@ -37,6 +55,7 @@ import {
   type ParsedFailurePolicy,
 } from './failure-policy';
 import { decideHealEnqueue } from './heal';
+import { buildRunImpactRecords } from './impact';
 import {
   appendValidationPrompt,
   appendValidationPromptAsShellComments,
@@ -351,7 +370,14 @@ export class RunCoordinator {
 
       if (mode === 'none') {
         run = await this.transitionRun(run, RunState.Reporting);
-        await this.writeHandoffArtifact(run, attempt, project, task, validationResults);
+        const artifact = await this.writeHandoffArtifact(
+          run,
+          attempt,
+          project,
+          task,
+          validationResults,
+        );
+        this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
         await this.cleanupWorkspace(workspacePath, branchName, true);
         return this.terminalRun(run, RunState.Succeeded);
       }
@@ -516,7 +542,11 @@ export class RunCoordinator {
     run = await this.transitionRun(run, RunState.Integrating);
 
     const fallbackTitle = buildCommitMessage(input.task, run, input.integration);
-    const handoff = resolveAttemptHandoff(attempt, input.workspacePath);
+    const rawHandoff = resolveAttemptHandoff(attempt, input.workspacePath);
+    // Runtime-validate the agent handoff; fall back to raw only when invalid
+    // so lenient asset/summary extraction still works.
+    const normalizedHandoff = normalizeAgentHandoff(rawHandoff);
+    const handoff = normalizedHandoff.report ?? rawHandoff;
     const pr =
       input.mode === 'pull-request'
         ? buildPrDescription({
@@ -565,6 +595,14 @@ export class RunCoordinator {
         }) ?? attempt;
     }
 
+    this.recordIntegrationOutcome({
+      run,
+      attempt,
+      mode: input.mode,
+      integration: input.integration,
+      result,
+    });
+
     if (result.conflict) {
       await this.cleanupWorkspace(input.workspacePath, input.branchName, false);
       return this.terminalRun(run, RunState.Conflict);
@@ -594,7 +632,7 @@ export class RunCoordinator {
     }
 
     run = await this.transitionRun(run, RunState.Reporting);
-    await this.writeHandoffArtifact(
+    const artifact = await this.writeHandoffArtifact(
       run,
       attempt,
       input.project,
@@ -602,11 +640,102 @@ export class RunCoordinator {
       input.validationResults,
       result,
     );
+    this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
 
     const keepBranch = input.mode === 'commit-only' || input.mode === 'pull-request';
     await this.cleanupWorkspace(input.workspacePath, input.branchName, true, keepBranch);
 
     return this.terminalRun(run, RunState.Succeeded);
+  }
+
+  /** Persist the canonical integration outcome for a run. Never fails the run. */
+  private recordIntegrationOutcome(input: {
+    run: Run;
+    attempt: Attempt;
+    mode: IntegrationMode;
+    integration: IntegrationConfig;
+    result: IntegrateResult;
+  }): void {
+    const { result } = input;
+
+    let status: RunIntegrationStatus;
+    if (result.conflict) {
+      status = 'conflict';
+    } else if (input.mode === 'auto-merge') {
+      status = 'merged';
+    } else if (input.mode === 'pull-request') {
+      status = result.prCreated ? 'open' : 'failed';
+    } else if (result.commitSha) {
+      status = 'committed';
+    } else {
+      // Nothing observable happened; keep accounting empty.
+      return;
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const realPrUrl =
+      result.prUrl && !result.prUrl.startsWith('local://') ? result.prUrl : null;
+    const provider =
+      input.mode === 'pull-request'
+        ? input.integration.prTool === 'tea'
+          ? 'forgejo'
+          : 'github'
+        : null;
+
+    try {
+      this.repos.runIntegrations.upsertForRun({
+        runId: input.run.id,
+        attemptId: input.attempt.id,
+        mode: input.mode,
+        provider,
+        apiUrl: input.integration.prApiUrl ?? null,
+        repo: input.integration.prRepo ?? null,
+        prNumber: realPrUrl ? extractPrNumber(realPrUrl) : null,
+        prUrl: result.prUrl ?? null,
+        status,
+        autoMergeRequested: input.integration.prAutoMerge ?? false,
+        commitSha: result.commitSha,
+        ...(status === 'open'
+          ? { openedAt: nowIso, nextCheckAt: initialNextCheckAt(now) }
+          : {}),
+        ...(status === 'merged' ? { mergedAt: nowIso } : {}),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.emit('run.accounting_error', input.run.id, { kind: 'integration', message });
+    }
+  }
+
+  /** Persist canonical impact items for a succeeded run. Never fails the run. */
+  private recordImpactItems(
+    run: Run,
+    attempt: Attempt,
+    handoff: AgentHandoffReport,
+    filesChanged: string[],
+  ): void {
+    try {
+      const records = buildRunImpactRecords({
+        agentItems: handoff.impact?.items ?? [],
+        filesChanged,
+      });
+      this.repos.runImpactItems.replaceForRun(
+        run.id,
+        attempt.id,
+        records.map((record) => ({
+          category: record.category,
+          subject: record.subject,
+          summary: record.summary,
+          source: record.source,
+          verification: record.verification,
+          confidence: record.confidence,
+          evidenceJson: JSON.stringify(record.evidence),
+        })),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.emit('run.accounting_error', run.id, { kind: 'impact', message });
+    }
   }
 
   private async executeAgent(
@@ -982,7 +1111,7 @@ export class RunCoordinator {
       prUrl: string | null;
       prAutoMergeError?: string | null;
     },
-  ): Promise<void> {
+  ): Promise<{ handoff: AgentHandoffReport; filesChanged: string[] }> {
     const artifactDir = join(this.paths.artifacts, run.id);
     mkdirSync(artifactDir, { recursive: true });
 
@@ -1005,7 +1134,7 @@ export class RunCoordinator {
     }
 
     const platformHandoff: AgentHandoffReport = {
-      schemaVersion: 1,
+      schemaVersion: HANDOFF_SCHEMA_VERSION,
       runId: run.id,
       status: 'completed',
       summary: `Task ${task.name} completed for project ${project.name}`,
@@ -1039,16 +1168,29 @@ export class RunCoordinator {
       ? resolveAttemptHandoff(attempt, workspacePath)
       : parseAttemptHandoffJson(attempt);
     const merged = mergeAgentHandoff(platformHandoff, agentHandoff);
+
+    // Record why an agent handoff failed schema validation without failing
+    // otherwise valid work; raw JSON stays on the attempt for diagnosis.
+    const warnings: string[] = [];
+    if (agentHandoff !== undefined && agentHandoff !== null) {
+      const normalized = normalizeAgentHandoff(agentHandoff);
+      if (!normalized.report) {
+        warnings.push(
+          ...normalized.warnings.map((warning) => `handoff-validation: ${warning}`),
+        );
+      }
+    }
     const autoMergeWarning = integrationResult?.prAutoMergeError?.trim();
-    const withAutoMergeNote: AgentHandoffReport = autoMergeWarning
-      ? {
-          ...merged,
-          unresolvedIssues: [
-            ...merged.unresolvedIssues,
-            `prAutoMerge: ${autoMergeWarning}`,
-          ],
-        }
-      : merged;
+    if (autoMergeWarning) {
+      warnings.push(`prAutoMerge: ${autoMergeWarning}`);
+    }
+    const withAutoMergeNote: AgentHandoffReport =
+      warnings.length > 0
+        ? {
+            ...merged,
+            unresolvedIssues: [...merged.unresolvedIssues, ...warnings],
+          }
+        : merged;
     const materialized = materializeHandoffAssets(
       workspacePath,
       artifactDir,
@@ -1062,6 +1204,8 @@ export class RunCoordinator {
     const artifactPath = join(artifactDir, 'handoff.json');
     writeFileSync(artifactPath, JSON.stringify(handoff, null, 2), 'utf8');
     this.emit('run.artifact_written', run.id, { path: artifactPath });
+
+    return { handoff, filesChanged: handoff.filesChanged };
   }
 
   private emit(type: string, runId: string, data?: unknown): void {
@@ -1200,6 +1344,7 @@ function mergeAgentHandoff(
     return platform;
   }
   const obj = agent as Record<string, unknown>;
+  const impact = extractHandoffImpactItems(agent);
   const status =
     typeof obj['status'] === 'string' && HANDOFF_STATUSES.has(obj['status'] as HandoffStatus)
       ? (obj['status'] as HandoffStatus)
@@ -1213,15 +1358,22 @@ function mergeAgentHandoff(
       ? (obj['agentAssessment'] as { successful?: unknown; confidence?: unknown })
       : null;
 
+  const unresolvedIssues = Array.isArray(obj['unresolvedIssues'])
+    ? asStringList(obj['unresolvedIssues'])
+    : platform.unresolvedIssues;
+
   return {
     ...platform,
     status,
     summary,
+    unresolvedIssues: impact.invalid
+      ? [
+          ...unresolvedIssues,
+          'handoff-validation: impact section failed validation and was ignored',
+        ]
+      : unresolvedIssues,
     ...(Array.isArray(obj['decisions'])
       ? { decisions: asStringList(obj['decisions']) }
-      : {}),
-    ...(Array.isArray(obj['unresolvedIssues'])
-      ? { unresolvedIssues: asStringList(obj['unresolvedIssues']) }
       : {}),
     ...(Array.isArray(obj['recommendedNextActions'])
       ? { recommendedNextActions: asStringList(obj['recommendedNextActions']) }
@@ -1239,6 +1391,7 @@ function mergeAgentHandoff(
           },
         }
       : {}),
+    ...(impact.items.length > 0 ? { impact: { items: impact.items } } : {}),
   };
 }
 

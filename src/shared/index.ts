@@ -29,13 +29,20 @@ export type { PageParams, PageQueryInput, PaginatedList } from './pagination';
 
 export {
   AgentHandoffReportSchema,
+  HANDOFF_SCHEMA_VERSION,
   HandoffAgentAssessmentSchema,
   HandoffAssetRoleSchema,
   HandoffAssetSchema,
+  HandoffImpactCategorySchema,
+  HandoffImpactEvidenceSchema,
+  HandoffImpactItemSchema,
+  HandoffImpactSchema,
   HandoffStatusSchema,
   HandoffValidationSchema,
   HandoffValidationStepSchema,
   HandoffValidationStepStatusSchema,
+  extractHandoffImpactItems,
+  normalizeAgentHandoff,
   parseAgentHandoffReport,
   safeParseAgentHandoffReport,
 } from './handoff';
@@ -44,10 +51,15 @@ export type {
   HandoffAgentAssessment,
   HandoffAsset,
   HandoffAssetRole,
+  HandoffImpact,
+  HandoffImpactCategory,
+  HandoffImpactEvidence,
+  HandoffImpactItem,
   HandoffStatus,
   HandoffValidation,
   HandoffValidationStep,
   HandoffValidationStepStatus,
+  NormalizedHandoff,
 } from './handoff';
 
 export {

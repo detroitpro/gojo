@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   AgentHandoffReportSchema,
+  extractHandoffImpactItems,
+  normalizeAgentHandoff,
   parseAgentHandoffReport,
   safeParseAgentHandoffReport,
 } from '../../../src/shared/handoff';
@@ -79,10 +81,18 @@ describe('AgentHandoffReport', () => {
     expect(result.success).toBe(false);
   });
 
-  test('rejects unsupported schema version', () => {
+  test('accepts schema version 2', () => {
     const result = AgentHandoffReportSchema.safeParse({
       ...validHandoff,
       schemaVersion: 2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects unsupported schema version', () => {
+    const result = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      schemaVersion: 3,
     });
     expect(result.success).toBe(false);
   });
@@ -131,5 +141,84 @@ describe('AgentHandoffReport', () => {
       assets: [{ role: 'attachment', label: 'empty' }],
     });
     expect(result.success).toBe(false);
+  });
+
+  test('accepts v2 impact items and applies defaults', () => {
+    const report = parseAgentHandoffReport({
+      ...validHandoff,
+      schemaVersion: 2,
+      impact: {
+        items: [
+          {
+            category: 'dependency-update',
+            subject: 'croner',
+            summary: 'Upgraded croner 8 -> 9',
+            evidence: { files: ['package.json'] },
+          },
+        ],
+      },
+    });
+    expect(report.impact?.items).toHaveLength(1);
+    expect(report.impact?.items[0]?.confidence).toBe(0.5);
+    expect(report.impact?.items[0]?.evidence.references).toEqual([]);
+  });
+
+  test('rejects impact item with unknown category or empty subject', () => {
+    const bad = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      schemaVersion: 2,
+      impact: { items: [{ category: 'world-peace', subject: 'x', summary: 'y' }] },
+    });
+    expect(bad.success).toBe(false);
+
+    const empty = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      schemaVersion: 2,
+      impact: { items: [{ category: 'bug-fix', subject: '', summary: 'y' }] },
+    });
+    expect(empty.success).toBe(false);
+  });
+});
+
+describe('normalizeAgentHandoff', () => {
+  test('returns report with no warnings for valid payload', () => {
+    const normalized = normalizeAgentHandoff(validHandoff);
+    expect(normalized.report?.runId).toBe(validHandoff.runId);
+    expect(normalized.warnings).toEqual([]);
+  });
+
+  test('returns null report and readable warnings for invalid payload', () => {
+    const normalized = normalizeAgentHandoff({ schemaVersion: 1, summary: '' });
+    expect(normalized.report).toBeNull();
+    expect(normalized.warnings.length).toBeGreaterThan(0);
+    expect(normalized.warnings[0]).toContain(':');
+  });
+});
+
+describe('extractHandoffImpactItems', () => {
+  test('extracts valid impact from otherwise invalid handoff', () => {
+    const { items, invalid } = extractHandoffImpactItems({
+      summary: '',
+      impact: {
+        items: [
+          { category: 'documentation', subject: 'docs/setup.md', summary: 'Rewrote setup' },
+        ],
+      },
+    });
+    expect(invalid).toBe(false);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.category).toBe('documentation');
+  });
+
+  test('flags invalid impact sections without throwing', () => {
+    const { items, invalid } = extractHandoffImpactItems({ impact: { items: 'nope' } });
+    expect(items).toEqual([]);
+    expect(invalid).toBe(true);
+  });
+
+  test('returns empty for missing impact', () => {
+    const { items, invalid } = extractHandoffImpactItems({ summary: 'hi' });
+    expect(items).toEqual([]);
+    expect(invalid).toBe(false);
   });
 });

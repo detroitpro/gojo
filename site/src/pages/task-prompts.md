@@ -120,6 +120,26 @@ When `integration.mode` is `pull-request`, **gojo** opens the PR with `integrati
 
 For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create` / `tea pulls create`.
 
+## Impact claims feed the dashboard
+
+Handoff schema v2 adds `impact.items` — structured outcome claims the dashboard aggregates. Prompt agents to report **one item per concrete subject** (one package, one issue, one doc page), never totals:
+
+```json
+"impact": {
+  "items": [
+    {
+      "category": "bug-fix",
+      "subject": "issue-127",
+      "summary": "Fixed timezone drift in cron next-run computation",
+      "confidence": 0.85,
+      "evidence": { "files": ["src/scheduler/cron.ts"], "references": ["#127"] }
+    }
+  ]
+}
+```
+
+Categories: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`. Claims whose `evidence.files` match the real diff are marked **corroborated**; machine-detectable changes (deps, docs, tests) are recorded as **verified** platform facts. Speculative or duplicate claims stay labeled **claimed** — tell agents not to pad.
+
 ### Minimal Hard rules sketch
 
 ```markdown

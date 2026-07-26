@@ -6,6 +6,7 @@ import type {
   BackupInfo,
   BrowseRoot,
   CreatedApiToken,
+  DashboardImpact,
   DashboardOverview,
   DashboardStats,
   DirectoryListing,
@@ -21,6 +22,8 @@ import type {
   RunArtifactsResult,
   RunDiffResult,
   RunEvent,
+  RunImpactItem,
+  RunIntegration,
   Schedule,
   SchedulesUpcomingResult,
   Task,
@@ -122,6 +125,18 @@ export async function getDashboard(): Promise<DashboardStats> {
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   const { data } = await request<DashboardOverview>("/dashboard/overview");
+  return data;
+}
+
+export async function getDashboardImpact(
+  params: { projectId?: string; from?: string; to?: string } = {},
+): Promise<DashboardImpact> {
+  const search = new URLSearchParams();
+  if (params.projectId) search.set("projectId", params.projectId);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  const { data } = await request<DashboardImpact>(`/dashboard/impact${suffix}`);
   return data;
 }
 
@@ -330,8 +345,18 @@ export async function listRuns(query: ListQuery = {}): Promise<PaginatedResult<R
   };
 }
 
-export async function getRun(id: string): Promise<{ run: Run; attempts: Attempt[] }> {
-  const { data } = await request<{ run: Run; attempts: Attempt[] }>(`/runs/${id}`);
+export async function getRun(id: string): Promise<{
+  run: Run;
+  attempts: Attempt[];
+  impactItems: RunImpactItem[];
+  integration: RunIntegration | null;
+}> {
+  const { data } = await request<{
+    run: Run;
+    attempts: Attempt[];
+    impactItems: RunImpactItem[];
+    integration: RunIntegration | null;
+  }>(`/runs/${id}`);
   return data;
 }
 

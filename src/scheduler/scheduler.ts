@@ -23,6 +23,12 @@ export interface SchedulerDeps {
   isPaused?: () => boolean;
   tickIntervalMs?: number;
   leaseTtlMs?: number;
+  /**
+   * Optional integration-outcome reconciliation invoked once per tick while
+   * the lease is held. The scheduler only invokes it; the integration-status
+   * module owns batching, backoff, and provider logic.
+   */
+  reconcileIntegrations?: (now: Date) => Promise<unknown>;
 }
 
 function parsePolicy<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
@@ -74,6 +80,7 @@ export class Scheduler {
   private readonly isPausedFn: () => boolean;
   private readonly tickIntervalMs: number;
   private readonly leaseTtlMs: number;
+  private readonly reconcileIntegrations: ((now: Date) => Promise<unknown>) | null;
   private readonly repos;
   private timer: ReturnType<typeof setInterval> | null = null;
   private leaseHeld = false;
@@ -86,6 +93,7 @@ export class Scheduler {
     this.isPausedFn = deps.isPaused ?? (() => isInstancePaused(deps.db));
     this.tickIntervalMs = deps.tickIntervalMs ?? DEFAULT_TICK_MS;
     this.leaseTtlMs = deps.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
+    this.reconcileIntegrations = deps.reconcileIntegrations ?? null;
   }
 
   async start(): Promise<void> {
@@ -123,6 +131,24 @@ export class Scheduler {
       if (!refreshed) {
         this.leaseHeld = false;
         return;
+      }
+    }
+
+    // Outcome reconciliation is passive (reads external PR state) and keeps
+    // running while the instance is paused so merge accounting stays current.
+    if (this.reconcileIntegrations) {
+      try {
+        await this.reconcileIntegrations(now);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(
+          JSON.stringify({
+            level: "error",
+            component: "scheduler",
+            phase: "integration-reconcile",
+            error: message,
+          }),
+        );
       }
     }
 

@@ -147,8 +147,13 @@ Include:
 - recommendedNextActions
 - agentAssessment.successful and confidence
 
-Use schemaVersion 1. Set runId to a placeholder ULID if you do not know the platform id;
+Use schemaVersion 2. Set runId to a placeholder ULID if you do not know the platform id;
 gojo will still associate the artifact with the real run.
+
+Also report impact — one \`impact.items\` entry per upgraded package
+(category \`dependency-update\`, subject = package name, evidence.files =
+manifest/lockfile). Never report totals; unverifiable claims are shown as
+"claimed" on the dashboard.
 ```
 
 Adjust package manager commands in `validationProfiles` to match the repo (`npm`, `yarn`, `cargo test`, `go test`, etc.).

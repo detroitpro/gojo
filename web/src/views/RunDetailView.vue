@@ -25,14 +25,28 @@ import {
   fmtTokens,
   shortSha,
 } from "@/lib/format";
+import {
+  impactCategoryLabel,
+  integrationStatusBadgeClass,
+  verificationBadgeClass,
+} from "@/lib/impact-format";
 import type { PhaseKey } from "@/lib/run-phases";
-import type { Attempt, Run, RunArtifactsResult, RunEvent } from "@/types";
+import type {
+  Attempt,
+  Run,
+  RunArtifactsResult,
+  RunEvent,
+  RunImpactItem,
+  RunIntegration,
+} from "@/types";
 
 const route = useRoute();
 const router = useRouter();
 
 const run = ref<Run | null>(null);
 const attempts = ref<Attempt[]>([]);
+const impactItems = ref<RunImpactItem[]>([]);
+const integration = ref<RunIntegration | null>(null);
 const events = ref<RunEvent[]>([]);
 const loading = ref(true);
 const error = ref("");
@@ -319,6 +333,8 @@ async function load() {
     const data = await getRun(runId.value);
     run.value = data.run;
     attempts.value = data.attempts;
+    impactItems.value = data.impactItems ?? [];
+    integration.value = data.integration ?? null;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load run";
   } finally {
@@ -455,6 +471,19 @@ function attemptDuration(attempt: Attempt): string {
   return fmtDuration(durationBetween(attempt.startedAt, attempt.finishedAt));
 }
 
+function impactEvidence(item: RunImpactItem): string {
+  try {
+    const parsed = JSON.parse(item.evidenceJson) as {
+      files?: string[];
+      references?: string[];
+    };
+    const parts = [...(parsed.files ?? []), ...(parsed.references ?? [])];
+    return parts.join(", ");
+  } catch {
+    return "";
+  }
+}
+
 onMounted(async () => {
   await load();
   startEvents();
@@ -564,6 +593,69 @@ onUnmounted(() => {
             <div class="cost-label">Model</div>
             <div class="cost-value mono">{{ costSummary.model ?? "—" }}</div>
           </div>
+        </div>
+      </section>
+
+      <section v-if="integration || impactItems.length > 0" class="panel">
+        <div class="panel-header">Impact &amp; integration</div>
+        <div class="panel-body">
+          <div v-if="integration" class="integration-summary">
+            <span class="badge" :class="integrationStatusBadgeClass(integration.status)">
+              {{ integration.status }}
+            </span>
+            <span class="mono muted">{{ integration.mode }}</span>
+            <a
+              v-if="integration.prUrl && !integration.prUrl.startsWith('local://')"
+              class="mono"
+              :href="integration.prUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ integration.repo ? `${integration.repo}#${integration.prNumber}` : "PR" }}
+            </a>
+            <span v-if="integration.mergedAt" class="muted">
+              merged {{ fmtTime(integration.mergedAt) }}
+            </span>
+            <span v-else-if="integration.closedAt" class="muted">
+              closed {{ fmtTime(integration.closedAt) }}
+            </span>
+            <span v-else-if="integration.status === 'open' && integration.nextCheckAt" class="muted">
+              next merge check {{ fmtTime(integration.nextCheckAt) }}
+            </span>
+            <span v-if="integration.lastError" class="muted" :title="integration.lastError">
+              · last check failed
+            </span>
+          </div>
+
+          <div v-if="impactItems.length > 0" class="table-wrap" :class="{ 'mt-4': integration }">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Subject</th>
+                  <th>Summary</th>
+                  <th>Source</th>
+                  <th>Trust</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in impactItems" :key="item.id">
+                  <td>{{ impactCategoryLabel(item.category) }}</td>
+                  <td class="mono">{{ item.subject }}</td>
+                  <td>{{ item.summary }}</td>
+                  <td class="muted">{{ item.source }}</td>
+                  <td>
+                    <span class="badge" :class="verificationBadgeClass(item.verification)">
+                      {{ item.verification }}
+                    </span>
+                  </td>
+                  <td class="mono muted text-sm">{{ impactEvidence(item) || "—" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="muted">No impact items recorded for this run</div>
         </div>
       </section>
 
@@ -736,3 +828,12 @@ onUnmounted(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.integration-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+</style>

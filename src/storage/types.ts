@@ -255,6 +255,96 @@ export interface UpsertSecretInput {
   ciphertext: string;
 }
 
+export type RunImpactSource = "agent" | "platform";
+
+/** Trust ladder for impact accounting: claimed < corroborated < verified. */
+export type RunImpactVerification = "claimed" | "corroborated" | "verified" | "rejected";
+
+export interface RunImpactItem {
+  id: string;
+  runId: string;
+  attemptId: string | null;
+  category: string;
+  subject: string;
+  summary: string;
+  source: RunImpactSource;
+  verification: RunImpactVerification;
+  confidence: number | null;
+  evidenceJson: string;
+  createdAt: string;
+}
+
+export interface RunImpactItemDraft {
+  category: string;
+  subject: string;
+  summary: string;
+  source: RunImpactSource;
+  verification: RunImpactVerification;
+  confidence?: number | null;
+  evidenceJson?: string;
+}
+
+export type RunIntegrationStatus =
+  | "committed"
+  | "open"
+  | "merged"
+  | "closed"
+  | "conflict"
+  | "failed"
+  | "unknown";
+
+export interface RunIntegration {
+  id: string;
+  runId: string;
+  attemptId: string | null;
+  mode: string;
+  provider: string | null;
+  apiUrl: string | null;
+  repo: string | null;
+  prNumber: number | null;
+  prUrl: string | null;
+  status: RunIntegrationStatus;
+  autoMergeRequested: boolean;
+  commitSha: string | null;
+  openedAt: string | null;
+  mergedAt: string | null;
+  closedAt: string | null;
+  checkCount: number;
+  lastCheckedAt: string | null;
+  nextCheckAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertRunIntegrationInput {
+  runId: string;
+  attemptId?: string | null;
+  mode: string;
+  provider?: string | null;
+  apiUrl?: string | null;
+  repo?: string | null;
+  prNumber?: number | null;
+  prUrl?: string | null;
+  status: RunIntegrationStatus;
+  autoMergeRequested?: boolean;
+  commitSha?: string | null;
+  openedAt?: string | null;
+  mergedAt?: string | null;
+  closedAt?: string | null;
+  nextCheckAt?: string | null;
+}
+
+export interface UpdateRunIntegrationInput {
+  status?: RunIntegrationStatus;
+  mergedAt?: string | null;
+  closedAt?: string | null;
+  checkCount?: number;
+  lastCheckedAt?: string | null;
+  nextCheckAt?: string | null;
+  lastError?: string | null;
+}
+
 export interface AgentProfile {
   id: string;
   projectId: string | null;

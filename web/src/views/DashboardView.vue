@@ -2,10 +2,21 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { getDashboard, getDashboardOverview, pauseInstance, resumeInstance } from "@/api";
+import {
+  getDashboard,
+  getDashboardImpact,
+  getDashboardOverview,
+  pauseInstance,
+  resumeInstance,
+} from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
+import {
+  formatMergeRate,
+  impactCountLabel,
+  verificationBadgeClass,
+} from "@/lib/impact-format";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
-import type { DashboardOverviewProject } from "@/types";
+import type { DashboardImpact, DashboardOverviewProject } from "@/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -26,11 +37,40 @@ const runsTotal = ref(0);
 const projects = ref<DashboardOverviewProject[]>([]);
 const projectFilter = ref(queryParam("projectId"));
 
+type ImpactRange = "30d" | "90d" | "all";
+const impact = ref<DashboardImpact | null>(null);
+const impactRange = ref<ImpactRange>("30d");
+
 const visibleProjects = computed(() => {
   if (!projectFilter.value) {
     return projects.value;
   }
   return projects.value.filter((project) => project.id === projectFilter.value);
+});
+
+function impactFrom(range: ImpactRange): string | undefined {
+  if (range === "all") {
+    return undefined;
+  }
+  const days = range === "30d" ? 30 : 90;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+async function loadImpact() {
+  try {
+    const from = impactFrom(impactRange.value);
+    impact.value = await getDashboardImpact({
+      ...(projectFilter.value ? { projectId: projectFilter.value } : {}),
+      ...(from ? { from } : {}),
+    });
+  } catch {
+    // Impact accounting is additive; keep the dashboard usable without it.
+    impact.value = null;
+  }
+}
+
+watch([projectFilter, impactRange], () => {
+  void loadImpact();
 });
 
 async function load() {
@@ -90,6 +130,7 @@ watch(projectFilter, (value) => {
 
 onMounted(() => {
   void load();
+  void loadImpact();
 });
 </script>
 
@@ -134,6 +175,94 @@ onMounted(() => {
           <div class="value ok">{{ activeRuns }}</div>
         </div>
       </div>
+
+      <section v-if="impact" class="panel">
+        <div class="panel-header impact-header">
+          <span>Impact</span>
+          <select
+            id="dashboard-impact-range"
+            v-model="impactRange"
+            class="select"
+            aria-label="Impact time range"
+          >
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="all">Lifetime</option>
+          </select>
+        </div>
+        <div class="panel-body">
+          <div class="stats-row impact-stats">
+            <div class="stat">
+              <div class="label">Merged</div>
+              <div class="value ok">{{ impact.totals.mergedRuns }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">PRs open</div>
+              <div class="value">{{ impact.totals.prsOpen }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Merge rate</div>
+              <div class="value">{{ formatMergeRate(impact.totals.mergeRate) }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Commits</div>
+              <div class="value">{{ impact.totals.commits }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Succeeded runs</div>
+              <div class="value">{{ impact.totals.succeededRuns }}</div>
+            </div>
+          </div>
+
+          <div v-if="impact.categories.length > 0" class="impact-categories">
+            <span
+              v-for="entry in impact.categories"
+              :key="`${entry.category}-${entry.verification}`"
+              class="badge"
+              :class="verificationBadgeClass(entry.verification)"
+              :title="`${entry.verification} (trust level)`"
+            >
+              {{ impactCountLabel(entry.category, entry.verification) }}: {{ entry.count }}
+            </span>
+          </div>
+          <div v-else class="muted text-sm impact-categories">
+            No impact items recorded in this range
+          </div>
+
+          <div v-if="impact.recentItems.length > 0" class="table-wrap impact-recent">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Subject</th>
+                  <th>Summary</th>
+                  <th>Trust</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in impact.recentItems.slice(0, 8)" :key="item.id">
+                  <td>
+                    <RouterLink
+                      :to="{ name: 'run-detail', params: { id: item.runId } }"
+                      class="entity-name"
+                    >
+                      {{ item.taskName }}
+                    </RouterLink>
+                    <span class="muted text-sm"> · {{ item.projectName }}</span>
+                  </td>
+                  <td class="mono">{{ item.subject }}</td>
+                  <td>{{ item.summary }}</td>
+                  <td>
+                    <span class="badge" :class="verificationBadgeClass(item.verification)">
+                      {{ item.verification }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <div v-if="projects.length === 0" class="empty">No projects registered</div>
 
@@ -229,5 +358,27 @@ onMounted(() => {
   width: 5.5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.impact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.impact-stats {
+  margin-bottom: 0;
+}
+
+.impact-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.impact-recent {
+  margin-top: 1rem;
 }
 </style>
