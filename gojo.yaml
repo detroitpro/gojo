@@ -201,11 +201,11 @@ schedules:
     timezone: America/Detroit
   maintain-quality:
     task: maintain-quality
-    cron: "0 2 * * 5"
+    cron: "0 2 * * *"
     timezone: America/Detroit
   maintain-tests:
     task: maintain-tests
-    cron: "0 2 * * 6"
+    cron: "0 3 * * *"
     timezone: America/Detroit
   maintain-deps:
     task: maintain-deps
@@ -213,7 +213,7 @@ schedules:
     timezone: America/Detroit
   maintain-docs:
     task: maintain-docs
-    cron: "0 4 * * 0"
+    cron: "0 4 * * *"
     timezone: America/Detroit
   maintain-merge:
     task: maintain-merge
