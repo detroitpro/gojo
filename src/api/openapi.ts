@@ -160,7 +160,7 @@ export const openApiDocument = {
       get: {
         summary: "Instance diagnostics",
         description:
-          "Includes daemonPath and tools (git/bun/gh/sh) resolved under the daemon environment.",
+          "Includes daemonPath and tools (git/bun/gh/tea/sh) resolved under the daemon environment.",
       },
     },
     "/api/v1/instance/pause": {

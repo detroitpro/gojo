@@ -52,7 +52,8 @@ export interface InstanceDoctorResult {
   tools: DoctorToolCheck[];
 }
 
-const INSTANCE_TOOLS = ["git", "bun", "gh", "sh"] as const;
+/** Core tools; `gh` and `tea` are optional PR CLIs (`integration.prTool`). */
+const INSTANCE_TOOLS = ["git", "bun", "gh", "tea", "sh"] as const;
 
 /** First token of a shell command (validation steps run via `sh -c`). */
 export function firstCommandToken(command: string): string {

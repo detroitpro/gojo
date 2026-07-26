@@ -88,7 +88,7 @@ describe('integration/integrator', () => {
     expect(await getHead(worktreePath)).toBe(result.commitSha!);
   });
 
-  test('pull-request returns placeholder when gh is unavailable', async () => {
+  test('pull-request returns placeholder when PR CLI cannot create a PR', async () => {
     const { repoPath, worktreePath, branchName } = await createRepo();
     writeFileSync(join(worktreePath, 'pr.txt'), 'pr');
 
@@ -101,6 +101,30 @@ describe('integration/integrator', () => {
       branchName,
       commitMessage: 'gojo: pr test',
       runId: 'run-1',
+      prTool: 'gh',
+    });
+
+    expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);
+    // No GitHub remote / auth in the temp repo — create fails → placeholder.
+    expect(result.prUrl).toBe(`local://pr/${branchName}`);
+  });
+
+  test('pull-request with prTool tea returns placeholder when create fails', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+    writeFileSync(join(worktreePath, 'pr-tea.txt'), 'pr');
+
+    const result = await integrate({
+      mode: 'pull-request',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: tea pr test',
+      runId: 'run-tea',
+      prTool: 'tea',
+      prLogin: 'home',
+      prRemote: 'origin',
     });
 
     expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);

@@ -6,6 +6,12 @@ import {
   push,
   statusPorcelain,
 } from '@/git/git';
+import {
+  buildPrCreateInvocation,
+  extractPrUrl,
+  normalizePrTool,
+  type PrTool,
+} from '@/integration/pr-create';
 import { runProcess } from '@/process/supervisor';
 
 import { MergeQueue } from './queue';
@@ -26,10 +32,16 @@ export interface IntegrateOptions {
   branchName: string;
   commitMessage: string;
   runId: string;
-  /** Overrides commitMessage for `gh pr create --title` when set. */
+  /** Overrides commitMessage for PR create --title when set. */
   prTitle?: string;
-  /** Markdown body for `gh pr create --body`. */
+  /** Markdown body for PR create (--body / --description). */
   prBody?: string;
+  /** PR CLI: `gh` (GitHub) or `tea` (Gitea/Forgejo). Default `gh`. */
+  prTool?: PrTool;
+  /** Tea `--login` when `prTool` is `tea`. */
+  prLogin?: string;
+  /** Tea `--remote` when `prTool` is `tea` (default `origin` if omitted). */
+  prRemote?: string;
   mergeQueue?: MergeQueue;
 }
 
@@ -62,38 +74,43 @@ async function hasRemote(cwd: string): Promise<boolean> {
   return result.exitCode === 0 && result.stdout.trim().length > 0;
 }
 
-async function tryGhPrCreate(
+async function tryPrCreate(
   repoPath: string,
-  branchName: string,
-  targetBranch: string,
-  title: string,
-  body: string,
+  opts: {
+    tool: PrTool;
+    branchName: string;
+    targetBranch: string;
+    title: string;
+    body: string;
+    login?: string;
+    remote?: string;
+  },
 ): Promise<string | null> {
-  const ghCheck = await runProcess({
+  const tool = normalizePrTool(opts.tool);
+  const invocation = buildPrCreateInvocation({
+    tool,
+    head: opts.branchName,
+    base: opts.targetBranch,
+    title: opts.title,
+    body: opts.body,
+    ...(opts.login ? { login: opts.login } : {}),
+    ...(opts.remote ? { remote: opts.remote } : tool === 'tea' ? { remote: 'origin' } : {}),
+  });
+
+  const toolCheck = await runProcess({
     command: 'sh',
-    args: ['-c', 'command -v gh >/dev/null 2>&1'],
+    args: ['-c', `command -v ${invocation.command} >/dev/null 2>&1`],
     cwd: repoPath,
     timeoutMs: 5_000,
   });
 
-  if (ghCheck.exitCode !== 0) {
+  if (toolCheck.exitCode !== 0) {
     return null;
   }
 
   const result = await runProcess({
-    command: 'gh',
-    args: [
-      'pr',
-      'create',
-      '--head',
-      branchName,
-      '--base',
-      targetBranch,
-      '--title',
-      title,
-      '--body',
-      body,
-    ],
+    command: invocation.command,
+    args: invocation.args,
     cwd: repoPath,
     timeoutMs: 60_000,
   });
@@ -102,8 +119,14 @@ async function tryGhPrCreate(
     return null;
   }
 
-  const url = result.stdout.trim();
-  return url.length > 0 ? url : null;
+  const combined = `${result.stdout}\n${result.stderr}`;
+  const fromOutput = extractPrUrl(combined);
+  if (fromOutput) {
+    return fromOutput;
+  }
+
+  const trimmed = result.stdout.trim();
+  return trimmed.length > 0 && /^https?:\/\//i.test(trimmed) ? trimmed : null;
 }
 
 async function mergeBranch(
@@ -155,15 +178,18 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
         opts.prBody?.trim() ||
         `Automated gojo run \`${opts.runId}\`.\n\nTask commit message: ${opts.commitMessage}`;
 
-      const ghUrl = await tryGhPrCreate(
-        opts.repoPath,
-        opts.branchName,
-        opts.targetBranch,
-        prTitle,
-        prBody,
-      );
+      const tool = normalizePrTool(opts.prTool);
+      const createdUrl = await tryPrCreate(opts.repoPath, {
+        tool,
+        branchName: opts.branchName,
+        targetBranch: opts.targetBranch,
+        title: prTitle,
+        body: prBody,
+        ...(opts.prLogin ? { login: opts.prLogin } : {}),
+        ...(opts.prRemote ? { remote: opts.prRemote } : {}),
+      });
 
-      const prUrl = ghUrl ?? `local://pr/${opts.branchName}`;
+      const prUrl = createdUrl ?? `local://pr/${opts.branchName}`;
       return { commitSha, prUrl, conflict: false };
     }
 

@@ -20,9 +20,9 @@ Coordinator builds AI adapter prompts as: `scheduledRunNotice` → `instructions
 
 ## Handoff → PR body
 
-`pull-request` integration creates GitHub PRs in [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts). Agents must not `gh pr create`; they write `.gojo/handoff.json`.
+`pull-request` integration opens a PR via [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts) and the task’s `integration.prTool` (`gh` or `tea`; default `gh`). Agents must not run the PR CLI themselves; they write `.gojo/handoff.json`.
 
 - Short `summary` (title material) and `decisions` for the structured fallback body.
 - For verbose PR descriptions, add `assets` with `role: "pr-body"` and a workspace-relative `path` (e.g. `.gojo/assets/pr-body.md`), and optionally `role: "pr-title"`. gojo prefers those assets when creating the PR and copies them under `$GOJO_HOME/artifacts/<runId>/assets/`.
 
-Coordinator passes title/body into `gh pr create`.
+Coordinator passes title/body into `gh pr create` or `tea pulls create` (with optional `prLogin` / `prRemote` for tea).

@@ -27,6 +27,10 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer task itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).
 
+## Integration
+
+`pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the task manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. If the CLI is missing or create fails, the run still succeeds with a `local://pr/<branch>` placeholder URL.
+
 ## May call
 
 - `workspace/`, `git/`

@@ -88,7 +88,7 @@ Skip ritual personality or “be careful” filler. Shared project instructions 
 
 ## Handoff drives the pull request
 
-When `integration.mode` is `pull-request`, **gojo** runs `gh pr create` — the agent must not. The PR title and body are built from `.gojo/handoff.json`:
+When `integration.mode` is `pull-request`, **gojo** opens the PR with `integration.prTool` (`gh` or `tea`; default `gh`) — the agent must not. The PR title and body are built from `.gojo/handoff.json`:
 
 | Handoff field | PR use |
 | --- | --- |
@@ -100,7 +100,7 @@ When `integration.mode` is `pull-request`, **gojo** runs `gh pr create` — the 
 | `filesChanged` | Files changed (fallback body) |
 | `unresolvedIssues` / `recommendedNextActions` | Follow-ups (fallback body) |
 
-For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create`.
+For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Without a rich handoff, reviewers only see a task name like `maintain-tests`. Prompt the agent to write the PR story into the handoff, not into a manual `gh pr create` / `tea pulls create`.
 
 ### Minimal Hard rules sketch
 

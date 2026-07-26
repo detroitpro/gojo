@@ -34,10 +34,11 @@ For anything that touches production branches:
 integration:
   mode: pull-request
   targetBranch: main
+  prTool: gh # or tea for Gitea/Forgejo; optional prLogin / prRemote for tea
   requireAllValidations: true
 ```
 
-Use `pull-request` in `gojo.yaml` so merges wait on human review. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted tasks.
+Use `pull-request` in `gojo.yaml` so merges wait on human review. Set `prTool: tea` (and usually `prLogin`) for Forgejo/Gitea hosts. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted tasks.
 
 ## Secrets without committing them
 

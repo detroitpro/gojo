@@ -54,6 +54,9 @@ interface IntegrationConfig {
   targetBranch?: string;
   commitMessage?: string;
   postApprovalMode?: IntegrationMode;
+  prTool?: 'gh' | 'tea';
+  prLogin?: string;
+  prRemote?: string;
 }
 
 interface ActiveRunContext {
@@ -536,6 +539,9 @@ export class RunCoordinator {
             prBody: pr.body,
           }
         : {}),
+      ...(input.integration.prTool ? { prTool: input.integration.prTool } : {}),
+      ...(input.integration.prLogin ? { prLogin: input.integration.prLogin } : {}),
+      ...(input.integration.prRemote ? { prRemote: input.integration.prRemote } : {}),
       mergeQueue: this.mergeQueue,
     });
 

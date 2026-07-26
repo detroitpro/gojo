@@ -67,10 +67,23 @@ export const TaskConcurrencySchema = z.object({
 
 export type TaskConcurrency = z.infer<typeof TaskConcurrencySchema>;
 
+export const PrToolSchema = z.enum(['gh', 'tea']);
+
+export type PrTool = z.infer<typeof PrToolSchema>;
+
 export const TaskIntegrationSchema = z.object({
   mode: z.enum(['commit-only', 'pull-request', 'auto-merge']),
   targetBranch: z.string().min(1),
   requireAllValidations: z.boolean().optional(),
+  /**
+   * CLI used when `mode` is `pull-request`.
+   * `gh` = GitHub CLI; `tea` = Gitea/Forgejo tea CLI. Default: `gh`.
+   */
+  prTool: PrToolSchema.optional(),
+  /** Tea `--login` (Forgejo/Gitea account alias). Ignored for `gh`. */
+  prLogin: z.string().min(1).optional(),
+  /** Tea `--remote` for host discovery. Ignored for `gh`. Default at runtime: `origin`. */
+  prRemote: z.string().min(1).optional(),
 });
 
 export type TaskIntegration = z.infer<typeof TaskIntegrationSchema>;

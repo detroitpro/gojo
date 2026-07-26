@@ -25,7 +25,7 @@ Every decision should converge on these:
 Unless the task explicitly owns merge/push (e.g. maintain-merge):
 
 - Do **not** push, open PRs, or merge. gojo `pull-request` / `commit-only` integration owns Git.
-- Write `.gojo/handoff.json` (schemaVersion 1) before you finish. **gojo opens the PR from this handoff.** Do **not** run `gh pr create` yourself.
+- Write `.gojo/handoff.json` (schemaVersion 1) before you finish. **gojo opens the PR from this handoff** (`integration.prTool`, default `gh`). Do **not** run `gh pr create` / `tea pulls create` yourself.
 - Use a placeholder ULID for `runId` if unknown.
 
 ## How you report (handoff judgment)

@@ -1,5 +1,5 @@
 /**
- * Build GitHub PR title/body from an agent handoff when gojo owns `gh pr create`.
+ * Build PR title/body from an agent handoff when gojo owns PR create (`gh` or `tea`).
  */
 
 import {

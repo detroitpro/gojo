@@ -163,6 +163,49 @@ describe('ProjectManifest', () => {
     expect(result.success).toBe(false);
   });
 
+  test('accepts integration.prTool tea with optional login/remote', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const tasks = parsed['tasks'] as Record<string, Record<string, unknown>>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      tasks: {
+        ...tasks,
+        'dependency-maintenance': {
+          ...tasks['dependency-maintenance'],
+          integration: {
+            mode: 'pull-request',
+            targetBranch: 'main',
+            prTool: 'tea',
+            prLogin: 'home',
+            prRemote: 'origin',
+          },
+        },
+      },
+    });
+    expect(manifest.tasks['dependency-maintenance']?.integration?.prTool).toBe('tea');
+    expect(manifest.tasks['dependency-maintenance']?.integration?.prLogin).toBe('home');
+  });
+
+  test('rejects invalid integration.prTool', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const tasks = parsed['tasks'] as Record<string, Record<string, unknown>>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      tasks: {
+        ...tasks,
+        'dependency-maintenance': {
+          ...tasks['dependency-maintenance'],
+          integration: {
+            mode: 'pull-request',
+            targetBranch: 'main',
+            prTool: 'glab',
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
   test('rejects empty validation profile steps', () => {
     const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
     const result = ProjectManifestSchema.safeParse({
