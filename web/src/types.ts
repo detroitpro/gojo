@@ -157,6 +157,31 @@ export interface DashboardStats {
   paused: boolean;
 }
 
+export interface DashboardOverviewRun {
+  id: string;
+  state: RunState;
+  trigger: string;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface DashboardOverviewTask {
+  id: string;
+  name: string;
+  description: string;
+  recentRuns: DashboardOverviewRun[];
+}
+
+export interface DashboardOverviewProject {
+  id: string;
+  name: string;
+  tasks: DashboardOverviewTask[];
+}
+
+export interface DashboardOverview {
+  projects: DashboardOverviewProject[];
+}
+
 export interface InstanceInfo {
   bindHost: string;
   bindPort: number;

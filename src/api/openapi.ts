@@ -150,7 +150,14 @@ export const openApiDocument = {
       post: { summary: "Retry run" },
     },
     "/api/v1/dashboard": {
-      get: { summary: "Dashboard summary" },
+      get: { summary: "Dashboard summary counts" },
+    },
+    "/api/v1/dashboard/overview": {
+      get: {
+        summary: "Dashboard per-project task overview",
+        description:
+          "Projects with enabled tasks and up to five recent runs each (oldest to newest).",
+      },
     },
     "/api/v1/instance": {
       get: { summary: "Instance settings" },

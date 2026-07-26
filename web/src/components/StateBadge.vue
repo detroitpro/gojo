@@ -1,31 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { runStateBadgeClass } from "@/lib/run-state-badge";
 import type { RunState } from "@/types";
 
 const props = defineProps<{
   state: RunState | string;
 }>();
 
-const badgeClass = computed(() => {
-  const s = props.state;
-  if (["Running", "Preparing", "Validating", "Integrating", "Reporting"].includes(s)) {
-    return "badge-running";
-  }
-  if (["Queued", "Scheduled"].includes(s)) {
-    return "badge-queued";
-  }
-  if (s === "Succeeded") {
-    return "badge-success";
-  }
-  if (["Failed", "Canceled", "TimedOut", "InfrastructureFailure", "Conflict"].includes(s)) {
-    return "badge-failed";
-  }
-  if (s === "AwaitingApproval") {
-    return "badge-warn";
-  }
-  return "badge-neutral";
-});
+const badgeClass = computed(() => runStateBadgeClass(props.state));
 </script>
 
 <template>

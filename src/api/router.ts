@@ -37,6 +37,7 @@ import { browseRoots, listDirectory } from "@/filesystem/browse";
 import { syncProjectFromManifest } from "@/app/project-sync";
 import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
+import { getDashboardOverview } from "@/storage/dashboard-overview";
 import {
   listProjectsPage,
   toProjectDetailRow,
@@ -783,6 +784,10 @@ export async function handleApiRequest(
       activeRuns,
       paused: ctx.isPaused(),
     });
+  }
+
+  if (method === "GET" && pathname === "/api/v1/dashboard/overview") {
+    return success(getDashboardOverview(ctx.db));
   }
 
   if (method === "GET" && pathname === "/api/v1/instance") {

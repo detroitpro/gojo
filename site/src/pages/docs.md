@@ -27,7 +27,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, recent runs, and pause/resume for the scheduler.
+**Dashboard** — counts, pause/resume, and per-project tables of enabled tasks with a last-five-runs strip.
 
 ![gojo projects](/images/ui-projects.png)
 

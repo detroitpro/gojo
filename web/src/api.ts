@@ -6,6 +6,7 @@ import type {
   BackupInfo,
   BrowseRoot,
   CreatedApiToken,
+  DashboardOverview,
   DashboardStats,
   DirectoryListing,
   HealthInfo,
@@ -116,6 +117,11 @@ export async function getInstance(): Promise<InstanceInfo> {
 
 export async function getDashboard(): Promise<DashboardStats> {
   const { data } = await request<DashboardStats>("/dashboard");
+  return data;
+}
+
+export async function getDashboardOverview(): Promise<DashboardOverview> {
+  const { data } = await request<DashboardOverview>("/dashboard/overview");
   return data;
 }
 
