@@ -181,7 +181,15 @@ onMounted(() => {
               <tbody>
                 <tr v-for="task in project.tasks" :key="task.id">
                   <td class="dashboard-col-task">
-                    <div class="entity-name">{{ task.name }}</div>
+                    <RouterLink
+                      :to="{
+                        name: 'runs',
+                        query: { taskId: task.id, projectId: project.id },
+                      }"
+                      class="entity-name"
+                    >
+                      {{ task.name }}
+                    </RouterLink>
                     <div v-if="task.description" class="muted text-sm">{{ task.description }}</div>
                   </td>
                   <td class="dashboard-col-runs">

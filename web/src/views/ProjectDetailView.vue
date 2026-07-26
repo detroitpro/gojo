@@ -6,11 +6,13 @@ import {
   deleteProject,
   getProject,
   getProjectDoctor,
+  listTasks,
   syncProject,
 } from "@/api";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
-import type { Project, ProjectDoctorResult, ProjectSyncResult } from "@/types";
+import type { Project, ProjectDoctorResult, ProjectSyncResult, Task } from "@/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,6 +20,7 @@ const router = useRouter();
 const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
+const projectTasks = ref<Task[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const error = ref("");
@@ -34,16 +37,31 @@ const health = computed(() =>
     : { score: null, level: "missing" as const, label: "…" },
 );
 
+const tasksByName = computed(() => {
+  const map = new Map<string, Task>();
+  for (const task of projectTasks.value) {
+    map.set(task.name, task);
+  }
+  return map;
+});
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     project.value = await getProject(projectId.value);
     doctor.value = await getProjectDoctor(projectId.value);
+    const tasks = await listTasks({
+      limit: MAX_PAGE_LIMIT,
+      offset: 0,
+      projectId: projectId.value,
+    });
+    projectTasks.value = tasks.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     project.value = null;
     doctor.value = null;
+    projectTasks.value = [];
   } finally {
     loading.value = false;
   }
@@ -65,6 +83,12 @@ async function runSync() {
       : "no manifest file";
     notice.value = `Synced from ${path} — ${result.sync.agentProfiles} agents, ${result.sync.tasks} tasks, ${result.sync.schedules} schedules`;
     doctor.value = await getProjectDoctor(project.value.id);
+    const tasks = await listTasks({
+      limit: MAX_PAGE_LIMIT,
+      offset: 0,
+      projectId: project.value.id,
+    });
+    projectTasks.value = tasks.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
   } finally {
@@ -108,9 +132,6 @@ onMounted(() => {
         <div v-if="project" class="subtitle mono">{{ project.id }}</div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-sm" type="button" :disabled="busy || loading" @click="load()">
-          Refresh
-        </button>
         <button
           class="btn btn-sm btn-primary"
           type="button"
@@ -325,7 +346,22 @@ onMounted(() => {
                   </thead>
                   <tbody>
                     <tr v-for="task in manifest.tasks" :key="task.name">
-                      <td class="entity-name">{{ task.name }}</td>
+                      <td>
+                        <RouterLink
+                          v-if="tasksByName.get(task.name)"
+                          :to="{
+                            name: 'runs',
+                            query: {
+                              taskId: tasksByName.get(task.name)!.id,
+                              projectId: project.id,
+                            },
+                          }"
+                          class="entity-name"
+                        >
+                          {{ task.name }}
+                        </RouterLink>
+                        <span v-else class="entity-name">{{ task.name }}</span>
+                      </td>
                       <td class="mono">{{ task.agent }}</td>
                       <td class="mono">{{ task.integrationMode }}</td>
                       <td class="muted">{{ task.description || "—" }}</td>

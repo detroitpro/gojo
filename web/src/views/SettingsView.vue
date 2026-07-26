@@ -291,7 +291,6 @@ onMounted(load);
         <h1>Settings</h1>
         <div class="subtitle">Instance configuration</div>
       </div>
-      <button class="btn btn-sm" type="button" @click="load">Refresh</button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>

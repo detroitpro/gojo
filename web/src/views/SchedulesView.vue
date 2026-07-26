@@ -45,7 +45,6 @@ const {
   loading,
   error,
   rangeLabel,
-  reload,
   load,
 } = useServerTable({
   watchSources: [projectFilter, enabledFilter, query],
@@ -102,11 +101,6 @@ function cronPrimary(schedule: Schedule): string {
   return schedule.cronDescription?.trim() || schedule.cronExpr;
 }
 
-async function refreshAll() {
-  await reload();
-  await loadUpcoming();
-}
-
 watch([projectFilter, enabledFilter, query, horizonHours], () => {
   void loadUpcoming();
 });
@@ -149,9 +143,6 @@ onMounted(() => {
         <h1>Schedules</h1>
         <div class="subtitle">Cron triggers and enablement</div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="refreshAll()">
-        Refresh
-      </button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>

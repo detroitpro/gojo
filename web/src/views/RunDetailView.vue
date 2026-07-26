@@ -40,7 +40,6 @@ const busy = ref(false);
 const rejectReason = ref("");
 const diffFiles = ref<string[] | null>(null);
 const artifacts = ref<RunArtifactsResult | null>(null);
-const inspectBusy = ref(false);
 const selectedPhase = ref<PhaseKey | null>(null);
 const highlightActivityId = ref<string | null>(null);
 
@@ -328,7 +327,6 @@ async function load() {
 }
 
 async function loadInspect() {
-  inspectBusy.value = true;
   try {
     const [diff, arts] = await Promise.all([
       getRunDiff(runId.value).catch(() => ({ files: [] as string[] })),
@@ -338,8 +336,6 @@ async function loadInspect() {
     artifacts.value = arts;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load inspect data";
-  } finally {
-    inspectBusy.value = false;
   }
 }
 
@@ -492,7 +488,6 @@ onUnmounted(() => {
       </div>
       <div class="toolbar">
         <button class="btn btn-sm" type="button" @click="router.push('/runs')">Back</button>
-        <button class="btn btn-sm" type="button" @click="load">Refresh</button>
         <button v-if="canCancel" class="btn btn-sm btn-danger" type="button" :disabled="busy" @click="doCancel">
           Cancel
         </button>
@@ -619,12 +614,7 @@ onUnmounted(() => {
       </section>
 
       <section class="panel">
-        <div class="panel-header">
-          Diff
-          <button class="btn btn-sm" type="button" :disabled="inspectBusy" @click="loadInspect">
-            Refresh
-          </button>
-        </div>
+        <div class="panel-header">Diff</div>
         <div class="panel-body">
           <div v-if="diffFiles === null" class="muted">Loading…</div>
           <div v-else-if="diffFiles.length === 0" class="muted">No changed files (or workspace unavailable)</div>

@@ -31,7 +31,6 @@ const {
   loading,
   error,
   rangeLabel,
-  reload,
   load,
 } = useServerTable({
   watchSources: [projectFilter, enabledFilter, query],
@@ -107,7 +106,6 @@ onMounted(() => {
         <h1>Tasks</h1>
         <div class="subtitle">Manifest-synced and API-created tasks across all projects</div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>

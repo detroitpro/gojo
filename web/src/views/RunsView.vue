@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { listProjects, listRuns, listTasks } from "@/api";
+import { listProjects, listRuns, listTasks, runTask } from "@/api";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
@@ -47,6 +47,7 @@ const taskFilter = ref(queryParam("taskId"));
 const stateFilter = ref("");
 const triggerFilter = ref("");
 const query = ref("");
+const enqueueBusy = ref(false);
 
 const {
   page,
@@ -56,7 +57,6 @@ const {
   loading,
   error,
   rangeLabel,
-  reload,
   load,
 } = useServerTable({
   watchSources: [projectFilter, taskFilter, stateFilter, triggerFilter, query],
@@ -70,6 +70,24 @@ const {
       trigger: triggerFilter.value || undefined,
       q: query.value || undefined,
     }),
+});
+
+const selectedTask = computed(() => {
+  if (!taskFilter.value) {
+    return null;
+  }
+  return tasks.value.find((task) => task.id === taskFilter.value) ?? null;
+});
+
+const canEnqueue = computed(() => {
+  if (!taskFilter.value) {
+    return false;
+  }
+  if (selectedTask.value) {
+    return selectedTask.value.enabled;
+  }
+  // Deep-linked task id still present even if options failed to resolve.
+  return true;
 });
 
 function fmtTime(value: string | null): string {
@@ -98,6 +116,22 @@ async function loadTaskOptions() {
     if (match) {
       tasks.value = [match, ...result.items];
     }
+  }
+}
+
+async function enqueueSelectedTask() {
+  if (!taskFilter.value || !canEnqueue.value) {
+    return;
+  }
+  enqueueBusy.value = true;
+  error.value = "";
+  try {
+    const run = await runTask(taskFilter.value);
+    await router.push({ name: "run-detail", params: { id: run.id } });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to enqueue run";
+  } finally {
+    enqueueBusy.value = false;
   }
 }
 
@@ -151,9 +185,25 @@ onMounted(() => {
     <header class="page-header">
       <div>
         <h1>Runs</h1>
-        <div class="subtitle">Execution history</div>
+        <div class="subtitle">
+          <template v-if="selectedTask">
+            {{ selectedTask.name
+            }}<span v-if="selectedTask.projectName"> · {{ selectedTask.projectName }}</span>
+          </template>
+          <template v-else>Execution history</template>
+        </div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="reload()">Refresh</button>
+      <div v-if="taskFilter" class="toolbar">
+        <button
+          class="btn btn-sm btn-primary"
+          type="button"
+          :disabled="enqueueBusy || !canEnqueue"
+          :title="selectedTask && !selectedTask.enabled ? 'Task is disabled' : undefined"
+          @click="enqueueSelectedTask"
+        >
+          {{ enqueueBusy ? "Enqueueing…" : "Enqueue run" }}
+        </button>
+      </div>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -232,7 +282,13 @@ onMounted(() => {
           <tbody>
             <tr v-for="run in runs" :key="run.id">
               <td>
-                <RouterLink :to="`/runs/${run.id}`" class="entity-name">
+                <RouterLink
+                  :to="{
+                    name: 'runs',
+                    query: { taskId: run.taskId, projectId: run.projectId },
+                  }"
+                  class="entity-name"
+                >
                   {{ run.taskName || "Unknown task" }}
                 </RouterLink>
                 <div class="mono muted text-sm">{{ run.taskId.slice(0, 10) }}…</div>
@@ -244,7 +300,9 @@ onMounted(() => {
               <td><StateBadge :state="run.state" /></td>
               <td class="mono">{{ run.trigger }}</td>
               <td>
-                <RouterLink :to="`/runs/${run.id}`" class="mono">{{ run.id.slice(0, 12) }}…</RouterLink>
+                <RouterLink :to="{ name: 'run-detail', params: { id: run.id } }" class="mono">
+                  {{ run.id.slice(0, 12) }}…
+                </RouterLink>
               </td>
               <td class="mono muted">{{ fmtTime(run.createdAt) }}</td>
               <td class="mono muted">{{ fmtTime(run.finishedAt) }}</td>
