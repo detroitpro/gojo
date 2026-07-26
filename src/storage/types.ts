@@ -164,6 +164,8 @@ export interface Attempt {
   branchName: string | null;
   startingCommit: string | null;
   resultCommit: string | null;
+  /** Real PR URL or `local://pr/<branch>` placeholder after pull-request integrate. */
+  prUrl: string | null;
   agentVersion: string | null;
   exitCode: number | null;
   handoffJson: string | null;
@@ -195,6 +197,7 @@ export interface UpdateAttemptInput {
   branchName?: string | null;
   startingCommit?: string | null;
   resultCommit?: string | null;
+  prUrl?: string | null;
   agentVersion?: string | null;
   exitCode?: number | null;
   handoffJson?: string | null;

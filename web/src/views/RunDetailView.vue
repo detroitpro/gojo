@@ -112,6 +112,26 @@ const handoffText = computed(() => {
   }
 });
 
+/** Prefer attempt.prUrl; fall back to handoff artifact field. */
+const prUrl = computed(() => {
+  for (let i = attempts.value.length - 1; i >= 0; i -= 1) {
+    const url = attempts.value[i]?.prUrl;
+    if (url) {
+      return url;
+    }
+  }
+  const handoff = artifacts.value?.handoff;
+  if (handoff && typeof handoff === "object") {
+    const raw = (handoff as { prUrl?: unknown }).prUrl;
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.trim();
+    }
+  }
+  return null;
+});
+
+const prUrlIsPlaceholder = computed(() => prUrl.value?.startsWith("local://pr/") ?? false);
+
 const artifactsHandoffText = computed(() => {
   if (!artifacts.value?.handoff) {
     return null;
@@ -493,6 +513,25 @@ onUnmounted(() => {
         {{ run.errorMessage }}
       </div>
 
+      <div
+        v-if="prUrl"
+        class="alert mb-4"
+        :class="prUrlIsPlaceholder ? 'alert-error' : 'alert-info'"
+      >
+        <span class="muted">Pull request:</span>
+        <a
+          v-if="!prUrlIsPlaceholder"
+          class="mono"
+          :href="prUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >{{ prUrl }}</a>
+        <span v-else class="mono">{{ prUrl }}</span>
+        <span v-if="prUrlIsPlaceholder" class="muted">
+          (PR CLI did not create a remote PR — branch may still be pushed)
+        </span>
+      </div>
+
       <section class="panel cost-panel">
         <div class="panel-header">Cost &amp; usage</div>
         <div class="panel-body cost-grid">
@@ -662,6 +701,7 @@ onUnmounted(() => {
                 <th>Start</th>
                 <th>Result</th>
                 <th>Branch</th>
+                <th>PR</th>
               </tr>
             </thead>
             <tbody>
@@ -682,6 +722,16 @@ onUnmounted(() => {
                   {{ shortSha(attempt.resultCommit) }}
                 </td>
                 <td class="mono muted">{{ attempt.branchName ?? "—" }}</td>
+                <td class="mono muted" :title="attempt.prUrl ?? undefined">
+                  <a
+                    v-if="attempt.prUrl && !attempt.prUrl.startsWith('local://')"
+                    :href="attempt.prUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >PR</a>
+                  <span v-else-if="attempt.prUrl">local</span>
+                  <span v-else>—</span>
+                </td>
               </tr>
             </tbody>
           </table>

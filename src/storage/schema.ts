@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS attempts (
   branch_name TEXT,
   starting_commit TEXT,
   result_commit TEXT,
+  pr_url TEXT,
   agent_version TEXT,
   exit_code INTEGER,
   handoff_json TEXT,
@@ -199,6 +200,12 @@ ALTER TABLE attempts ADD COLUMN cost_source TEXT;
 ALTER TABLE attempts ADD COLUMN usage_json TEXT;
 ALTER TABLE attempts ADD COLUMN model TEXT;
 ALTER TABLE attempts ADD COLUMN agent_duration_ms INTEGER;
+`,
+  },
+  {
+    version: 3,
+    sql: `
+ALTER TABLE attempts ADD COLUMN pr_url TEXT;
 `,
   },
 ];

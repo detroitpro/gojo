@@ -151,3 +151,25 @@ else
   echo ""
   echo "After PATH is updated, try: gojo --help"
 fi
+
+# Atomic install leaves a running systemd/launchd unit on the old inode until restart.
+warn_restart_if_service_active() {
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl --user is-active --quiet gojo.service 2>/dev/null; then
+      echo ""
+      echo "WARNING: gojo.service is still running the previous binary."
+      echo "Restart so new features (e.g. integration.prTool) take effect:"
+      echo "  systemctl --user restart gojo"
+      echo "  # or: make service-restart"
+      return
+    fi
+  fi
+  if command -v launchctl >/dev/null 2>&1; then
+    if launchctl print "gui/$(id -u)/com.gojo.daemon" >/dev/null 2>&1; then
+      echo ""
+      echo "WARNING: gojo launchd service may still be running the previous binary."
+      echo "Restart with: gojo service restart   # or: make service-restart"
+    fi
+  fi
+}
+warn_restart_if_service_active

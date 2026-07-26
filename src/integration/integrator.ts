@@ -49,6 +49,12 @@ export interface IntegrateResult {
   commitSha: string | null;
   prUrl: string | null;
   conflict: boolean;
+  /**
+   * For `pull-request` mode: true when the PR CLI created a real PR URL.
+   * False when create failed and `prUrl` is a `local://pr/...` placeholder.
+   * Null for modes that do not open PRs.
+   */
+  prCreated: boolean | null;
 }
 
 const defaultMergeQueue = new MergeQueue();
@@ -155,15 +161,15 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
     case 'none': {
       const changed = (await diffNameOnly(opts.worktreePath)).length > 0;
       if (changed || (await isDirty(opts.worktreePath))) {
-        return { commitSha: null, prUrl: null, conflict: false };
+        return { commitSha: null, prUrl: null, conflict: false, prCreated: null };
       }
-      return { commitSha: null, prUrl: null, conflict: false };
+      return { commitSha: null, prUrl: null, conflict: false, prCreated: null };
     }
 
     case 'commit-only':
     case 'await-approval': {
       const commitSha = await commitIfDirty(opts.worktreePath, opts.commitMessage);
-      return { commitSha, prUrl: null, conflict: false };
+      return { commitSha, prUrl: null, conflict: false, prCreated: null };
     }
 
     case 'pull-request': {
@@ -189,8 +195,16 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
         ...(opts.prRemote ? { remote: opts.prRemote } : {}),
       });
 
-      const prUrl = createdUrl ?? `local://pr/${opts.branchName}`;
-      return { commitSha, prUrl, conflict: false };
+      if (createdUrl) {
+        return { commitSha, prUrl: createdUrl, conflict: false, prCreated: true };
+      }
+
+      return {
+        commitSha,
+        prUrl: `local://pr/${opts.branchName}`,
+        conflict: false,
+        prCreated: false,
+      };
     }
 
     case 'auto-merge': {
@@ -201,11 +215,11 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
       );
 
       if (mergeResult.conflict) {
-        return { commitSha, prUrl: null, conflict: true };
+        return { commitSha, prUrl: null, conflict: true, prCreated: null };
       }
 
       const mergedHead = await getHead(opts.repoPath);
-      return { commitSha: mergedHead, prUrl: null, conflict: false };
+      return { commitSha: mergedHead, prUrl: null, conflict: false, prCreated: null };
     }
 
     default: {

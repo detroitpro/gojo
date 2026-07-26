@@ -107,6 +107,7 @@ describe('integration/integrator', () => {
     expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);
     // No GitHub remote / auth in the temp repo — create fails → placeholder.
     expect(result.prUrl).toBe(`local://pr/${branchName}`);
+    expect(result.prCreated).toBe(false);
   });
 
   test('pull-request with prTool tea returns placeholder when create fails', async () => {
@@ -129,6 +130,7 @@ describe('integration/integrator', () => {
 
     expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);
     expect(result.prUrl).toBe(`local://pr/${branchName}`);
+    expect(result.prCreated).toBe(false);
   });
 
   test('auto-merge merges branch into target', async () => {

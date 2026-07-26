@@ -29,7 +29,7 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 
 ## Integration
 
-`pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the task manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. If the CLI is missing or create fails, the run still succeeds with a `local://pr/<branch>` placeholder URL.
+`pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the task manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
 
 ## May call
 

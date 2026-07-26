@@ -63,6 +63,7 @@ export interface Attempt {
   branchName: string | null;
   startingCommit: string | null;
   resultCommit: string | null;
+  prUrl: string | null;
   agentVersion: string | null;
   exitCode: number | null;
   handoffJson: string | null;
@@ -216,6 +217,13 @@ export interface InstanceDoctorResult {
   home: string;
   daemonPath: string;
   tools: DoctorToolCheck[];
+  binaryStale: boolean;
+  binaryStatus: {
+    stale: boolean;
+    detail: string | null;
+    exePath: string | null;
+  };
+  warnings: string[];
 }
 
 export interface AgentTestResult {

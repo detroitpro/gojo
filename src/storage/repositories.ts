@@ -105,6 +105,7 @@ interface AttemptRow {
   branch_name: string | null;
   starting_commit: string | null;
   result_commit: string | null;
+  pr_url: string | null;
   agent_version: string | null;
   exit_code: number | null;
   handoff_json: string | null;
@@ -228,6 +229,7 @@ function mapAttempt(row: AttemptRow): Attempt {
     branchName: row.branch_name,
     startingCommit: row.starting_commit,
     resultCommit: row.result_commit,
+    prUrl: row.pr_url ?? null,
     agentVersion: row.agent_version,
     exitCode: row.exit_code,
     handoffJson: row.handoff_json,
@@ -923,6 +925,7 @@ export function createRepositories(db: Database): Repositories {
         branch_name: input.branchName ?? null,
         starting_commit: input.startingCommit ?? null,
         result_commit: null,
+        pr_url: null,
         agent_version: null,
         exit_code: null,
         handoff_json: null,
@@ -970,6 +973,7 @@ export function createRepositories(db: Database): Repositories {
           input.startingCommit !== undefined ? input.startingCommit : existing.startingCommit,
         resultCommit:
           input.resultCommit !== undefined ? input.resultCommit : existing.resultCommit,
+        prUrl: input.prUrl !== undefined ? input.prUrl : existing.prUrl,
         agentVersion:
           input.agentVersion !== undefined ? input.agentVersion : existing.agentVersion,
         exitCode: input.exitCode !== undefined ? input.exitCode : existing.exitCode,
@@ -998,7 +1002,7 @@ export function createRepositories(db: Database): Repositories {
         .query(
           `UPDATE attempts SET
             state = ?, workspace_path = ?, branch_name = ?, starting_commit = ?,
-            result_commit = ?, agent_version = ?, exit_code = ?, handoff_json = ?,
+            result_commit = ?, pr_url = ?, agent_version = ?, exit_code = ?, handoff_json = ?,
             started_at = ?, finished_at = ?,
             input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
             total_cost_usd = ?, cost_source = ?, usage_json = ?, model = ?, agent_duration_ms = ?
@@ -1010,6 +1014,7 @@ export function createRepositories(db: Database): Repositories {
           next.branchName,
           next.startingCommit,
           next.resultCommit,
+          next.prUrl,
           next.agentVersion,
           next.exitCode,
           next.handoffJson,

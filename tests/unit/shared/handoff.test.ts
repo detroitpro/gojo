@@ -95,6 +95,14 @@ describe('AgentHandoffReport', () => {
     expect(result.success).toBe(false);
   });
 
+  test('accepts optional prUrl from platform integration', () => {
+    const report = parseAgentHandoffReport({
+      ...validHandoff,
+      prUrl: 'http://192.168.5.251:3001/detroitpro/rhystic-gaming/pulls/54',
+    });
+    expect(report.prUrl).toContain('/pulls/54');
+  });
+
   test('accepts optional assets with path or content', () => {
     const result = AgentHandoffReportSchema.safeParse({
       ...validHandoff,

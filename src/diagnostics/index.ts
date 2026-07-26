@@ -12,3 +12,8 @@ export type {
   ProjectDoctorResult,
   ProjectValidationToolCheck,
 } from "./doctor";
+export {
+  inspectRunningBinary,
+  isDeletedExeLink,
+} from "./binary-stale";
+export type { RunningBinaryStatus } from "./binary-stale";

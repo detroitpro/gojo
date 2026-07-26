@@ -88,6 +88,11 @@ export const AgentHandoffReportSchema = z.object({
   agentAssessment: HandoffAgentAssessmentSchema,
   /** Optional attached files/blobs (e.g. verbose PR body markdown). */
   assets: z.array(HandoffAssetSchema).optional(),
+  /**
+   * Set by gojo after pull-request integration: real PR URL, or
+   * `local://pr/<branch>` when the PR CLI failed.
+   */
+  prUrl: z.string().min(1).optional(),
 });
 
 export type AgentHandoffReport = z.infer<typeof AgentHandoffReportSchema>;

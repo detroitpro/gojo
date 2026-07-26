@@ -354,6 +354,16 @@ onMounted(load);
               git=<span :class="doctor.git ? 'ok' : 'bad'">{{ doctor.git }}</span>
               disk=<span :class="doctor.disk ? 'ok' : 'bad'">{{ doctor.disk }}</span>
               database=<span :class="doctor.database ? 'ok' : 'bad'">{{ doctor.database }}</span>
+              binary=<span :class="doctor.binaryStale ? 'bad' : 'ok'">{{
+                doctor.binaryStale ? "stale" : "current"
+              }}</span>
+            </div>
+            <div
+              v-for="(warning, idx) in doctor.warnings ?? []"
+              :key="`doc-warn-${idx}`"
+              class="alert alert-error mt-3"
+            >
+              {{ warning }}
             </div>
             <div class="mono muted mt-3">home={{ doctor.home }}</div>
             <div v-if="doctor.tools?.length" class="mt-5">

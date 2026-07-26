@@ -42,14 +42,14 @@ build-site: ## Build Astro docs site
 install-cli: ## Install compiled gojo onto PATH (~/.local/bin)
 	bun run install:cli
 
-install: ## Build everything, install CLI+service, start service, print status
+install: ## Build everything, install CLI+service, restart service, print status
 	bun run install:cli
 	@GOJO_BIN="$(HOME)/.local/bin/gojo"; \
 	if [ ! -x "$$GOJO_BIN" ]; then GOJO_BIN="$(CURDIR)/bin/gojo"; fi; \
 	echo "==> Installing service ($$GOJO_BIN)"; \
 	"$$GOJO_BIN" service install; \
-	echo "==> Starting service"; \
-	"$$GOJO_BIN" service start; \
+	echo "==> Restarting service (pick up new binary)"; \
+	"$$GOJO_BIN" service restart || "$$GOJO_BIN" service start; \
 	echo "==> Service status"; \
 	"$$GOJO_BIN" service status
 

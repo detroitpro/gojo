@@ -545,16 +545,40 @@ export class RunCoordinator {
       mergeQueue: this.mergeQueue,
     });
 
-    if (result.commitSha) {
+    if (result.commitSha || result.prUrl) {
       attempt =
         this.repos.attempts.update(attempt.id, {
-          resultCommit: result.commitSha,
+          ...(result.commitSha ? { resultCommit: result.commitSha } : {}),
+          ...(result.prUrl ? { prUrl: result.prUrl } : {}),
         }) ?? attempt;
     }
 
     if (result.conflict) {
       await this.cleanupWorkspace(input.workspacePath, input.branchName, false);
       return this.terminalRun(run, RunState.Conflict);
+    }
+
+    if (input.mode === 'pull-request' && result.prCreated === false) {
+      const tool = input.integration.prTool ?? 'gh';
+      await this.writeHandoffArtifact(
+        run,
+        attempt,
+        input.project,
+        input.task,
+        input.validationResults,
+        result,
+      );
+      await this.cleanupWorkspace(input.workspacePath, input.branchName, true, true);
+      return this.failRun(
+        run,
+        `Pull request create failed via ${tool}. Branch ${input.branchName} may already be pushed; placeholder ${result.prUrl ?? 'local://pr/' + input.branchName}. Restart gojo after install if prTool was recently added, then check ${tool} auth.`,
+        {
+          project: input.project,
+          task: input.task,
+          phase: 'integration',
+          validationResults: input.validationResults,
+        },
+      );
     }
 
     run = await this.transitionRun(run, RunState.Reporting);
@@ -991,6 +1015,7 @@ export class RunCoordinator {
         successful: true,
         confidence: 1,
       },
+      ...(integrationResult?.prUrl ? { prUrl: integrationResult.prUrl } : {}),
     };
 
     const workspacePath = attempt.workspacePath ?? undefined;

@@ -193,12 +193,16 @@ describe("api/router", () => {
         home: string;
         daemonPath: string;
         tools: Array<{ name: string; found: boolean }>;
+        binaryStale: boolean;
+        warnings: string[];
       };
     };
     expect(doctorBody.data.disk).toBe(true);
     expect(doctorBody.data.database).toBe(true);
     expect(typeof doctorBody.data.daemonPath).toBe("string");
     expect(doctorBody.data.tools.some((t) => t.name === "bun")).toBe(true);
+    expect(doctorBody.data.binaryStale).toBe(false);
+    expect(Array.isArray(doctorBody.data.warnings)).toBe(true);
 
     const projectResponse = await fetch(`${baseUrl}/api/v1/projects`, {
       method: "POST",

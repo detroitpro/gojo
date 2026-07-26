@@ -3,6 +3,10 @@ import { isAbsolute, join, resolve } from "node:path";
 
 import { listAdapters } from "@/agents";
 import type { AppContext } from "@/app/context";
+import {
+  inspectRunningBinary,
+  type RunningBinaryStatus,
+} from "@/diagnostics/binary-stale";
 import { execGit } from "@/git/git";
 import type { Repositories } from "@/storage";
 import type { Project, Task } from "@/storage/types";
@@ -50,6 +54,11 @@ export interface InstanceDoctorResult {
   daemonPath: string;
   /** Core tools resolved under the daemon env. */
   tools: DoctorToolCheck[];
+  /** True when this process is running a replaced binary (restart needed). */
+  binaryStale: boolean;
+  binaryStatus: RunningBinaryStatus;
+  /** Operator-facing warnings (stale binary, etc.). */
+  warnings: string[];
 }
 
 /** Core tools; `gh` and `tea` are optional PR CLIs (`integration.prTool`). */
@@ -208,6 +217,11 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
   );
 
   const tools = INSTANCE_TOOLS.map((name) => resolveTool(name));
+  const binaryStatus = inspectRunningBinary();
+  const warnings: string[] = [];
+  if (binaryStatus.stale && binaryStatus.detail) {
+    warnings.push(binaryStatus.detail);
+  }
 
   return {
     git,
@@ -217,5 +231,8 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     home: ctx.paths.home,
     daemonPath: process.env["PATH"] ?? "",
     tools,
+    binaryStale: binaryStatus.stale,
+    binaryStatus,
+    warnings,
   };
 }
