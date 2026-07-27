@@ -93,7 +93,8 @@ export class GitLabSourceAdapter implements SourceAdapter {
     const observedFallback = new Date().toISOString();
     const map = (item: GitLabItem, kind: "pull-request" | "issue"): NormalizedSourceItem => ({
       kind,
-      nativeKey: String(item.iid),
+      // GitLab allocates issue and merge-request IIDs independently.
+      nativeKey: `${kind}:${item.iid}`,
       title: item.title,
       summary: item.description ?? "",
       delivery: kind === "pull-request" && item.draft ? "draft" : "open",

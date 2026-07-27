@@ -38,6 +38,7 @@ function seedSource(db: Database, adapter = "gitlab") {
     kind: "repository",
     externalKey: "acme/app",
     displayName: "acme/app",
+    webUrl: "https://gitlab.example.com/acme/app",
   });
   return { project, connection, source, work };
 }
@@ -85,7 +86,7 @@ describe("sources/GitLab adapter", () => {
       }
       return Response.json([
         {
-          iid: 12,
+          iid: 7,
           title: "Track rollout",
           state: "opened",
           web_url: "https://gitlab.example.com/acme/app/-/issues/12",
@@ -106,7 +107,7 @@ describe("sources/GitLab adapter", () => {
     expect(result.items).toHaveLength(2);
     expect(result.items[0]).toMatchObject({
       kind: "pull-request",
-      nativeKey: "7",
+      nativeKey: "pull-request:7",
       delivery: "open",
       provenance: "bot",
       nativeState: "opened",
@@ -114,6 +115,10 @@ describe("sources/GitLab adapter", () => {
     });
     expect(JSON.parse(result.items[0]?.nativeJson ?? "{}")).toMatchObject({
       merge_status: "can_be_merged",
+    });
+    expect(result.items[1]).toMatchObject({
+      kind: "issue",
+      nativeKey: "issue:7",
     });
   });
 });
@@ -238,6 +243,35 @@ describe("sources/runtime", () => {
       observedAt: "2026-07-20T00:00:00.000Z",
       syncState: "current",
     });
+    const runWork = work.items.create({
+      projectId: project.id,
+      kind: "run",
+      title: "Deliver OPS-9",
+      provenance: "gojo-agent",
+    });
+    const orphan = work.items.create({
+      projectId: project.id,
+      kind: "issue",
+      nativeKey: "OPS-9",
+      title: "Legacy linked artifact",
+      delivery: "open",
+      provenance: "gojo-agent",
+      nativeState: "investigating",
+      webUrl: "https://gitlab.example.com/acme/app/-/issues/OPS-9",
+      syncState: "current",
+    });
+    work.links.create(runWork.id, orphan.id, "delivers");
+    const absentOrphan = work.items.create({
+      projectId: project.id,
+      kind: "issue",
+      nativeKey: "OPS-10",
+      title: "Closed outside Gojo",
+      delivery: "open",
+      provenance: "gojo-agent",
+      nativeState: "opened",
+      webUrl: "https://gitlab.example.com/acme/app/-/issues/OPS-10",
+      syncState: "current",
+    });
     let observedToken: string | null | undefined;
     const fakeAdapter: SourceAdapter = {
       type: "gitlab",
@@ -304,9 +338,24 @@ describe("sources/runtime", () => {
       attention: "stale",
       syncState: "stale",
     });
+    const observed = work.items
+      .listByProject(project.id, { limit: 20, offset: 0 })
+      .items.filter((item) => item.nativeKey === "OPS-9");
+    expect(observed).toHaveLength(1);
+    expect(work.items.findById(orphan.id)).toBeNull();
+    expect(work.links.listByWorkItem(runWork.id)).toContainEqual(
+      expect.objectContaining({
+        targetWorkItemId: observed[0]?.id,
+        type: "delivers",
+      }),
+    );
+    expect(work.items.findById(absentOrphan.id)).toMatchObject({
+      attention: "stale",
+      syncState: "stale",
+    });
     expect(work.items.status(project.id)).toMatchObject({
       verifiedOpen: 1,
-      staleOpen: 1,
+      staleOpen: 2,
     });
     db.close();
   });

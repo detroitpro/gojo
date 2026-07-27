@@ -178,9 +178,24 @@ export class SourceSyncService {
         cursor: cursor?.cursor ?? null,
         token,
       });
+      const beforeSync = this.work.items.listByProject(source.projectId, {
+        limit: 10_000,
+        offset: 0,
+      }).items;
+      const orphanedByNativeRef = new Map<string, typeof beforeSync>();
+      for (const existing of beforeSync) {
+        if (existing.sourceId || !existing.nativeKey) continue;
+        const key = `${existing.kind}:${existing.nativeKey}`;
+        const matches = orphanedByNativeRef.get(key) ?? [];
+        matches.push(existing);
+        orphanedByNativeRef.set(key, matches);
+      }
       let observedAt: string | null = null;
       for (const item of result.items) {
         const workItem = this.upsertItem(source, item);
+        for (const orphan of orphanedByNativeRef.get(`${item.kind}:${item.nativeKey}`) ?? []) {
+          this.work.items.mergeInto(workItem.id, orphan.id);
+        }
         this.work.events.append({
           projectId: source.projectId,
           workItemId: workItem.id,
@@ -195,15 +210,24 @@ export class SourceSyncService {
         if (!observedAt || item.observedAt > observedAt) observedAt = item.observedAt;
       }
       const completedAt = now.toISOString();
-      const seen = new Set(result.items.map((item) => item.nativeKey));
+      const seen = new Set(result.items.map((item) => `${item.kind}:${item.nativeKey}`));
+      const sourceWebUrl = source.webUrl?.replace(/\.git\/?$/i, "").replace(/\/+$/, "");
       for (const existing of this.work.items
         .listByProject(source.projectId, { limit: 10_000, offset: 0 })
         .items.filter(
           (item) =>
-            item.sourceId === source.id &&
+            (item.sourceId === source.id ||
+              (item.sourceId === null &&
+                Boolean(sourceWebUrl) &&
+                Boolean(item.webUrl?.startsWith(`${sourceWebUrl}/`)))) &&
             ["draft", "open", "review", "blocked"].includes(item.delivery),
         )) {
-        if (!existing.nativeKey || seen.has(existing.nativeKey)) continue;
+        if (
+          !existing.nativeKey ||
+          seen.has(`${existing.kind}:${existing.nativeKey}`)
+        ) {
+          continue;
+        }
         this.work.items.update(existing.id, {
           attention: "stale",
           syncState: "stale",

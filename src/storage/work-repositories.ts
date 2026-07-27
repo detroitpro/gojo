@@ -858,6 +858,66 @@ export function createWorkRepositories(db: Database) {
       return this.findById(id);
     },
 
+    mergeInto(canonicalId: string, duplicateId: string): WorkItem | null {
+      if (canonicalId === duplicateId) return this.findById(canonicalId);
+      const canonical = this.findById(canonicalId);
+      const duplicate = this.findById(duplicateId);
+      if (!canonical || !duplicate) return canonical;
+      if (
+        canonical.projectId !== duplicate.projectId ||
+        canonical.kind !== duplicate.kind ||
+        canonical.nativeKey !== duplicate.nativeKey
+      ) {
+        throw new Error("Cannot merge unrelated work items");
+      }
+      db.transaction(() => {
+        sqlite
+          .query(
+            `DELETE FROM work_links
+             WHERE source_work_item_id = ? AND (
+               target_work_item_id = ? OR EXISTS (
+                 SELECT 1 FROM work_links existing
+                 WHERE existing.source_work_item_id = ?
+                   AND existing.target_work_item_id = work_links.target_work_item_id
+                   AND existing.type = work_links.type
+               )
+             )`,
+          )
+          .run(duplicate.id, canonical.id, canonical.id);
+        sqlite
+          .query(
+            "UPDATE work_links SET source_work_item_id = ? WHERE source_work_item_id = ?",
+          )
+          .run(canonical.id, duplicate.id);
+        sqlite
+          .query(
+            `DELETE FROM work_links
+             WHERE target_work_item_id = ? AND (
+               source_work_item_id = ? OR EXISTS (
+                 SELECT 1 FROM work_links existing
+                 WHERE existing.target_work_item_id = ?
+                   AND existing.source_work_item_id = work_links.source_work_item_id
+                   AND existing.type = work_links.type
+               )
+             )`,
+          )
+          .run(duplicate.id, canonical.id, canonical.id);
+        sqlite
+          .query(
+            "UPDATE work_links SET target_work_item_id = ? WHERE target_work_item_id = ?",
+          )
+          .run(canonical.id, duplicate.id);
+        sqlite
+          .query("UPDATE work_events SET work_item_id = ? WHERE work_item_id = ?")
+          .run(canonical.id, duplicate.id);
+        sqlite
+          .query("DELETE FROM external_resources WHERE work_item_id = ?")
+          .run(duplicate.id);
+        sqlite.query("DELETE FROM work_items WHERE id = ?").run(duplicate.id);
+      });
+      return this.findById(canonical.id);
+    },
+
     markSourceFailure(sourceId: string, message: string, nextSyncAt: string): void {
       const now = nowIso();
       sqlite
