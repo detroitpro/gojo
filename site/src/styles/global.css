@@ -87,10 +87,10 @@ pre code {
 }
 
 .brand {
-  font-family: var(--display);
+  font-family: var(--mono);
   font-weight: 600;
   font-size: 1.35rem;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.02em;
   color: var(--accent);
   text-decoration: none;
 }
@@ -288,10 +288,10 @@ pre code {
 }
 
 .hero-brand {
-  font-family: var(--display);
+  font-family: var(--mono);
   font-size: clamp(3.5rem, 10vw, 6.5rem);
-  font-weight: 650;
-  letter-spacing: -0.04em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   line-height: 0.95;
   color: var(--accent);
   margin: 0 0 1.25rem;
@@ -299,10 +299,10 @@ pre code {
 }
 
 .hero h1 {
-  font-family: var(--display);
+  font-family: var(--sans);
   font-size: clamp(1.6rem, 3.5vw, 2.35rem);
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.2;
   max-width: 18ch;
   margin: 0 0 1rem;
@@ -342,10 +342,10 @@ pre code {
 }
 
 .section h2 {
-  font-family: var(--display);
+  font-family: var(--sans);
   font-size: clamp(1.6rem, 3vw, 2rem);
-  font-weight: 550;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: 0;
   margin: 0 0 0.75rem;
 }
 
@@ -484,10 +484,10 @@ pre code {
 }
 
 .doc-wrap h1 {
-  font-family: var(--display);
+  font-family: var(--sans);
   font-size: clamp(1.9rem, 4vw, 2.5rem);
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   margin: 0 0 0.75rem;
 }
 
@@ -498,10 +498,11 @@ pre code {
 }
 
 .doc-content h2 {
-  font-family: var(--display);
+  font-family: var(--sans);
   font-size: 1.45rem;
   margin: 2.25rem 0 0.75rem;
-  font-weight: 550;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .doc-content h3 {

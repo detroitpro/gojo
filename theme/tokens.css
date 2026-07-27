@@ -80,7 +80,8 @@
   --warn-line: rgba(196, 165, 116, 0.4);
 
   /* Typography stacks */
-  --display: "Fraunces", Georgia, serif;
+  /* Display titles share the UI sans; brand wordmarks use --mono */
+  --display: "DM Sans", system-ui, sans-serif;
   --sans: "DM Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
 
