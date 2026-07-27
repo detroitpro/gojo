@@ -83,6 +83,36 @@ export const openApiDocument = {
           "Includes baseCheckout (dirty files / behind origin) and validationTools resolved under the daemon PATH.",
       },
     },
+    "/api/v1/projects/{id}/work": {
+      get: {
+        summary: "List project work",
+        description:
+          "Paged source-agnostic work ledger with execution, delivery, provenance, attention, and freshness filters.",
+      },
+    },
+    "/api/v1/projects/{id}/work/status": {
+      get: {
+        summary: "Get project work status",
+        description:
+          "Canonical counts for working, queued, attention, verified-open, and stale-open work.",
+      },
+    },
+    "/api/v1/projects/{id}/events": {
+      get: { summary: "SSE project work and source events" },
+    },
+    "/api/v1/projects/{id}/sources": {
+      get: { summary: "List project source connections and health" },
+      post: { summary: "Attach a source connection to a project" },
+    },
+    "/api/v1/projects/{id}/sources/{sourceId}/refresh": {
+      post: { summary: "Enqueue or perform project source reconciliation" },
+    },
+    "/api/v1/work/{id}": {
+      get: { summary: "Get work detail, links, events, and immutable run context" },
+    },
+    "/api/v1/sources/{sourceId}/events": {
+      post: { summary: "Ingest a signed generic source work event" },
+    },
     "/api/v1/agents": {
       get: { summary: "List and detect agents" },
     },
@@ -166,6 +196,12 @@ export const openApiDocument = {
     },
     "/api/v1/runs/{id}/events": {
       get: { summary: "SSE run events" },
+    },
+    "/api/v1/runs/{id}/progress": {
+      post: {
+        summary: "Report structured run progress",
+        description: "Accepts run-scoped agent tokens and updates canonical active-work focus.",
+      },
     },
     "/api/v1/runs/{id}/diff": {
       get: { summary: "Changed files for run" },

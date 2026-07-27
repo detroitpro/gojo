@@ -17,6 +17,8 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 - [Task prompts](./task-prompts.md) — constrained limits for `.gojo/tasks/`
 - Modules:
   - [runs](./modules/runs.md) (includes self-healing plumbing)
+  - [work](./modules/work.md) (cross-source project visibility)
+  - [sources](./modules/sources.md) (GitHub/GitLab/Forgejo/non-git connectors)
   - [agents](./modules/agents.md)
   - [scheduler](./modules/scheduler.md)
 

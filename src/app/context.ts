@@ -19,7 +19,18 @@ import { isTerminal } from "@shared/run-states";
 import { Scheduler } from "@/scheduler/scheduler";
 import { nextOccurrence } from "@/scheduler/cron";
 import { SecretStore } from "@/secrets/store";
-import { Database, createRepositories, type Repositories } from "@/storage";
+import {
+  Database,
+  createRepositories,
+  createWorkRepositories,
+  type Repositories,
+  type WorkRepositories,
+} from "@/storage";
+import {
+  ensureProjectRepositorySource,
+  GenericWebhookIngestor,
+  SourceSyncService,
+} from "@/sources";
 import { WorkspaceManager } from "@/workspace/manager";
 import { configureTelemetry } from "@/telemetry/otel";
 
@@ -33,6 +44,7 @@ export interface AppContext {
   paths: GojoPaths;
   db: Database;
   repos: Repositories;
+  work: WorkRepositories;
   instance: InstanceConfig;
   instanceConfigPath: string;
   workspace: WorkspaceManager;
@@ -41,6 +53,8 @@ export interface AppContext {
   scheduler: Scheduler;
   notifications: NotificationDispatcher;
   secrets: SecretStore;
+  sourceSync: SourceSyncService;
+  sourceWebhooks: GenericWebhookIngestor;
   eventBus: RunEventBus;
   eventHistory: RunEventHistory;
   leaseHolderId: string;
@@ -64,6 +78,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   setInstancePaused(db, instance.paused);
 
   const repos = createRepositories(db);
+  const work = createWorkRepositories(db);
   const eventBus = new RunEventBus();
   const eventHistory = new RunEventHistory();
   eventBus.subscribe((event) => {
@@ -72,6 +87,31 @@ export async function createAppContext(home?: string): Promise<AppContext> {
 
   const workspace = new WorkspaceManager(paths.worktrees);
   const secrets = new SecretStore(db, paths);
+  for (const project of repos.projects.list()) {
+    try {
+      ensureProjectRepositorySource(db, project.id);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: "warn",
+          component: "sources",
+          phase: "repository-discovery",
+          projectId: project.id,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+  const resolveSourceSecret = (name: string, projectId: string) =>
+    secrets.get(name, projectId) ?? secrets.get(name);
+  const sourceSync = new SourceSyncService({
+    db,
+    resolveSecret: resolveSourceSecret,
+  });
+  const sourceWebhooks = new GenericWebhookIngestor({
+    db,
+    resolveSecret: resolveSourceSecret,
+  });
   const users = new UserService(db);
   users.purgeExpiredApiTokens();
   const apiBaseUrl = `http://${instance.bindHost}:${instance.bindPort}/api/v1`;
@@ -81,7 +121,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     workspace,
     eventBus,
     apiBaseUrl,
-    issueAgentToken: () => {
+    issueAgentToken: (runId) => {
       const admin = users.findFirstAdmin();
       if (!admin) {
         return null;
@@ -90,7 +130,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       const { token, record } = users.createApiTokenForUser(
         admin.id,
         `agent-run-${ulid()}`,
-        { expiresAt },
+        { expiresAt, scopes: [`run:progress:${runId}`] },
       );
       return { token, id: record.id };
     },
@@ -178,6 +218,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     paths,
     db,
     repos,
+    work,
     instance,
     instanceConfigPath,
     workspace,
@@ -186,6 +227,8 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     scheduler,
     notifications,
     secrets,
+    sourceSync,
+    sourceWebhooks,
     eventBus,
     eventHistory,
     leaseHolderId,
@@ -225,6 +268,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       await notificationHooks?.drain();
       await dispatcher.stop();
       await scheduler.stop();
+      await sourceSync.stop();
       eventHistory.clear();
       db.close();
     },
@@ -248,6 +292,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   }, 15_000);
 
   await coordinator.recoverInterrupted();
+  sourceSync.start();
 
   return ctx;
 }

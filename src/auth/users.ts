@@ -157,12 +157,13 @@ export class UserService {
   createApiTokenForUser(
     userId: string,
     name: string,
-    options?: { expiresAt?: string | null },
+    options?: { expiresAt?: string | null; scopes?: string[] },
   ): { record: ApiTokenRecord; token: string } {
     const { token, hash } = createApiToken();
     const id = ulid();
     const createdAt = nowIso();
     const expiresAt = options?.expiresAt === undefined ? null : options.expiresAt;
+    const scopesJson = JSON.stringify(options?.scopes ?? []);
 
     this.db
       .connection()
@@ -170,7 +171,7 @@ export class UserService {
         `INSERT INTO api_tokens (id, user_id, token_hash, name, scopes_json, created_at, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, userId, hash, name, "[]", createdAt, expiresAt);
+      .run(id, userId, hash, name, scopesJson, createdAt, expiresAt);
 
     return {
       token,
@@ -179,7 +180,7 @@ export class UserService {
         userId,
         tokenHash: hash,
         name,
-        scopesJson: "[]",
+        scopesJson,
         createdAt,
         expiresAt,
       },
@@ -187,6 +188,12 @@ export class UserService {
   }
 
   verifyApiToken(token: string): UserRecord | null {
+    return this.verifyApiTokenDetails(token)?.user ?? null;
+  }
+
+  verifyApiTokenDetails(
+    token: string,
+  ): { user: UserRecord; token: ApiTokenRecord; scopes: string[] } | null {
     if (!token.startsWith("gojo_")) {
       return null;
     }
@@ -209,7 +216,30 @@ export class UserService {
       return null;
     }
 
-    return this.findById(row.user_id);
+    const user = this.findById(row.user_id);
+    if (!user) return null;
+    let scopes: string[] = [];
+    try {
+      const parsed = JSON.parse(row.scopes_json) as unknown;
+      if (Array.isArray(parsed)) {
+        scopes = parsed.filter((value): value is string => typeof value === "string");
+      }
+    } catch {
+      scopes = [];
+    }
+    return {
+      user,
+      token: {
+        id: row.id,
+        userId: row.user_id,
+        tokenHash: row.token_hash,
+        name: row.name,
+        scopesJson: row.scopes_json,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      },
+      scopes,
+    };
   }
 
   listApiTokens(userId: string): ApiTokenRecord[] {

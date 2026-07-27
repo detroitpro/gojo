@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -91,7 +91,8 @@ CREATE TABLE IF NOT EXISTS runs (
   not_before_at TEXT,
   expires_at TEXT,
   admitted_at TEXT,
-  priority INTEGER NOT NULL DEFAULT 30
+  priority INTEGER NOT NULL DEFAULT 30,
+  work_item_id TEXT REFERENCES work_items(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
@@ -105,6 +106,7 @@ CREATE TABLE IF NOT EXISTS attempts (
   result_commit TEXT,
   pr_url TEXT,
   agent_version TEXT,
+  agent_adapter TEXT,
   exit_code INTEGER,
   handoff_json TEXT,
   started_at TEXT,
@@ -227,6 +229,156 @@ CREATE TABLE IF NOT EXISTS run_integrations (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS source_connections (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  adapter TEXT NOT NULL,
+  base_url TEXT,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  capabilities_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  last_checked_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(adapter, base_url, name)
+);
+
+CREATE TABLE IF NOT EXISTS project_sources (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  connection_id TEXT REFERENCES source_connections(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  external_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  web_url TEXT,
+  clone_url TEXT,
+  default_branch TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  observed_at TEXT,
+  next_sync_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(project_id, connection_id, kind, external_key)
+);
+
+CREATE TABLE IF NOT EXISTS source_sync_cursors (
+  source_id TEXT PRIMARY KEY NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  cursor TEXT,
+  backfill_complete INTEGER NOT NULL DEFAULT 0,
+  rate_limit_json TEXT NOT NULL DEFAULT '{}',
+  last_success_at TEXT,
+  last_error_at TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS source_webhook_deliveries (
+  source_id TEXT NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  delivery_id TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  PRIMARY KEY(source_id, delivery_id)
+);
+
+CREATE TABLE IF NOT EXISTS work_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  source_id TEXT REFERENCES project_sources(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  native_key TEXT,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  execution TEXT NOT NULL DEFAULT 'none',
+  delivery TEXT NOT NULL DEFAULT 'none',
+  outcome TEXT NOT NULL DEFAULT 'pending',
+  attention TEXT NOT NULL DEFAULT 'none',
+  provenance TEXT NOT NULL DEFAULT 'external',
+  actor_name TEXT,
+  agent_profile_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
+  labels_json TEXT NOT NULL DEFAULT '[]',
+  native_state TEXT,
+  native_json TEXT NOT NULL DEFAULT '{}',
+  web_url TEXT,
+  observed_at TEXT,
+  next_sync_at TEXT,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  archived_at TEXT,
+  UNIQUE(source_id, native_key)
+);
+
+CREATE TABLE IF NOT EXISTS work_links (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  target_work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(source_work_item_id, target_work_item_id, type)
+);
+
+CREATE TABLE IF NOT EXISTS work_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS external_resources (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_item_id TEXT NOT NULL UNIQUE REFERENCES work_items(id) ON DELETE CASCADE,
+  source_id TEXT REFERENCES project_sources(id) ON DELETE SET NULL,
+  native_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  native_state TEXT,
+  author_name TEXT,
+  provenance TEXT NOT NULL DEFAULT 'external',
+  labels_json TEXT NOT NULL DEFAULT '[]',
+  review_json TEXT NOT NULL DEFAULT '{}',
+  checks_json TEXT NOT NULL DEFAULT '{}',
+  mergeability TEXT,
+  web_url TEXT,
+  native_json TEXT NOT NULL DEFAULT '{}',
+  observed_at TEXT,
+  next_sync_at TEXT,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(source_id, native_key)
+);
+
+CREATE TABLE IF NOT EXISTS run_context (
+  run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  task_name TEXT NOT NULL,
+  task_description TEXT NOT NULL DEFAULT '',
+  prompt TEXT NOT NULL,
+  manifest_hash TEXT,
+  instructions TEXT NOT NULL DEFAULT '',
+  agent_profile_json TEXT NOT NULL DEFAULT '{}',
+  adapter TEXT,
+  model TEXT,
+  validation_json TEXT NOT NULL DEFAULT '{}',
+  integration_json TEXT NOT NULL DEFAULT '{}',
+  failure_policy_json TEXT NOT NULL DEFAULT '{}',
+  base_branch TEXT,
+  schedule_json TEXT,
+  created_at TEXT NOT NULL
+);
 `;
 
 /** Incremental migrations applied when an older schema_migrations version is present. */
@@ -303,11 +455,166 @@ ALTER TABLE runs ADD COLUMN priority INTEGER NOT NULL DEFAULT 30;
 CREATE INDEX IF NOT EXISTS idx_runs_queue ON runs(state, priority, not_before_at);
 `,
   },
+  {
+    version: 6,
+    sql: `
+CREATE TABLE IF NOT EXISTS source_connections (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  adapter TEXT NOT NULL,
+  base_url TEXT,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  capabilities_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  last_checked_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(adapter, base_url, name)
+);
+CREATE TABLE IF NOT EXISTS project_sources (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  connection_id TEXT REFERENCES source_connections(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  external_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  web_url TEXT,
+  clone_url TEXT,
+  default_branch TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  observed_at TEXT,
+  next_sync_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(project_id, connection_id, kind, external_key)
+);
+CREATE TABLE IF NOT EXISTS source_sync_cursors (
+  source_id TEXT PRIMARY KEY NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  cursor TEXT,
+  backfill_complete INTEGER NOT NULL DEFAULT 0,
+  rate_limit_json TEXT NOT NULL DEFAULT '{}',
+  last_success_at TEXT,
+  last_error_at TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_webhook_deliveries (
+  source_id TEXT NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  delivery_id TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  PRIMARY KEY(source_id, delivery_id)
+);
+CREATE TABLE IF NOT EXISTS work_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  source_id TEXT REFERENCES project_sources(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  native_key TEXT,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  execution TEXT NOT NULL DEFAULT 'none',
+  delivery TEXT NOT NULL DEFAULT 'none',
+  outcome TEXT NOT NULL DEFAULT 'pending',
+  attention TEXT NOT NULL DEFAULT 'none',
+  provenance TEXT NOT NULL DEFAULT 'external',
+  actor_name TEXT,
+  agent_profile_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
+  labels_json TEXT NOT NULL DEFAULT '[]',
+  native_state TEXT,
+  native_json TEXT NOT NULL DEFAULT '{}',
+  web_url TEXT,
+  observed_at TEXT,
+  next_sync_at TEXT,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  archived_at TEXT,
+  UNIQUE(source_id, native_key)
+);
+CREATE TABLE IF NOT EXISTS work_links (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  target_work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(source_work_item_id, target_work_item_id, type)
+);
+CREATE TABLE IF NOT EXISTS work_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS external_resources (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_item_id TEXT NOT NULL UNIQUE REFERENCES work_items(id) ON DELETE CASCADE,
+  source_id TEXT REFERENCES project_sources(id) ON DELETE SET NULL,
+  native_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  native_state TEXT,
+  author_name TEXT,
+  provenance TEXT NOT NULL DEFAULT 'external',
+  labels_json TEXT NOT NULL DEFAULT '[]',
+  review_json TEXT NOT NULL DEFAULT '{}',
+  checks_json TEXT NOT NULL DEFAULT '{}',
+  mergeability TEXT,
+  web_url TEXT,
+  native_json TEXT NOT NULL DEFAULT '{}',
+  observed_at TEXT,
+  next_sync_at TEXT,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(source_id, native_key)
+);
+CREATE TABLE IF NOT EXISTS run_context (
+  run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  task_name TEXT NOT NULL,
+  task_description TEXT NOT NULL DEFAULT '',
+  prompt TEXT NOT NULL,
+  manifest_hash TEXT,
+  instructions TEXT NOT NULL DEFAULT '',
+  agent_profile_json TEXT NOT NULL DEFAULT '{}',
+  adapter TEXT,
+  model TEXT,
+  validation_json TEXT NOT NULL DEFAULT '{}',
+  integration_json TEXT NOT NULL DEFAULT '{}',
+  failure_policy_json TEXT NOT NULL DEFAULT '{}',
+  base_branch TEXT,
+  schedule_json TEXT,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE runs ADD COLUMN work_item_id TEXT REFERENCES work_items(id) ON DELETE SET NULL;
+ALTER TABLE attempts ADD COLUMN agent_adapter TEXT;
+`,
+  },
 ];
 
 /** Applied after incremental migrations so upgraded DBs have columns first. */
 export const SCHEMA_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_runs_queue ON runs(state, priority, not_before_at);
+CREATE INDEX IF NOT EXISTS idx_runs_work_item ON runs(work_item_id);
+CREATE INDEX IF NOT EXISTS idx_project_sources_sync ON project_sources(sync_state, next_sync_at);
+CREATE INDEX IF NOT EXISTS idx_source_webhooks_received ON source_webhook_deliveries(received_at);
+CREATE INDEX IF NOT EXISTS idx_work_items_project_updated ON work_items(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_work_items_project_state ON work_items(project_id, execution, delivery, attention);
+CREATE INDEX IF NOT EXISTS idx_work_events_project_sequence ON work_events(project_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_work_events_item_sequence ON work_events(work_item_id, sequence);
 `;
 
 export const EXPECTED_TABLES = [
@@ -329,4 +636,13 @@ export const EXPECTED_TABLES = [
   "scheduler_leases",
   "run_impact_items",
   "run_integrations",
+  "source_connections",
+  "project_sources",
+  "source_sync_cursors",
+  "source_webhook_deliveries",
+  "work_items",
+  "work_links",
+  "work_events",
+  "external_resources",
+  "run_context",
 ] as const;

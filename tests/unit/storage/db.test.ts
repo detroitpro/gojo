@@ -58,7 +58,7 @@ describe("storage/db", () => {
     sqlite.exec("ALTER TABLE runs DROP COLUMN expires_at;");
     sqlite.exec("ALTER TABLE runs DROP COLUMN admitted_at;");
     sqlite.exec("ALTER TABLE runs DROP COLUMN priority;");
-    // Fresh DBs only record SCHEMA_VERSION (5); pin to 4 so incremental v5 runs.
+    // Fresh DBs only record latest SCHEMA_VERSION; pin to 4 so v5+ run.
     sqlite.query("DELETE FROM schema_migrations").run();
     sqlite
       .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
@@ -71,7 +71,7 @@ describe("storage/db", () => {
         "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations",
       )
       .get()?.version;
-    expect(version).toBe(5);
+    expect(version).toBe(6);
 
     const columns = sqlite
       .query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')")

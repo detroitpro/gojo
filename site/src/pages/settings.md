@@ -28,6 +28,11 @@ bun run gojo backup restore <archive>
 
 A **project** is a registered Git repository path plus runtime state in SQLite.
 
+Its repository is also attached as a visibility **source**. Additional GitLab,
+Forgejo, tracker, incident, deployment, or generic webhook sources can be
+attached without changing the project manifest. Source observations, freshness,
+and provenance are explained in [Project visibility and sources](/project-visibility).
+
 The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: agents, tasks, validation profiles, schedules, notifications. **Sync** upserts by name into the database and **soft-disables** tasks and schedules missing from the manifest (rows are kept for history). Prefer frequency-free keys — put cadence in `cron` / `timezone` only (see [Task prompts](/task-prompts)).
 
 ### Projects UI

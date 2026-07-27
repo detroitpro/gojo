@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 import { ulid } from 'ulid';
 
@@ -36,6 +37,7 @@ import {
 } from '@shared/manifest';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
+import { createWorkRepositories } from '@/storage/work-repositories';
 import type {
   Attempt,
   Project,
@@ -108,9 +110,13 @@ export class RunCoordinator {
   private readonly eventBus: RunEventBus;
   private readonly mergeQueue = new MergeQueue();
   private readonly repos;
+  private readonly db: Database;
+  private readonly work;
   private readonly activeRuns = new Map<string, ActiveRunContext>();
   private readonly apiBaseUrl: string | null;
-  private readonly issueAgentToken: (() => { token: string; id: string } | null) | null;
+  private readonly issueAgentToken:
+    | ((runId: string) => { token: string; id: string } | null)
+    | null;
   private readonly revokeAgentToken: ((tokenId: string) => void) | null;
 
   constructor(deps: {
@@ -119,13 +125,15 @@ export class RunCoordinator {
     workspace: WorkspaceManager;
     eventBus?: RunEventBus;
     apiBaseUrl?: string;
-    issueAgentToken?: () => { token: string; id: string } | null;
+    issueAgentToken?: (runId: string) => { token: string; id: string } | null;
     revokeAgentToken?: (tokenId: string) => void;
   }) {
     this.paths = deps.paths;
+    this.db = deps.db;
     this.workspace = deps.workspace;
     this.eventBus = deps.eventBus ?? new RunEventBus();
     this.repos = createRepositories(deps.db);
+    this.work = createWorkRepositories(deps.db);
     this.apiBaseUrl = deps.apiBaseUrl ?? null;
     this.issueAgentToken = deps.issueAgentToken ?? null;
     this.revokeAgentToken = deps.revokeAgentToken ?? null;
@@ -144,16 +152,68 @@ export class RunCoordinator {
         ? RunState.Queued
         : RunState.Scheduled;
 
-    const run = this.repos.runs.create({
-      projectId: input.projectId,
-      taskId: input.taskId,
-      ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId } : {}),
-      idempotencyKey,
-      trigger: input.trigger,
-      state: initialState,
-      notBeforeAt: input.notBeforeAt ?? new Date().toISOString(),
-      expiresAt: input.expiresAt ?? null,
-      priority: input.priority ?? priorityForTrigger(input.trigger),
+    const project = this.repos.projects.findById(input.projectId);
+    const task = this.repos.tasks.findById(input.taskId);
+    if (!project || !task) {
+      throw new Error("Project or task not found");
+    }
+    const profile = task.agentProfileId
+      ? this.repos.agentProfiles.findById(task.agentProfileId)
+      : null;
+    const schedule = input.scheduleId
+      ? this.repos.schedules.findById(input.scheduleId)
+      : null;
+    const run = this.db.transaction(() => {
+      let created = this.repos.runs.create({
+        projectId: input.projectId,
+        taskId: input.taskId,
+        ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId } : {}),
+        idempotencyKey,
+        trigger: input.trigger,
+        state: initialState,
+        notBeforeAt: input.notBeforeAt ?? new Date().toISOString(),
+        expiresAt: input.expiresAt ?? null,
+        priority: input.priority ?? priorityForTrigger(input.trigger),
+      });
+      const workItem = this.work.items.create({
+        projectId: project.id,
+        kind: "run",
+        nativeKey: created.id,
+        title: task.name,
+        summary: task.description,
+        execution: workExecutionForRunState(created.state),
+        outcome: workOutcomeForRunState(created.state),
+        attention: workAttentionForRunState(created.state),
+        provenance: "gojo-agent",
+        agentProfileId: task.agentProfileId,
+        nativeState: created.state,
+        nativeJson: JSON.stringify({ trigger: created.trigger }),
+        syncState: "current",
+      });
+      created =
+        this.repos.runs.update(created.id, { workItemId: workItem.id }) ?? created;
+      const profileConfig = profile?.configJson ?? "{}";
+      const parsedProfile = parseJsonObject(profileConfig);
+      this.work.runContexts.create({
+        runId: created.id,
+        workItemId: workItem.id,
+        taskName: task.name,
+        taskDescription: task.description,
+        prompt: task.prompt,
+        manifestHash: createHash("sha256").update(project.manifestJson).digest("hex"),
+        instructions: JSON.stringify(readInstructions(project) ?? {}),
+        agentProfileJson: profileConfig,
+        adapter: profile?.adapter ?? null,
+        model:
+          typeof parsedProfile["model"] === "string" ? parsedProfile["model"] : null,
+        validationJson: task.validationProfileJson,
+        integrationJson: task.integrationJson,
+        failurePolicyJson: task.failurePolicyJson,
+        baseBranch:
+          parseIntegrationConfig(task.integrationJson).targetBranch ?? project.defaultBranch,
+        scheduleJson: schedule ? JSON.stringify(schedule) : null,
+      });
+      return created;
     });
 
     this.emit('run.created', run.id, { state: run.state });
@@ -198,6 +258,7 @@ export class RunCoordinator {
       if (!run.startedAt) {
         run =
           this.repos.runs.update(run.id, { startedAt: new Date().toISOString() }) ?? run;
+        this.syncWorkFromRun(run);
       }
 
       let project = this.repos.projects.findById(run.projectId);
@@ -272,6 +333,7 @@ export class RunCoordinator {
           workspacePath,
           branchName,
           startingCommit: workspace.startingCommit,
+          agentAdapter: resolveAdapterName(task, this.repos.agentProfiles),
           state: 'pending',
         });
 
@@ -332,6 +394,7 @@ export class RunCoordinator {
           steps: validation.steps ?? [],
           signal: controller.signal,
           onStep: (step) => {
+            this.persistValidation(attempt!.id, step);
             this.emit('run.validation.step', runIdForValidation, step);
           },
         });
@@ -453,6 +516,32 @@ export class RunCoordinator {
     }
 
     this.terminalRun(run, RunState.Canceled);
+  }
+
+  updateProgress(
+    runId: string,
+    input: {
+      title: string;
+      summary: string;
+      blockedReason?: string | null;
+      references?: string[];
+    },
+  ): Run {
+    const run = this.repos.runs.findById(runId);
+    if (!run || !run.workItemId) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    this.work.items.update(run.workItemId, {
+      title: input.title,
+      summary: input.summary,
+      attention: input.blockedReason ? "blocked" : workAttentionForRunState(run.state),
+      nativeJson: JSON.stringify({
+        blockedReason: input.blockedReason ?? null,
+        references: input.references ?? [],
+      }),
+    });
+    this.emit("run.progress", run.id, input);
+    return run;
   }
 
   async approveRun(runId: string): Promise<void> {
@@ -721,6 +810,44 @@ export class RunCoordinator {
           : {}),
         ...(status === 'merged' ? { mergedAt: nowIso } : {}),
       });
+      const source = this.work.sources
+        .listByProject(input.run.projectId)
+        .find((candidate) => candidate.kind === "repository");
+      const prNumber = realPrUrl ? extractPrNumber(realPrUrl) : null;
+      if (source && (prNumber || realPrUrl)) {
+        const externalWork = this.work.items.upsertExternal({
+          projectId: input.run.projectId,
+          sourceId: source.id,
+          kind: "pull-request",
+          nativeKey: String(prNumber ?? realPrUrl),
+          title: prNumber ? `Pull request #${prNumber}` : "Pull request",
+          delivery:
+            status === "open"
+              ? "open"
+              : status === "merged"
+                ? "merged"
+                : status === "conflict"
+                  ? "blocked"
+                  : "closed",
+          outcome:
+            status === "merged"
+              ? "succeeded"
+              : status === "open"
+                ? "pending"
+                : "failed",
+          attention: status === "conflict" ? "blocked" : "none",
+          provenance: "gojo-agent",
+          nativeState: status,
+          nativeJson: JSON.stringify({ provider, repo: input.integration.prRepo ?? null }),
+          webUrl: realPrUrl,
+          observedAt: nowIso,
+          nextSyncAt: status === "open" ? initialNextCheckAt(now) : null,
+          syncState: status === "open" ? "pending" : "current",
+        });
+        if (input.run.workItemId) {
+          this.work.links.create(input.run.workItemId, externalWork.id, "delivers");
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.emit('run.accounting_error', input.run.id, { kind: 'integration', message });
@@ -802,6 +929,7 @@ export class RunCoordinator {
         adapterName,
         workspacePath,
         validationSteps,
+        progressReporting: this.apiBaseUrl !== null,
         ...(instructions !== undefined ? { instructions } : {}),
       });
 
@@ -813,7 +941,7 @@ export class RunCoordinator {
       if (this.apiBaseUrl) {
         agentEnv['GOJO_API_URL'] = this.apiBaseUrl;
       }
-      const issued = this.issueAgentToken?.();
+      const issued = this.issueAgentToken?.(runId);
       if (issued?.token) {
         agentEnv['GOJO_API_TOKEN'] = issued.token;
       }
@@ -886,6 +1014,7 @@ export class RunCoordinator {
       throw new Error(`Failed to update run ${run.id}`);
     }
 
+    this.syncWorkFromRun(updated);
     this.emit('run.state_changed', run.id, { from: run.state, to });
     return updated;
   }
@@ -897,6 +1026,7 @@ export class RunCoordinator {
         state,
         finishedAt: new Date().toISOString(),
       }) ?? run;
+    this.syncWorkFromRun(updated);
 
     // Emit state_changed so timeline phases close (Reporting → Succeeded, etc.).
     // terminalRun updates state directly and historically only emitted run.finished.
@@ -926,6 +1056,7 @@ export class RunCoordinator {
         finishedAt: new Date().toISOString(),
         errorMessage: message,
       }) ?? run;
+    this.syncWorkFromRun(updated);
 
     const project =
       context?.project ?? this.repos.projects.findById(updated.projectId) ?? undefined;
@@ -1021,6 +1152,10 @@ export class RunCoordinator {
       taskId: decision.healerTaskId,
       trigger: 'heal',
       idempotencyKey: `heal:${failedRun.id}:${decision.healerTaskId}`,
+    }).then((healerRun) => {
+      if (healerRun.workItemId && failedRun.workItemId) {
+        this.work.links.create(healerRun.workItemId, failedRun.workItemId, "heals");
+      }
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(
@@ -1227,14 +1362,149 @@ export class RunCoordinator {
   }
 
   private emit(type: string, runId: string, data?: unknown): void {
+    const run = this.repos.runs.findById(runId);
+    const at = new Date().toISOString();
+    if (type === "run.artifact_written" && run) {
+      const path = (data as { path?: unknown } | undefined)?.path;
+      if (typeof path === "string") {
+        this.persistArtifact(run, path, at);
+      }
+    }
+    const durable =
+      type !== "run.agent.output" && run?.workItemId
+        ? this.work.events.append({
+            projectId: run.projectId,
+            workItemId: run.workItemId,
+            runId,
+            type,
+            dataJson: JSON.stringify(data ?? {}),
+            source: "gojo",
+            occurredAt: at,
+          })
+        : null;
     const event = {
+      ...(durable ? { id: durable.sequence } : {}),
       type,
       runId,
-      at: new Date().toISOString(),
+      at,
       ...(data !== undefined ? { data } : {}),
     };
     this.eventBus.emit(event);
   }
+
+  private persistValidation(attemptId: string, result: ValidationStepResult): void {
+    const finishedAt = new Date().toISOString();
+    const startedAt = new Date(
+      new Date(finishedAt).getTime() - Math.max(0, result.durationMs),
+    ).toISOString();
+    this.db
+      .connection()
+      .query(
+        `INSERT INTO validations (
+          id, attempt_id, name, command, exit_code, status,
+          started_at, finished_at, output_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(
+        ulid(),
+        attemptId,
+        result.name,
+        result.command,
+        result.exitCode,
+        result.status,
+        startedAt,
+        finishedAt,
+      );
+  }
+
+  private persistArtifact(run: Run, path: string, createdAt: string): void {
+    const existing = this.db
+      .connection()
+      .query<{ id: string }, [string, string]>(
+        "SELECT id FROM artifacts WHERE run_id = ? AND path = ? LIMIT 1",
+      )
+      .get(run.id, path);
+    if (existing) return;
+    const filename = path.split("/").pop() ?? "artifact";
+    const kind = filename.endsWith(".json")
+      ? filename.slice(0, -".json".length)
+      : "artifact";
+    const attempt = this.repos.attempts.listByRun(run.id).at(-1);
+    this.db
+      .connection()
+      .query(
+        `INSERT INTO artifacts (
+          id, run_id, attempt_id, kind, path, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(ulid(), run.id, attempt?.id ?? null, kind, path, createdAt);
+  }
+
+  private syncWorkFromRun(run: Run): void {
+    if (!run.workItemId) return;
+    this.work.items.update(run.workItemId, {
+      execution: workExecutionForRunState(run.state),
+      outcome: workOutcomeForRunState(run.state),
+      attention: workAttentionForRunState(run.state),
+      nativeState: run.state,
+      lastError: run.errorMessage,
+      startedAt: run.startedAt,
+      completedAt: run.finishedAt,
+      syncState: "current",
+      observedAt: new Date().toISOString(),
+    });
+  }
+}
+
+function parseJsonObject(json: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function workExecutionForRunState(state: RunState) {
+  switch (state) {
+    case RunState.Scheduled:
+    case RunState.Queued:
+      return "queued" as const;
+    case RunState.Preparing:
+      return "preparing" as const;
+    case RunState.Running:
+      return "running" as const;
+    case RunState.Validating:
+      return "validating" as const;
+    case RunState.AwaitingApproval:
+      return "awaiting-approval" as const;
+    case RunState.Integrating:
+      return "integrating" as const;
+    case RunState.Reporting:
+      return "reporting" as const;
+    default:
+      return "terminal" as const;
+  }
+}
+
+function workOutcomeForRunState(state: RunState) {
+  if (state === RunState.Succeeded) return "succeeded" as const;
+  if (
+    state === RunState.Canceled ||
+    state === RunState.Skipped ||
+    state === RunState.Superseded ||
+    state === RunState.Abandoned
+  ) {
+    return "canceled" as const;
+  }
+  if (isTerminal(state)) return "failed" as const;
+  return "pending" as const;
+}
+
+function workAttentionForRunState(state: RunState) {
+  if (state === RunState.AwaitingApproval) return "approval" as const;
+  if (state === RunState.Blocked || state === RunState.Conflict) return "blocked" as const;
+  return "none" as const;
 }
 
 function parseValidationConfig(json: string): ValidationProfileConfig {

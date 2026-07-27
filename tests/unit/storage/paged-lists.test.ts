@@ -374,6 +374,7 @@ describe("paged-lists", () => {
       prUrl: "https://github.com/me/a/pull/1",
       status: "open",
       openedAt: "2026-07-01T00:00:00.000Z",
+      nextCheckAt: "2026-07-27T20:00:00.000Z",
     });
     repos.runIntegrations.upsertForRun({
       runId: runNew.id,
@@ -384,6 +385,7 @@ describe("paged-lists", () => {
       prUrl: "https://github.com/me/a/pull/2",
       status: "open",
       openedAt: "2026-07-10T00:00:00.000Z",
+      nextCheckAt: "2026-07-27T20:00:00.000Z",
     });
     repos.runIntegrations.upsertForRun({
       runId: runMerged.id,

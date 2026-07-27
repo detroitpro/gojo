@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -7,7 +7,9 @@ import {
   getDashboardImpact,
   getProject,
   getProjectDoctor,
-  listIntegrations,
+  getProjectWorkStatus,
+  listProjectSources,
+  listProjectWork,
   listTasks,
   runTask,
   syncProject,
@@ -22,11 +24,13 @@ import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
 import type {
   DashboardImpact,
-  IntegrationListItem,
   Project,
   ProjectDoctorResult,
+  ProjectSource,
   ProjectSyncResult,
   Task,
+  WorkItem,
+  WorkStatus,
 } from "@/types";
 
 const route = useRoute();
@@ -36,10 +40,12 @@ const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
 const projectTasks = ref<Task[]>([]);
-const openIntegrations = ref<IntegrationListItem[]>([]);
 const openPrTotal = ref(0);
-const mergedIntegrations = ref<IntegrationListItem[]>([]);
-const mergedPrTotal = ref(0);
+const workItems = ref<WorkItem[]>([]);
+const workStatus = ref<WorkStatus | null>(null);
+const projectSources = ref<ProjectSource[]>([]);
+let workPoll: ReturnType<typeof setInterval> | null = null;
+let projectEvents: EventSource | null = null;
 const mergeBusy = ref(false);
 const loading = ref(true);
 const busy = ref(false);
@@ -136,54 +142,64 @@ const mergeBabysitter = computed(() =>
   projectTasks.value.find((task) => task.name === "maintain-merge" && task.enabled) ?? null,
 );
 
-function prLabel(row: IntegrationListItem): string {
-  if (row.repo && row.prNumber != null) {
-    return `${row.repo}#${row.prNumber}`;
-  }
-  if (row.prNumber != null) {
-    return `#${row.prNumber}`;
-  }
-  return row.prUrl ?? "PR";
-}
-
-function isExternalPrUrl(url: string | null): boolean {
-  return Boolean(url && !url.startsWith("local://"));
-}
-
 function scrollToOpenPrs() {
-  document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("delivery")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function loadOpenPrs() {
+const nowWork = computed(() =>
+  workItems.value.filter((item) => item.execution !== "none" && item.execution !== "terminal"),
+);
+const attentionWork = computed(() =>
+  workItems.value.filter((item) => item.attention !== "none"),
+);
+const deliveryWork = computed(() =>
+  workItems.value.filter((item) => ["draft", "open", "review", "blocked"].includes(item.delivery)),
+);
+const historyWork = computed(() =>
+  workItems.value.filter(
+    (item) =>
+      item.execution === "terminal" ||
+      item.delivery === "merged" ||
+      item.delivery === "closed",
+  ),
+);
+const sourceNames = computed(
+  () => new Map(projectSources.value.map((source) => [source.id, source.displayName])),
+);
+
+function sourceLabel(item: WorkItem): string {
+  if (item.sourceId) return sourceNames.value.get(item.sourceId) ?? item.sourceId;
+  return item.provenance === "gojo-agent" ? "gojo" : "local";
+}
+
+function observedLabel(item: WorkItem): string {
+  if (!item.observedAt) return "not observed";
+  return new Date(item.observedAt).toLocaleString();
+}
+
+async function loadWork() {
   try {
-    const result = await listIntegrations({
-      limit: MAX_PAGE_LIMIT,
-      offset: 0,
-      status: "open",
-      projectId: projectId.value,
-    });
-    openIntegrations.value = result.items;
-    openPrTotal.value = result.total;
+    const [page, status, sources] = await Promise.all([
+      listProjectWork(projectId.value, { limit: MAX_PAGE_LIMIT, offset: 0 }),
+      getProjectWorkStatus(projectId.value),
+      listProjectSources(projectId.value),
+    ]);
+    workItems.value = page.items;
+    workStatus.value = status;
+    projectSources.value = sources;
+    openPrTotal.value = status.verifiedOpen;
   } catch {
-    openIntegrations.value = [];
+    workItems.value = [];
+    workStatus.value = null;
+    projectSources.value = [];
     openPrTotal.value = 0;
   }
 }
 
-async function loadMergedPrs() {
-  try {
-    const result = await listIntegrations({
-      limit: MAX_PAGE_LIMIT,
-      offset: 0,
-      status: "merged",
-      projectId: projectId.value,
-    });
-    mergedIntegrations.value = result.items;
-    mergedPrTotal.value = result.total;
-  } catch {
-    mergedIntegrations.value = [];
-    mergedPrTotal.value = 0;
-  }
+function connectProjectEvents() {
+  projectEvents?.close();
+  projectEvents = new EventSource(`/api/v1/projects/${projectId.value}/events`);
+  projectEvents.onmessage = () => void loadWork();
 }
 
 async function runMergeBabysitter() {
@@ -214,16 +230,16 @@ async function load() {
       projectId: projectId.value,
     });
     projectTasks.value = tasks.items;
-    await Promise.all([loadOpenPrs(), loadMergedPrs()]);
+    await loadWork();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     project.value = null;
     doctor.value = null;
     projectTasks.value = [];
-    openIntegrations.value = [];
+    workItems.value = [];
+    workStatus.value = null;
+    projectSources.value = [];
     openPrTotal.value = 0;
-    mergedIntegrations.value = [];
-    mergedPrTotal.value = 0;
   } finally {
     loading.value = false;
     if (route.hash === "#open-prs") {
@@ -254,7 +270,7 @@ async function runSync() {
       projectId: project.value.id,
     });
     projectTasks.value = tasks.items;
-    await Promise.all([loadOpenPrs(), loadMergedPrs()]);
+    await loadWork();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
   } finally {
@@ -284,6 +300,8 @@ watch(projectId, () => {
   hiddenTaskIds.value = new Set();
   void load();
   void loadImpact();
+  void loadWork();
+  connectProjectEvents();
 });
 
 watch(impactRange, () => {
@@ -302,6 +320,15 @@ watch(
 onMounted(() => {
   void load();
   void loadImpact();
+  connectProjectEvents();
+  workPoll = setInterval(() => void loadWork(), 15_000);
+});
+
+onUnmounted(() => {
+  if (workPoll) clearInterval(workPoll);
+  workPoll = null;
+  projectEvents?.close();
+  projectEvents = null;
 });
 </script>
 
@@ -407,88 +434,158 @@ onMounted(() => {
         </div>
       </section>
 
-      <section id="open-prs" class="panel mb-7">
+      <section class="panel mb-7">
         <div class="panel-header impact-header">
-          <span>Open PRs</span>
-          <div class="toolbar">
-            <button
-              v-if="mergeBabysitter && openPrTotal > 0"
-              class="btn btn-sm btn-primary"
-              type="button"
-              :disabled="mergeBusy"
-              @click="runMergeBabysitter()"
-            >
-              {{ mergeBusy ? "Enqueueing…" : "Run merge babysitter" }}
-            </button>
-            <RouterLink
-              v-else-if="openPrTotal > 0"
-              class="btn btn-sm"
-              :to="{ name: 'tasks', query: { projectId: project.id } }"
-            >
-              View tasks
-            </RouterLink>
-          </div>
+          <span>Project command center</span>
+          <span class="muted text-sm">
+            {{
+              workStatus?.asOf
+                ? `Observed ${new Date(workStatus.asOf).toLocaleString()}`
+                : "Awaiting source observations"
+            }}
+          </span>
         </div>
         <div class="panel-body">
-          <p class="muted text-sm mb-5">
-            Currently open gojo-tracked pull requests (not limited to the Impact date range).
-            <template v-if="openPrTotal > 0 && !mergeBabysitter">
-              Add an enabled <span class="mono">maintain-merge</span> task to babysit merges from
-              here.
-            </template>
-          </p>
-          <div v-if="openIntegrations.length === 0" class="muted text-sm">No open PRs</div>
+          <div class="stats-row impact-stats">
+            <div class="stat">
+              <div class="label">Working</div>
+              <div class="value">{{ workStatus?.working ?? 0 }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Queued</div>
+              <div class="value">{{ workStatus?.queued ?? 0 }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Needs attention</div>
+              <div class="value" :class="{ warn: (workStatus?.needsAttention ?? 0) > 0 }">
+                {{ workStatus?.needsAttention ?? 0 }}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="label">Verified open</div>
+              <div class="value">{{ workStatus?.verifiedOpen ?? 0 }}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Stale open</div>
+              <div class="value" :class="{ warn: (workStatus?.staleOpen ?? 0) > 0 }">
+                {{ workStatus?.staleOpen ?? 0 }}
+              </div>
+            </div>
+          </div>
+          <div class="source-health mt-5">
+            <span
+              v-for="source in projectSources"
+              :key="source.id"
+              class="badge"
+              :class="{
+                'badge-success': source.syncState === 'current',
+                'badge-warn': ['stale', 'error'].includes(source.syncState),
+                'badge-neutral': !['current', 'stale', 'error'].includes(source.syncState),
+              }"
+              :title="source.lastError ?? `Observed ${source.observedAt ?? 'never'}`"
+            >
+              {{ source.displayName }} · {{ source.syncState }}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel mb-7">
+        <div class="panel-header">Now</div>
+        <div class="panel-body">
+          <div v-if="nowWork.length === 0" class="muted text-sm">No active or queued work</div>
           <div v-else class="table-wrap">
             <table class="data">
-              <thead>
-                <tr>
-                  <th>PR</th>
-                  <th>Task</th>
-                  <th>Branch</th>
-                  <th>Opened</th>
-                  <th>Last check</th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead><tr><th>Work</th><th>Agent / actor</th><th>Phase</th><th>Source</th><th>Activity</th></tr></thead>
               <tbody>
-                <tr v-for="row in openIntegrations" :key="row.runId">
+                <tr v-for="item in nowWork" :key="item.id">
                   <td>
+                    <RouterLink
+                      v-if="item.kind === 'run' && item.nativeKey"
+                      :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
+                      class="entity-name"
+                    >{{ item.title }}</RouterLink>
                     <a
-                      v-if="isExternalPrUrl(row.prUrl)"
-                      :href="row.prUrl!"
+                      v-else-if="item.webUrl"
+                      :href="item.webUrl"
                       class="entity-name"
                       target="_blank"
                       rel="noopener noreferrer"
-                    >
-                      {{ prLabel(row) }}
-                    </a>
-                    <span v-else class="mono">{{ prLabel(row) }}</span>
-                    <div v-if="row.lastError" class="muted text-sm">{{ row.lastError }}</div>
+                    >{{ item.title }}</a>
+                    <span v-else>{{ item.title }}</span>
+                    <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
                   </td>
+                  <td>{{ item.actorName ?? item.provenance }}</td>
+                  <td><span class="badge badge-neutral">{{ item.execution }}</span></td>
+                  <td>{{ sourceLabel(item) }}</td>
+                  <td class="mono muted">{{ observedLabel(item) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="attentionWork.length > 0" class="panel mb-7">
+        <div class="panel-header">Needs attention</div>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Work</th><th>Reason</th><th>Source</th><th>Last observation</th></tr></thead>
+              <tbody>
+                <tr v-for="item in attentionWork" :key="item.id">
+                  <td>{{ item.title }}</td>
                   <td>
-                    <RouterLink
-                      v-if="row.taskId"
-                      :to="{ name: 'task-detail', params: { id: row.taskId } }"
+                    <span class="badge badge-warn">{{ item.attention }}</span>
+                    <div v-if="item.lastError" class="muted text-sm">{{ item.lastError }}</div>
+                  </td>
+                  <td>{{ sourceLabel(item) }}</td>
+                  <td class="mono muted">{{ observedLabel(item) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="delivery" class="panel mb-7">
+        <div class="panel-header impact-header">
+          <span>Delivery</span>
+          <button
+            v-if="mergeBabysitter && openPrTotal > 0"
+            class="btn btn-sm btn-primary"
+            type="button"
+            :disabled="mergeBusy"
+            @click="runMergeBabysitter()"
+          >
+            {{ mergeBusy ? "Enqueueing…" : "Run merge babysitter" }}
+          </button>
+        </div>
+        <div class="panel-body">
+          <div v-if="deliveryWork.length === 0" class="muted text-sm">No active delivery work</div>
+          <div v-else class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Work</th><th>State</th><th>Provenance</th><th>Source</th><th>Observed</th></tr></thead>
+              <tbody>
+                <tr v-for="item in deliveryWork" :key="item.id">
+                  <td>
+                    <a
+                      v-if="item.webUrl"
+                      :href="item.webUrl"
                       class="entity-name"
-                    >
-                      {{ row.taskName ?? row.taskId }}
-                    </RouterLink>
-                    <span v-else class="muted">—</span>
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ item.title }}</a>
+                    <span v-else>{{ item.title }}</span>
+                    <div v-if="item.labels.length > 0" class="muted text-sm">
+                      {{ item.labels.join(" · ") }}
+                    </div>
                   </td>
-                  <td class="mono muted">{{ row.branchName ?? "—" }}</td>
+                  <td><span class="badge badge-neutral">{{ item.delivery }}</span></td>
+                  <td>{{ item.provenance }}</td>
+                  <td>{{ sourceLabel(item) }}</td>
                   <td class="mono muted">
-                    {{ row.openedAt ? new Date(row.openedAt).toLocaleString() : "—" }}
-                  </td>
-                  <td class="mono muted">
-                    {{ row.lastCheckedAt ? new Date(row.lastCheckedAt).toLocaleString() : "—" }}
-                  </td>
-                  <td>
-                    <RouterLink
-                      :to="{ name: 'run-detail', params: { id: row.runId } }"
-                      class="btn btn-sm"
-                    >
-                      Run
-                    </RouterLink>
+                    {{ observedLabel(item) }} · {{ item.syncState }}
                   </td>
                 </tr>
               </tbody>
@@ -497,68 +594,25 @@ onMounted(() => {
         </div>
       </section>
 
-      <section id="merged-prs" class="panel mb-7">
-        <div class="panel-header">Recently merged</div>
+      <section class="panel mb-7">
+        <div class="panel-header">History</div>
         <div class="panel-body">
-          <p class="muted text-sm mb-5">
-            Recently merged gojo-tracked pull requests (live status, not limited to the Impact date
-            range).
-          </p>
-          <div v-if="mergedIntegrations.length === 0" class="muted text-sm">No merged PRs</div>
+          <div v-if="historyWork.length === 0" class="muted text-sm">No completed work yet</div>
           <div v-else class="table-wrap">
             <table class="data">
-              <thead>
-                <tr>
-                  <th>PR</th>
-                  <th>Task</th>
-                  <th>Branch</th>
-                  <th>Merged</th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead><tr><th>Work</th><th>Outcome</th><th>Source</th><th>Completed / updated</th></tr></thead>
               <tbody>
-                <tr v-for="row in mergedIntegrations" :key="row.runId">
-                  <td>
-                    <a
-                      v-if="isExternalPrUrl(row.prUrl)"
-                      :href="row.prUrl!"
-                      class="entity-name"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {{ prLabel(row) }}
-                    </a>
-                    <span v-else class="mono">{{ prLabel(row) }}</span>
-                  </td>
-                  <td>
-                    <RouterLink
-                      v-if="row.taskId"
-                      :to="{ name: 'task-detail', params: { id: row.taskId } }"
-                      class="entity-name"
-                    >
-                      {{ row.taskName ?? row.taskId }}
-                    </RouterLink>
-                    <span v-else class="muted">—</span>
-                  </td>
-                  <td class="mono muted">{{ row.branchName ?? "—" }}</td>
+                <tr v-for="item in historyWork.slice(0, 25)" :key="item.id">
+                  <td>{{ item.title }}</td>
+                  <td>{{ item.delivery !== "none" ? item.delivery : item.outcome }}</td>
+                  <td>{{ sourceLabel(item) }}</td>
                   <td class="mono muted">
-                    {{ row.mergedAt ? new Date(row.mergedAt).toLocaleString() : "—" }}
-                  </td>
-                  <td>
-                    <RouterLink
-                      :to="{ name: 'run-detail', params: { id: row.runId } }"
-                      class="btn btn-sm"
-                    >
-                      Run
-                    </RouterLink>
+                    {{ new Date(item.completedAt ?? item.updatedAt).toLocaleString() }}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p v-if="mergedPrTotal > mergedIntegrations.length" class="muted text-sm mt-3">
-            Showing {{ mergedIntegrations.length }} of {{ mergedPrTotal }}
-          </p>
         </div>
       </section>
 
@@ -586,14 +640,14 @@ onMounted(() => {
               <div class="label">PRs open</div>
               <div class="value">
                 <a
-                  v-if="openPrTotal > 0 || impact.totals.prsOpen > 0"
-                  href="#open-prs"
+                  v-if="openPrTotal > 0"
+                  href="#delivery"
                   class="entity-name"
                   @click.prevent="scrollToOpenPrs"
                 >
-                  {{ openPrTotal || impact.totals.prsOpen }}
+                  {{ openPrTotal }}
                 </a>
-                <template v-else>{{ impact.totals.prsOpen }}</template>
+                <template v-else>0</template>
               </div>
             </div>
             <div class="stat">

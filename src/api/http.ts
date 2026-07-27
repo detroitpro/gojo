@@ -18,6 +18,8 @@ export type AuthContext = {
   userId: string;
   username: string;
   authMethod: "session" | "token";
+  tokenId?: string;
+  scopes?: string[];
 };
 
 export function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Response {

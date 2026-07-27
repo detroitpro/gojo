@@ -14,7 +14,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 | `dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; calls `executeRun` for admits |
 | `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + task prompt + validation gate |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
-| `events.ts` | In-memory run event bus |
+| `events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
 | `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
 | `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
 
@@ -30,7 +30,7 @@ All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — 
 
 Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
 
-Gojo-tracked PRs are listed by `GET /api/v1/integrations?status=open|merged` (and `gojo integration list --open|--merged`). `status` is required. Default sort is `openedAt` desc for open and `mergedAt` desc for merged. Project summaries include `openPrCount`; `GET /projects?hasOpenPrs=true` filters to projects with at least one open PR. This count is **not** Impact’s date window — it is live `run_integrations.status = 'open'`. The ops UI shows Open PRs and Recently merged panels on project detail (with a **Run merge babysitter** CTA when an enabled `maintain-merge` task exists), an Open PRs column on the projects list, and the project remote URL in Overview when set.
+Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged` (and `gojo integration list --open|--merged`) as a compatibility/specialist view. Project summaries and the command center derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /projects?hasOpenPrs=true` uses the same verified semantics.
 
 Task enable/disable mirrors schedules: `POST /api/v1/tasks/:id/enable|disable`, `gojo task enable|disable <id>`, and the Tasks UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable tasks absent from `gojo.yaml`.
 
@@ -38,11 +38,12 @@ Task detail (`GET /api/v1/tasks/:id`, `gojo task inspect <id>`, UI `/tasks/:id`)
 
 ## Prompt assembly
 
-For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, then the validation command section. Shell adapters skip instructions (script must stay executable) and only comment-append validation.
+For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, validation commands, and the run-scoped progress reporting contract. Shell adapters skip instructions (script must stay executable) and only comment-append validation.
 
 ## Self-healing plumbing
 
-- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_TASK_ID`, and `GOJO_PROJECT_ID` into agent env (`agent-run-*` tokens are short-lived and revoked when the agent attempt finishes; Settings hides them by default).
+- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_TASK_ID`, and `GOJO_PROJECT_ID` into agent env. `agent-run-*` tokens are short-lived, restricted to `POST /runs/:id/progress` for that run, and revoked when the attempt finishes.
+- Enqueue atomically creates a Work item and immutable `run_context` snapshot (task/prompt/manifest hash/agent profile/policies/base/schedule). State transitions, progress, validation, artifacts, and heal lineage remain attributable after restart or later manifest edits.
 - On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts tasks/schedules by name and **soft-disables** tasks and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
 - Workspace branch/worktree names are `gojo/<task>/<project>/<date>/run-<fullRunId>` (optional `-aN` attempt suffix) under `$GOJO_HOME/worktrees`. Full ULID + project slug avoids collisions when many schedules fire in the same millisecond; task stays second so allowlists like `gojo/maintain-quality` still match. Orphan paths under the worktrees root are reclaimed before `git worktree add`.
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer task itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
@@ -58,7 +59,7 @@ When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo’s pulls merge A
 
 After integration the coordinator persists two canonical record sets (accounting failures never fail the run):
 
-- **`run_integrations`** (one row per run) — mode, provider (`forgejo` for tea, `github` for gh), PR number/URL, commit SHA, and a status independent of run state: `open` / `merged` / `closed` / `committed` / `conflict` / `failed`. Direct `auto-merge` persists `merged` immediately; `pull-request` persists `open` with a `next_check_at` so the integration-status reconciler (`integration/status-reconciler.ts`, invoked from the scheduler tick) can observe the external merge/close later. “Automation merged” metrics count `merged` integration rows — never `RunState.Succeeded`.
+- **`run_integrations`** (one compatibility row per run) — mode, provider, PR number/URL, commit SHA, and integration status. The reconciler never abandons a nonterminal PR: current opens are checked every minute and errors back off to at most fifteen minutes. The linked Work resource carries source observation/freshness and provider sync discovers human/bot work as well as gojo-created work.
 - **`run_impact_items`** (unique per `(run, category, subject)`) — built by `impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema.
 
 The agent handoff is runtime-validated (`normalizeAgentHandoff`, schema v1/v2) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`.

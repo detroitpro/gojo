@@ -11,6 +11,7 @@ import { defaultBackupDest } from "@/backup/list";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
+import { ensureProjectRepositorySource } from "@/sources";
 import { getTaskDetail, listIntegrationsPage } from "@/storage/paged-lists";
 import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
 import {
@@ -160,6 +161,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
           ...(branch ? { defaultBranch: branch } : {}),
           ...(remote !== undefined ? { remoteUrl: remote } : {}),
         });
+        ensureProjectRepositorySource(ctx.db, project.id);
         printOutput(format, { project });
         break;
       }
@@ -188,7 +190,9 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         if (!project) {
           die("project not found", format);
         }
-        printOutput(format, { sync: syncProjectFromManifest(ctx.repos, project) });
+        const sync = syncProjectFromManifest(ctx.repos, project);
+        ensureProjectRepositorySource(ctx.db, project.id);
+        printOutput(format, { sync });
         break;
       }
       case "doctor": {
@@ -201,6 +205,65 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
           die("project not found", format);
         }
         printOutput(format, await projectDoctor(project, ctx.repos));
+        break;
+      }
+      case "work": {
+        const id = parsed.positional[0];
+        if (!id) die("usage: gojo project work <id>", format);
+        const result = ctx.work.items.listByProject(id, {
+          limit: DEFAULT_PAGE_LIMIT,
+          offset: 0,
+          kind: getFlagString(parsed, "kind") ?? null,
+          provenance:
+            (getFlagString(parsed, "provenance") as
+              | "gojo-agent"
+              | "human"
+              | "bot"
+              | "external"
+              | undefined) ?? null,
+          delivery:
+            (getFlagString(parsed, "delivery") as
+              | "none"
+              | "draft"
+              | "open"
+              | "review"
+              | "blocked"
+              | "merged"
+              | "closed"
+              | undefined) ?? null,
+          attention:
+            (getFlagString(parsed, "attention") as
+              | "none"
+              | "approval"
+              | "blocked"
+              | "sync-error"
+              | "stale"
+              | undefined) ?? null,
+        });
+        printOutput(format, result);
+        break;
+      }
+      case "status": {
+        const id = parsed.positional[0];
+        if (!id) die("usage: gojo project status <id>", format);
+        printOutput(format, ctx.work.items.status(id));
+        break;
+      }
+      case "sources": {
+        const id = parsed.positional[0];
+        if (!id) die("usage: gojo project sources <id>", format);
+        printOutput(format, { sources: ctx.work.sources.listByProject(id) });
+        break;
+      }
+      case "refresh-source": {
+        const id = parsed.positional[0];
+        const sourceId = parsed.positional[1];
+        if (!id || !sourceId) {
+          die("usage: gojo project refresh-source <id> <sourceId>", format);
+        }
+        const source = ctx.work.sources.findById(sourceId);
+        if (!source || source.projectId !== id) die("project source not found", format);
+        printOutput(format, { sync: await ctx.sourceSync.syncSource(sourceId) });
         break;
       }
       case "remove": {
@@ -591,7 +654,7 @@ Commands:
   setup                         Create admin user
   server start|status|stop|doctor
   service install|uninstall|start|stop|restart|status|logs
-  project add|list|inspect|sync|doctor|remove
+  project add|list|inspect|sync|doctor|work|status|sources|refresh-source|remove
   agent detect|list|inspect|test
   task list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next

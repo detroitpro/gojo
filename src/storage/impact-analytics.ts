@@ -14,7 +14,7 @@ export interface DashboardImpactTotals {
   succeededRuns: number;
   /** Integrations that produced a real PR (any current status). */
   prsOpened: number;
-  /** PRs currently open (reconciler still tracking). */
+  /** Source-current open PRs; stale last-known-open work is excluded. */
   prsOpen: number;
   /** Runs whose canonical integration status is `merged`. */
   mergedRuns: number;
@@ -77,6 +77,27 @@ function runFilter(query: DashboardImpactQuery): { clause: string; params: strin
   };
 }
 
+function workFilter(query: DashboardImpactQuery): { clause: string; params: string[] } {
+  const conditions: string[] = [];
+  const params: string[] = [];
+  if (query.projectId) {
+    conditions.push("wi.project_id = ?");
+    params.push(query.projectId);
+  }
+  if (query.from) {
+    conditions.push("wi.created_at >= ?");
+    params.push(query.from);
+  }
+  if (query.to) {
+    conditions.push("wi.created_at <= ?");
+    params.push(query.to);
+  }
+  return {
+    clause: conditions.length > 0 ? ` AND ${conditions.join(" AND ")}` : "",
+    params,
+  };
+}
+
 /**
  * Aggregate canonical impact and integration outcomes in SQL.
  * Counts only persisted records — never raw handoff JSON or run states.
@@ -109,7 +130,17 @@ export function getDashboardImpact(
     >(
       `SELECT
          COALESCE(SUM(CASE WHEN ri.pr_number IS NOT NULL THEN 1 ELSE 0 END), 0) AS prs_opened,
-         COALESCE(SUM(CASE WHEN ri.status = 'open' THEN 1 ELSE 0 END), 0) AS prs_open,
+         COALESCE(SUM(CASE WHEN ri.status = 'open'
+           AND ri.next_check_at IS NOT NULL
+           AND ri.last_error IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM work_links wl
+             JOIN work_items linked ON linked.id = wl.target_work_item_id
+             WHERE wl.source_work_item_id = r.work_item_id
+               AND wl.type = 'delivers'
+               AND linked.kind = 'pull-request'
+           )
+           THEN 1 ELSE 0 END), 0) AS prs_open,
          COALESCE(SUM(CASE WHEN ri.status = 'merged' THEN 1 ELSE 0 END), 0) AS merged_runs,
          COALESCE(SUM(CASE WHEN ri.status = 'closed' THEN 1 ELSE 0 END), 0) AS closed_unmerged,
          COALESCE(SUM(CASE WHEN ri.commit_sha IS NOT NULL THEN 1 ELSE 0 END), 0) AS commits,
@@ -122,6 +153,18 @@ export function getDashboardImpact(
 
   const mergedRuns = integrationTotals?.merged_runs ?? 0;
   const mergeTracked = integrationTotals?.merge_tracked ?? 0;
+  const work = workFilter(query);
+  const verifiedOpenPrs =
+    sqlite
+      .query<{ count: number }, string[]>(
+        `SELECT COUNT(*) AS count
+         FROM work_items wi
+         WHERE wi.kind = 'pull-request'
+           AND wi.delivery IN ('draft', 'open', 'review')
+           AND wi.sync_state = 'current'
+           AND wi.archived_at IS NULL${work.clause}`,
+      )
+      .get(...work.params)?.count ?? 0;
 
   const categories = sqlite
     .query<{ category: string; verification: string; count: number }, string[]>(
@@ -171,7 +214,7 @@ export function getDashboardImpact(
     totals: {
       succeededRuns,
       prsOpened: integrationTotals?.prs_opened ?? 0,
-      prsOpen: integrationTotals?.prs_open ?? 0,
+      prsOpen: verifiedOpenPrs + (integrationTotals?.prs_open ?? 0),
       mergedRuns,
       closedUnmerged: integrationTotals?.closed_unmerged ?? 0,
       commits: integrationTotals?.commits ?? 0,

@@ -18,6 +18,7 @@ import type {
   IntegrationListItem,
   Project,
   ProjectDoctorResult,
+  ProjectSource,
   ProjectSyncResponse,
   QueueSnapshot,
   Run,
@@ -31,6 +32,8 @@ import type {
   SchedulingPolicy,
   Task,
   User,
+  WorkItem,
+  WorkStatus,
 } from "./types";
 import { ApiError } from "./types";
 import { buildListQuery, type ListQuery, type PaginatedResult } from "./lib/pagination";
@@ -338,6 +341,40 @@ export async function syncProject(id: string): Promise<ProjectSyncResponse> {
     throw new ApiError("not_found", "Project not found after sync", 404);
   }
   return { project: data.project, sync: data.sync };
+}
+
+export async function listProjectWork(
+  projectId: string,
+  query: ListQuery = {},
+): Promise<PaginatedResult<WorkItem>> {
+  const { data } = await request<{
+    items: WorkItem[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/projects/${projectId}/work${buildListQuery(query)}`);
+  return data;
+}
+
+export async function getProjectWorkStatus(projectId: string): Promise<WorkStatus> {
+  const { data } = await request<WorkStatus>(`/projects/${projectId}/work/status`);
+  return data;
+}
+
+export async function listProjectSources(projectId: string): Promise<ProjectSource[]> {
+  const { data } = await request<{ sources: ProjectSource[] }>(
+    `/projects/${projectId}/sources`,
+  );
+  return data.sources;
+}
+
+export async function refreshProjectSource(
+  projectId: string,
+  sourceId: string,
+): Promise<void> {
+  await request(`/projects/${projectId}/sources/${sourceId}/refresh`, {
+    method: "POST",
+  });
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

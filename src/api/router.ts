@@ -35,6 +35,7 @@ import {
 import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "@/app/project-sync";
+import { defaultSourceAdapters, ensureProjectRepositorySource } from "@/sources";
 import {
   getInstanceSetting,
   getSchedulingPolicy,
@@ -71,6 +72,13 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
+import type {
+  WorkAttention,
+  WorkDelivery,
+  WorkExecution,
+  WorkOutcome,
+  WorkProvenance,
+} from "@shared/work";
 
 type RunListItem = {
   id: string;
@@ -123,6 +131,71 @@ function parseEnabledParam(value: string | null): boolean | null {
   return null;
 }
 
+function parseWorkProvenance(value: string | null): WorkProvenance | null {
+  return value === "gojo-agent" ||
+    value === "human" ||
+    value === "bot" ||
+    value === "external"
+    ? value
+    : null;
+}
+
+function parseWorkDelivery(value: string | null): WorkDelivery | null {
+  return value === "none" ||
+    value === "draft" ||
+    value === "open" ||
+    value === "review" ||
+    value === "blocked" ||
+    value === "merged" ||
+    value === "closed"
+    ? value
+    : null;
+}
+
+function parseWorkAttention(value: string | null): WorkAttention | null {
+  return value === "none" ||
+    value === "approval" ||
+    value === "blocked" ||
+    value === "sync-error" ||
+    value === "stale"
+    ? value
+    : null;
+}
+
+function parseWorkExecution(value: string | null): WorkExecution | null {
+  const allowed: WorkExecution[] = [
+    "queued",
+    "preparing",
+    "running",
+    "validating",
+    "awaiting-approval",
+    "integrating",
+    "reporting",
+    "terminal",
+    "none",
+  ];
+  return allowed.includes(value as WorkExecution) ? (value as WorkExecution) : null;
+}
+
+function parseWorkOutcome(value: string | null): WorkOutcome | null {
+  const allowed: WorkOutcome[] = [
+    "pending",
+    "succeeded",
+    "failed",
+    "no-change",
+    "canceled",
+  ];
+  return allowed.includes(value as WorkOutcome) ? (value as WorkOutcome) : null;
+}
+
+function parseJsonValue(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return {};
+  }
+}
+
 function publicUser(user: { id: string; username: string; role: string }) {
   return { id: user.id, username: user.username, role: user.role };
 }
@@ -133,9 +206,15 @@ function resolveAuth(ctx: AppContext, request: Request): AuthContext | null {
 
   const token = bearerToken(request);
   if (token) {
-    const user = users.verifyApiToken(token);
-    if (user) {
-      return { userId: user.id, username: user.username, authMethod: "token" };
+    const verified = users.verifyApiTokenDetails(token);
+    if (verified) {
+      return {
+        userId: verified.user.id,
+        username: verified.user.username,
+        authMethod: "token",
+        tokenId: verified.token.id,
+        scopes: verified.scopes,
+      };
     }
   }
 
@@ -155,6 +234,9 @@ function resolveAuth(ctx: AppContext, request: Request): AuthContext | null {
 }
 
 function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boolean {
+  if (method === "POST" && /^\/api\/v1\/sources\/[^/]+\/events$/.test(pathname)) {
+    return true;
+  }
   if (pathname === "/api/v1/health" && method === "GET") {
     return true;
   }
@@ -176,7 +258,8 @@ function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boo
 function isAuthExemptMutation(pathname: string): boolean {
   return pathname === "/api/v1/setup" ||
     pathname === "/api/v1/auth/login" ||
-    pathname === "/api/v1/auth/logout";
+    pathname === "/api/v1/auth/logout" ||
+    /^\/api\/v1\/sources\/[^/]+\/events$/.test(pathname);
 }
 
 function isMutating(method: string): boolean {
@@ -227,6 +310,21 @@ export async function handleApiRequest(
       const auth = resolveAuth(ctx, request);
       if (!auth) {
         return failure("unauthorized", "Authentication required", 401);
+      }
+      if (
+        auth.authMethod === "token" &&
+        auth.scopes &&
+        auth.scopes.length > 0 &&
+        !auth.scopes.some((scope) => {
+          const match = scope.match(/^run:progress:(.+)$/);
+          return (
+            method === "POST" &&
+            match?.[1] != null &&
+            pathname === `/api/v1/runs/${match[1]}/progress`
+          );
+        })
+      ) {
+        return failure("forbidden", "Token scope does not allow this operation", 403);
       }
       (request as Request & { auth?: AuthContext }).auth = auth;
     }
@@ -443,6 +541,11 @@ export async function handleApiRequest(
       ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}),
       ...(body.remoteUrl !== undefined ? { remoteUrl: body.remoteUrl } : {}),
     });
+    try {
+      ensureProjectRepositorySource(ctx.db, project.id);
+    } catch {
+      // Repository discovery is best-effort; source health exposes failures.
+    }
 
     return success({ project: toProjectDetailRow(ctx.db, project) }, 201);
   }
@@ -469,13 +572,173 @@ export async function handleApiRequest(
       return success(await projectDoctor(project, ctx.repos));
     }
 
+    if (method === "GET" && action === "work") {
+      const page = parsePageParamsFromUrl(url);
+      return success(
+        ctx.work.items.listByProject(projectId, {
+          ...page,
+          kind: url.searchParams.get("kind"),
+          provenance: parseWorkProvenance(url.searchParams.get("provenance")),
+          delivery: parseWorkDelivery(url.searchParams.get("delivery")),
+          attention: parseWorkAttention(url.searchParams.get("attention")),
+          execution: parseWorkExecution(url.searchParams.get("execution")),
+          outcome: parseWorkOutcome(url.searchParams.get("outcome")),
+          sourceId: url.searchParams.get("sourceId"),
+          actor: url.searchParams.get("actor"),
+          label: url.searchParams.get("label"),
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+          q: url.searchParams.get("q"),
+        }),
+      );
+    }
+
+    if (method === "GET" && action === "work/status") {
+      return success(ctx.work.items.status(projectId));
+    }
+
+    if (method === "GET" && action === "events") {
+      const last = Number(request.headers.get("Last-Event-ID") ?? "0");
+      const stream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          let sequence = Number.isFinite(last) ? last : 0;
+          let closed = false;
+          const sendAvailable = () => {
+            if (closed) return;
+            for (const event of ctx.work.events.listByProject(projectId, sequence, 500)) {
+              sequence = event.sequence;
+              controller.enqueue(
+                encoder.encode(
+                  `id: ${event.sequence}\ndata: ${JSON.stringify(event)}\n\n`,
+                ),
+              );
+            }
+          };
+          sendAvailable();
+          const timer = setInterval(sendAvailable, 1_000);
+          request.signal.addEventListener(
+            "abort",
+            () => {
+              closed = true;
+              clearInterval(timer);
+              try {
+                controller.close();
+              } catch {
+                // already closed
+              }
+            },
+            { once: true },
+          );
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    if (method === "GET" && action === "sources") {
+      const sources = ctx.work.sources.listByProject(projectId).map((source) => ({
+        ...source,
+        connection: source.connectionId
+          ? ctx.work.connections.findById(source.connectionId)
+          : null,
+        cursor: ctx.work.sync.cursor(source.id),
+      }));
+      return success({ sources });
+    }
+
+    if (method === "POST" && action === "sources") {
+      const body = await readJsonBody<{
+        name?: string;
+        adapter?: string;
+        baseUrl?: string | null;
+        config?: Record<string, unknown>;
+        kind?: string;
+        externalKey?: string;
+        displayName?: string;
+        webUrl?: string | null;
+      }>(request);
+      const adapter = defaultSourceAdapters().find(
+        (candidate) => candidate.type === body?.adapter,
+      );
+      if (!body?.name || !adapter || !body.kind || !body.externalKey) {
+        return failure(
+          "validation_error",
+          "name, supported adapter, kind, and externalKey are required",
+          400,
+        );
+      }
+      const connection = ctx.work.connections.create({
+        name: body.name,
+        adapter: adapter.type,
+        baseUrl: body.baseUrl ?? null,
+        configJson: JSON.stringify(body.config ?? {}),
+        capabilities: adapter.capabilities,
+      });
+      const source = ctx.work.sources.create({
+        projectId,
+        connectionId: connection.id,
+        kind: body.kind,
+        externalKey: body.externalKey,
+        displayName: body.displayName ?? body.externalKey,
+        webUrl: body.webUrl ?? null,
+      });
+      return success({ source, connection }, 201);
+    }
+
+    const sourceRefreshMatch = action?.match(/^sources\/([^/]+)\/refresh$/);
+    if (method === "POST" && sourceRefreshMatch) {
+      const sourceId = sourceRefreshMatch[1] ?? "";
+      const source = ctx.work.sources.findById(sourceId);
+      if (!source || source.projectId !== projectId) {
+        return failure("not_found", "Project source not found", 404);
+      }
+      return success({ sync: await ctx.sourceSync.syncSource(sourceId) }, 202);
+    }
+
     if (method === "POST" && action === "sync") {
       const result = syncProjectFromManifest(ctx.repos, project);
+      ensureProjectRepositorySource(ctx.db, project.id);
       const refreshed = ctx.repos.projects.findById(projectId);
       return success({
         project: refreshed ? toProjectDetailRow(ctx.db, refreshed) : null,
         sync: result,
       });
+    }
+  }
+
+  const workDetailMatch = pathname.match(/^\/api\/v1\/work\/([^/]+)$/);
+  if (method === "GET" && workDetailMatch) {
+    const workItemId = workDetailMatch[1] ?? "";
+    const work = ctx.work.items.findById(workItemId);
+    if (!work) return failure("not_found", "Work item not found", 404);
+    return success({
+      work,
+      links: ctx.work.links.listByWorkItem(workItemId),
+      events: ctx.work.events.listByWorkItem(workItemId),
+      runContext:
+        work.kind === "run" && work.nativeKey
+          ? ctx.work.runContexts.findByRun(work.nativeKey)
+          : null,
+    });
+  }
+
+  const sourceEventsMatch = pathname.match(/^\/api\/v1\/sources\/([^/]+)\/events$/);
+  if (method === "POST" && sourceEventsMatch) {
+    try {
+      const sourceId = sourceEventsMatch[1] ?? "";
+      const body = await request.text();
+      const signature = request.headers.get("X-Gojo-Signature") ?? "";
+      return success(await ctx.sourceWebhooks.ingest(sourceId, body, signature), 202);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return failure("validation_error", message, 400);
     }
   }
 
@@ -771,7 +1034,26 @@ export async function handleApiRequest(
           send(event);
         });
 
-        for (const event of ctx.eventHistory.list(runId, afterIdOk)) {
+        const durableEvents = run.workItemId
+          ? ctx.work.events
+              .listByWorkItem(run.workItemId, afterIdOk ?? 0)
+              .map((event) => ({
+                id: event.sequence,
+                type: event.type,
+                runId,
+                at: event.occurredAt,
+                data: parseJsonValue(event.dataJson),
+              }))
+          : [];
+        for (const event of durableEvents) {
+          send(event);
+          if (closed) {
+            return;
+          }
+        }
+        for (const event of ctx.eventHistory
+          .list(runId, afterIdOk)
+          .filter((candidate) => candidate.type === "run.agent.output")) {
           send(event);
           if (closed) {
             return;
@@ -813,7 +1095,35 @@ export async function handleApiRequest(
 
   const runActionMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/(cancel|approve|reject|retry)$/);
   const runInspectMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/(diff|artifacts)$/);
+  const runProgressMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/progress$/);
   const runDetailMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)$/);
+
+  if (method === "POST" && runProgressMatch) {
+    const runId = runProgressMatch[1] ?? "";
+    const body = await readJsonBody<{
+      title?: string;
+      summary?: string;
+      blockedReason?: string | null;
+      references?: string[];
+    }>(request);
+    if (!body?.title?.trim() || !body.summary?.trim()) {
+      return failure("validation_error", "title and summary are required", 400);
+    }
+    try {
+      const run = ctx.coordinator.updateProgress(runId, {
+        title: body.title.trim(),
+        summary: body.summary.trim(),
+        blockedReason: body.blockedReason ?? null,
+        references: Array.isArray(body.references)
+          ? body.references.filter((value): value is string => typeof value === "string")
+          : [],
+      });
+      return success({ run: enrichRun(ctx, run) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return failure("not_found", message, 404);
+    }
+  }
 
   if (method === "GET" && runInspectMatch) {
     const runId = runInspectMatch[1] ?? "";

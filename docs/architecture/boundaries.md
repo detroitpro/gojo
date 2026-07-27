@@ -9,6 +9,8 @@ Allowed and forbidden edges among daemon modules. Product rules (agent ≠ succe
 3. **Agents do not write the target branch.** Integration owns commit/PR/merge.
 4. **HTTP handlers stay thin.** Orchestration lives in `runs/`, `app/`, and domain services—not ad-hoc logic in `api/router.ts`.
 5. **SQLite access goes through `storage/`.** Don’t open ad-hoc DB handles from adapters or scheduler.
+6. **Sources preserve native truth.** Adapters normalize observations; they do not collapse provider-specific state into a forge-only model.
+7. **Work is the visibility read model.** UI/API counts come from the same ledger and must expose observation time and freshness.
 
 ## Dependency sketch
 
@@ -19,6 +21,8 @@ scheduler ────────► storage, runs (create/trigger only)
 runs/coordinator ─► workspace, git, agents, validation, integration, storage
 agents ───────────► process (subprocess), not scheduler
 integration ──────► git, storage (merge queue)
+sources ──────────► storage, secrets, provider APIs (never scheduler lease)
+runs ─────────────► work storage (immutable context + semantic events)
 validation ───────► process / shell in worktree
 workspace ────────► git
 ```
@@ -32,6 +36,8 @@ workspace ────────► git
 | Agent `git push` to default branch as success path | `commit-only` / PR / approval modes via integration |
 | UI or router embedding cron math | `scheduler/` + storage |
 | Domain modules importing `api/` for manifest sync | `app/project-sync` (shared by CLI, API, coordinator) |
+| UI counting raw `run_integrations.status='open'` | Work status (`verifiedOpen` vs `staleOpen`) |
+| Provider conditionals spread through router/UI | A `sources/` adapter + declared capabilities |
 
 ## When you change a boundary
 

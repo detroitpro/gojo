@@ -14,7 +14,9 @@ CLI / HTTP API / scheduler tick (one process)
         ├─ workspace + git (isolated worktrees)
         ├─ agents (shell / cursor / claude-code adapters)
         ├─ validation
-        ├─ integration (commit / PR / merge queue + PR status reconcile)
+        ├─ integration (commit / PR / merge queue)
+        ├─ sources (GitHub / GitLab / Forgejo / generic work sync)
+        ├─ work (durable cross-source ledger, links, events, freshness)
         └─ notifications, secrets, backup, telemetry
 ```
 
@@ -37,6 +39,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
 | `validation/` | Validation profile execution (inherits daemon PATH) |
 | `integration/` | Integration modes, merge queue, external PR status reconciler |
+| `sources/` | Source adapter registry, repository discovery, polling/webhook ingestion |
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |
 | `secrets/` | Encrypted secret store |
@@ -46,7 +49,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `diagnostics/` | Doctor checks (instance tools + project baseCheckout / validationTools) |
 | `process/` | Subprocess supervision |
 | `filesystem/` | Host browse helpers for UI |
-| `shared/` | Manifest, handoff, IDs, run states |
+| `shared/` | Manifest, handoff, IDs, run states, source-agnostic Work contract |
 | `config/` | Paths, instance config |
 | `telemetry/` | Optional OTEL hooks |
 | `artifacts/`, `audit/`, `updates/` | Supporting domains |

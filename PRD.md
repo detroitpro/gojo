@@ -387,6 +387,42 @@ A record of an attempted external message, including retries and delivery status
 
 An immutable record of an administrative or system action.
 
+### 7.14 Work item
+
+The canonical operator-facing identity for something being worked on or
+delivered. A work item may be a gojo run, pull/merge request, issue, ticket,
+incident, deployment, document, or another source-native kind.
+
+Execution, delivery, outcome, and attention are independent axes. Every
+external item carries provenance, source identity, native state, observation
+time, freshness, and typed links to related work. Stale last-known-open work
+must never be reported as verified open.
+
+### 7.15 Project source
+
+A project attachment to an authoritative repository, tracker, deployment,
+incident, or other work system. Projects may have multiple sources. Adapters
+declare capabilities and preserve source-native state rather than forcing every
+system into Git concepts.
+
+Initial source adapters are GitHub, GitLab, Forgejo/Gitea, and a signed generic
+work webhook. Polling is the repair loop for readable sources; webhooks provide
+low-latency updates.
+
+### 7.16 Work link and event
+
+Work links record causality and provenance (`executes`, `delivers`, `tracks`,
+`implements`, `retry-of`, `heals`, `supersedes`). Work events are append-only
+semantic lifecycle observations used for durable timeline replay. Raw console
+chunks are artifacts/transient output, not authoritative lifecycle state.
+
+### 7.17 Run context
+
+An immutable enqueue-time snapshot of task intent, prompt, manifest hash,
+instructions, agent profile/adapter/model configuration, validation and
+integration policies, base branch, and schedule. Historical attribution must
+survive later project synchronization.
+
 ---
 
 ## 8. Project Configuration
@@ -1149,6 +1185,10 @@ Shows:
 
 Shows:
 
+* A command center split into Now, Needs attention, Delivery, and History
+* Feature/focus, assigned agent or actor, phase, provenance, and latest activity
+* Source connection health, observation time, errors, and backfill progress
+* Verified-open and stale-last-known-open counts as separate values
 * Repository status
 * Target branch
 * Assigned agents

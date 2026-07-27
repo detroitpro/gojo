@@ -108,6 +108,110 @@ describe("api/router", () => {
     expect(body.data.project.name).toBe("demo");
   });
 
+  test("serves unified work, status, sources, detail, and run progress", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+    const project = ctx!.repos.projects.create({
+      name: "visibility",
+      repoPath: tempDir ?? "/tmp/visibility",
+    });
+    const task = ctx!.repos.tasks.create({
+      projectId: project.id,
+      name: "maintain-work",
+      description: "Maintain the work ledger",
+      prompt: "report",
+    });
+    const run = await ctx!.coordinator.createRun({
+      projectId: project.id,
+      taskId: task.id,
+      trigger: "manual",
+    });
+    const connection = ctx!.work.connections.create({
+      name: "external",
+      adapter: "generic-webhook",
+      capabilities: {
+        read: false,
+        list: false,
+        webhooks: true,
+        write: false,
+        workKinds: ["ticket"],
+      },
+    });
+    const source = ctx!.work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "tracker",
+      externalKey: "ops",
+      displayName: "Operations",
+    });
+    const ticket = ctx!.work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "ticket",
+      nativeKey: "OPS-7",
+      title: "Investigate queue",
+      delivery: "open",
+      provenance: "human",
+      nativeState: "triage",
+      observedAt: "2026-07-27T17:00:00.000Z",
+      syncState: "current",
+    });
+
+    const page = await fetch(
+      `${baseUrl}/api/v1/projects/${project.id}/work?kind=ticket&limit=10`,
+      { headers: auth },
+    );
+    expect(page.status).toBe(200);
+    const pageBody = (await page.json()) as {
+      data: { items: Array<{ id: string; nativeKey: string }>; total: number };
+    };
+    expect(pageBody.data.total).toBe(1);
+    expect(pageBody.data.items[0]?.nativeKey).toBe("OPS-7");
+
+    const status = await fetch(
+      `${baseUrl}/api/v1/projects/${project.id}/work/status`,
+      { headers: auth },
+    );
+    expect(status.status).toBe(200);
+    expect(await status.json()).toMatchObject({
+      data: { verifiedOpen: 1 },
+    });
+
+    const detail = await fetch(`${baseUrl}/api/v1/work/${ticket.id}`, {
+      headers: auth,
+    });
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({
+      data: { work: { nativeKey: "OPS-7" }, links: [], events: [] },
+    });
+
+    const sources = await fetch(`${baseUrl}/api/v1/projects/${project.id}/sources`, {
+      headers: auth,
+    });
+    expect(sources.status).toBe(200);
+    expect(await sources.json()).toMatchObject({
+      data: { sources: [expect.objectContaining({ id: source.id })] },
+    });
+
+    const progress = await fetch(`${baseUrl}/api/v1/runs/${run.id}/progress`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        title: "Implementing command center",
+        summary: "Storage is complete",
+        references: ["OPS-7"],
+      }),
+    });
+    expect(progress.status).toBe(200);
+    expect(ctx!.work.items.findById(run.workItemId ?? "")).toMatchObject({
+      title: "Implementing command center",
+      summary: "Storage is complete",
+    });
+  });
+
   test("direct user service integrates with context", async () => {
     tempDir = mkdtempSync(`${tmpdir()}/gojo-router-users-`);
     ctx = await createAppContext(tempDir);
@@ -827,6 +931,7 @@ describe("api/router", () => {
       prUrl: "https://github.com/me/app/pull/42",
       status: "open",
       openedAt: "2026-07-20T00:00:00.000Z",
+      nextCheckAt: "2026-07-27T19:00:00.000Z",
     });
 
     const missingStatus = await fetch(`${baseUrl}/api/v1/integrations`, { headers: auth });

@@ -58,6 +58,8 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo run list [--project <id>]\|inspect\|logs\|diff` | Observe (`list` defaults to all projects) |
 | `gojo integration list --open\|--merged [--project <id>]` | List open or merged gojo-tracked PRs |
 | `gojo run approve\|reject [--reason]\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
+| `gojo project work\|status\|sources <id>` | Inspect the source-agnostic work ledger and connector health |
+| `gojo project refresh-source <id> <sourceId>` | Reconcile one project source immediately |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 
@@ -72,3 +74,4 @@ Failed runs may enqueue a project **self-heal** task when the manifest declares 
 - [Getting started](/getting-started)
 - [Settings](/settings)
 - [FAQ](/faq)
+- [Project visibility and sources](/project-visibility)

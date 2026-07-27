@@ -103,6 +103,7 @@ interface RunRow {
   expires_at: string | null;
   admitted_at: string | null;
   priority: number;
+  work_item_id: string | null;
 }
 
 interface AttemptRow {
@@ -116,6 +117,7 @@ interface AttemptRow {
   result_commit: string | null;
   pr_url: string | null;
   agent_version: string | null;
+  agent_adapter: string | null;
   exit_code: number | null;
   handoff_json: string | null;
   started_at: string | null;
@@ -229,6 +231,7 @@ export function mapRun(row: RunRow): Run {
     expiresAt: row.expires_at ?? null,
     admittedAt: row.admitted_at ?? null,
     priority: row.priority ?? 30,
+    workItemId: row.work_item_id ?? null,
   };
 }
 
@@ -244,6 +247,7 @@ function mapAttempt(row: AttemptRow): Attempt {
     resultCommit: row.result_commit,
     prUrl: row.pr_url ?? null,
     agentVersion: row.agent_version,
+    agentAdapter: row.agent_adapter ?? null,
     exitCode: row.exit_code,
     handoffJson: row.handoff_json,
     startedAt: row.started_at,
@@ -906,8 +910,8 @@ export function createRepositories(db: Database): Repositories {
           `INSERT INTO runs (
             id, project_id, task_id, schedule_id, state, idempotency_key,
             trigger, created_at, started_at, finished_at, error_message,
-            not_before_at, expires_at, admitted_at, priority
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, NULL, ?)`,
+            not_before_at, expires_at, admitted_at, priority, work_item_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, NULL, ?, ?)`,
         )
         .run(
           id,
@@ -921,6 +925,7 @@ export function createRepositories(db: Database): Repositories {
           notBeforeAt,
           expiresAt,
           priority,
+          input.workItemId ?? null,
         );
 
       return mapRun({
@@ -939,6 +944,7 @@ export function createRepositories(db: Database): Repositories {
         expires_at: expiresAt,
         admitted_at: null,
         priority,
+        work_item_id: input.workItemId ?? null,
       });
     },
 
@@ -1104,12 +1110,15 @@ export function createRepositories(db: Database): Repositories {
         notBeforeAt: input.notBeforeAt !== undefined ? input.notBeforeAt : existing.notBeforeAt,
         expiresAt: input.expiresAt !== undefined ? input.expiresAt : existing.expiresAt,
         priority: input.priority !== undefined ? input.priority : existing.priority,
+        workItemId:
+          input.workItemId !== undefined ? input.workItemId : existing.workItemId,
       };
 
       sqlite
         .query(
           `UPDATE runs SET state = ?, started_at = ?, finished_at = ?, error_message = ?,
-           admitted_at = ?, not_before_at = ?, expires_at = ?, priority = ? WHERE id = ?`,
+           admitted_at = ?, not_before_at = ?, expires_at = ?, priority = ?,
+           work_item_id = ? WHERE id = ?`,
         )
         .run(
           next.state,
@@ -1120,6 +1129,7 @@ export function createRepositories(db: Database): Repositories {
           next.notBeforeAt,
           next.expiresAt,
           next.priority,
+          next.workItemId,
           id,
         );
 
@@ -1141,11 +1151,11 @@ export function createRepositories(db: Database): Repositories {
         .query(
           `INSERT INTO attempts (
             id, run_id, attempt_number, state, workspace_path, branch_name,
-            starting_commit, result_commit, agent_version, exit_code,
+            starting_commit, result_commit, agent_version, agent_adapter, exit_code,
             handoff_json, started_at, finished_at,
             input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
             total_cost_usd, cost_source, usage_json, model, agent_duration_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
         )
         .run(
@@ -1156,6 +1166,7 @@ export function createRepositories(db: Database): Repositories {
           input.workspacePath ?? null,
           input.branchName ?? null,
           input.startingCommit ?? null,
+          input.agentAdapter ?? null,
         );
 
       return mapAttempt({
@@ -1169,6 +1180,7 @@ export function createRepositories(db: Database): Repositories {
         result_commit: null,
         pr_url: null,
         agent_version: null,
+        agent_adapter: input.agentAdapter ?? null,
         exit_code: null,
         handoff_json: null,
         started_at: null,
@@ -1417,20 +1429,43 @@ export function createRepositories(db: Database): Repositories {
 
   const agentProfiles: AgentProfileRepository = {
     create(input) {
-      const id = ulid();
       const createdAt = nowIso();
       const configJson = input.configJson ?? "{}";
+      const projectId = input.projectId ?? null;
+      const existing =
+        projectId === null
+          ? sqlite
+              .query<AgentProfileRow, [string]>(
+                "SELECT * FROM agent_profiles WHERE project_id IS NULL AND name = ? ORDER BY created_at LIMIT 1",
+              )
+              .get(input.name)
+          : sqlite
+              .query<AgentProfileRow, [string, string]>(
+                "SELECT * FROM agent_profiles WHERE project_id = ? AND name = ? ORDER BY created_at LIMIT 1",
+              )
+              .get(projectId, input.name);
+      if (existing) {
+        sqlite
+          .query("UPDATE agent_profiles SET adapter = ?, config_json = ? WHERE id = ?")
+          .run(input.adapter, configJson, existing.id);
+        return mapAgentProfile({
+          ...existing,
+          adapter: input.adapter,
+          config_json: configJson,
+        });
+      }
 
+      const id = ulid();
       sqlite
         .query(
           `INSERT INTO agent_profiles (id, project_id, name, adapter, config_json, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, input.projectId ?? null, input.name, input.adapter, configJson, createdAt);
+        .run(id, projectId, input.name, input.adapter, configJson, createdAt);
 
       return mapAgentProfile({
         id,
-        project_id: input.projectId ?? null,
+        project_id: projectId,
         name: input.name,
         adapter: input.adapter,
         config_json: configJson,

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   IntegrationStatusReconciler,
+  computeErrorNextCheckAt,
   computeNextCheckAt,
   extractPrNumber,
   fetchForgejoPrStatus,
@@ -53,12 +54,12 @@ describe('extractPrNumber', () => {
 });
 
 describe('backoff', () => {
-  test('doubles from five minutes and caps at six hours', () => {
+  test('polls active PRs every minute and only backs errors off to fifteen minutes', () => {
     const now = new Date('2026-07-01T00:00:00.000Z');
-    expect(initialNextCheckAt(now)).toBe('2026-07-01T00:05:00.000Z');
-    expect(computeNextCheckAt(1, now)).toBe('2026-07-01T00:10:00.000Z');
-    expect(computeNextCheckAt(3, now)).toBe('2026-07-01T00:40:00.000Z');
-    expect(computeNextCheckAt(30, now)).toBe('2026-07-01T06:00:00.000Z');
+    expect(initialNextCheckAt(now)).toBe('2026-07-01T00:01:00.000Z');
+    expect(computeNextCheckAt(30, now)).toBe('2026-07-01T00:01:00.000Z');
+    expect(computeErrorNextCheckAt(1, now)).toBe('2026-07-01T00:02:00.000Z');
+    expect(computeErrorNextCheckAt(30, now)).toBe('2026-07-01T00:15:00.000Z');
   });
 });
 
@@ -177,8 +178,7 @@ describe('IntegrationStatusReconciler', () => {
     const updated = repos.runIntegrations.findByRun(integration.runId);
     expect(updated?.status).toBe('open');
     expect(updated?.checkCount).toBe(1);
-    // 5min * 2^1 = 10 minutes after "now"
-    expect(updated?.nextCheckAt).toBe('2026-07-01T00:20:00.000Z');
+    expect(updated?.nextCheckAt).toBe('2026-07-01T00:11:00.000Z');
     db.close();
   });
 
@@ -241,7 +241,7 @@ describe('IntegrationStatusReconciler', () => {
     db.close();
   });
 
-  test('stops polling after the give-up threshold for still-open PRs', async () => {
+  test('never stops polling a nonterminal PR', async () => {
     const { db, repos } = openDb();
     const integration = seedOpenIntegration(repos);
     repos.runIntegrations.update(integration.id, { checkCount: 59 });
@@ -255,7 +255,7 @@ describe('IntegrationStatusReconciler', () => {
     const updated = repos.runIntegrations.findByRun(integration.runId);
     expect(updated?.status).toBe('open');
     expect(updated?.checkCount).toBe(60);
-    expect(updated?.nextCheckAt).toBeNull();
+    expect(updated?.nextCheckAt).toBe('2026-07-01T00:11:00.000Z');
     db.close();
   });
 

@@ -14,6 +14,21 @@ export type {
   TaskRepository,
 } from "./repositories";
 export { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
+export { createWorkRepositories } from "./work-repositories";
+export type {
+  CreateProjectSourceInput,
+  CreateSourceConnectionInput,
+  CreateWorkItemInput,
+  ProjectSource,
+  RunContextRecord,
+  SourceConnection,
+  UpsertExternalWorkInput,
+  WorkEvent,
+  WorkLink,
+  WorkListInput,
+  WorkPage,
+  WorkRepositories,
+} from "./work-repositories";
 export {
   getInstanceSetting,
   getSchedulingPolicy,

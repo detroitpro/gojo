@@ -25,7 +25,7 @@ function queryParam(key: string): string {
 const loading = ref(true);
 const error = ref("");
 const paused = ref(false);
-const activeRuns = ref(0);
+const runningRuns = ref(0);
 const waitingRuns = ref(0);
 const projectCount = ref(0);
 const taskCount = ref(0);
@@ -79,7 +79,7 @@ async function load() {
       getDashboardOverview(),
     ]);
     paused.value = dashboard.paused;
-    activeRuns.value = dashboard.activeRuns;
+    runningRuns.value = dashboard.runningRuns ?? 0;
     waitingRuns.value = dashboard.waitingRuns ?? 0;
     projectCount.value = dashboard.projects;
     taskCount.value = dashboard.tasks;
@@ -155,7 +155,7 @@ onMounted(() => {
         <div class="status-band-primary">
           <div class="label">{{ paused ? "Scheduler" : "Active now" }}</div>
           <div class="value" :class="{ 'is-paused': paused }">
-            {{ paused ? "Paused" : activeRuns }}
+            {{ paused ? "Paused" : runningRuns }}
           </div>
           <div class="hint">
             <template v-if="paused">Cron stays quiet until you resume</template>

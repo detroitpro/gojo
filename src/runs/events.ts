@@ -41,6 +41,8 @@ export class RunEventHistory {
   record(event: RunEvent): void {
     if (event.id == null) {
       event.id = this.nextId++;
+    } else {
+      this.nextId = Math.max(this.nextId, event.id + 1);
     }
     const list = this.events.get(event.runId) ?? [];
     list.push(event);

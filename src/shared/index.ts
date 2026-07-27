@@ -152,3 +152,27 @@ export {
   SchedulingPolicySchema,
 } from './scheduling';
 export type { SchedulingPolicy } from './scheduling';
+
+export {
+  SourceCapabilitiesSchema,
+  SourceSyncStateSchema,
+  WorkAttentionSchema,
+  WorkDeliverySchema,
+  WorkExecutionSchema,
+  WorkItemSchema,
+  WorkLinkTypeSchema,
+  WorkOutcomeSchema,
+  WorkProvenanceSchema,
+} from './work';
+export type {
+  SourceCapabilities,
+  SourceSyncState,
+  WorkAttention,
+  WorkDelivery,
+  WorkExecution,
+  WorkItem,
+  WorkLinkType,
+  WorkOutcome,
+  WorkProvenance,
+  WorkStatus,
+} from './work';

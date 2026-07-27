@@ -32,8 +32,91 @@ export interface ProjectSummaryCounts {
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
-  /** Currently-open gojo-tracked PRs (not Impact’s date window). */
+  /** Source-verified open PRs; stale last-known-open work is excluded. */
   openPrCount: number;
+}
+
+export type WorkExecution =
+  | "queued"
+  | "preparing"
+  | "running"
+  | "validating"
+  | "awaiting-approval"
+  | "integrating"
+  | "reporting"
+  | "terminal"
+  | "none";
+export type WorkDelivery =
+  | "none"
+  | "draft"
+  | "open"
+  | "review"
+  | "blocked"
+  | "merged"
+  | "closed";
+export type WorkAttention = "none" | "approval" | "blocked" | "sync-error" | "stale";
+export type SourceSyncState =
+  | "pending"
+  | "syncing"
+  | "current"
+  | "stale"
+  | "error"
+  | "unsupported";
+
+export interface WorkItem {
+  id: string;
+  projectId: string;
+  sourceId: string | null;
+  kind: string;
+  nativeKey: string | null;
+  title: string;
+  summary: string;
+  execution: WorkExecution;
+  delivery: WorkDelivery;
+  outcome: "pending" | "succeeded" | "failed" | "no-change" | "canceled";
+  attention: WorkAttention;
+  provenance: "gojo-agent" | "human" | "bot" | "external";
+  actorName: string | null;
+  labels: string[];
+  nativeState: string | null;
+  webUrl: string | null;
+  observedAt: string | null;
+  nextSyncAt: string | null;
+  syncState: SourceSyncState;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface WorkStatus {
+  working: number;
+  queued: number;
+  needsAttention: number;
+  verifiedOpen: number;
+  staleOpen: number;
+  asOf: string | null;
+}
+
+export interface ProjectSource {
+  id: string;
+  projectId: string;
+  connectionId: string | null;
+  kind: string;
+  externalKey: string;
+  displayName: string;
+  webUrl: string | null;
+  syncState: SourceSyncState;
+  observedAt: string | null;
+  nextSyncAt: string | null;
+  lastError: string | null;
+  connection: {
+    id: string;
+    name: string;
+    adapter: string;
+    capabilities: { workKinds: string[] };
+  } | null;
 }
 
 export type IntegrationListStatus = "open" | "merged";
@@ -96,6 +179,7 @@ export interface Run {
   expiresAt?: string | null;
   admittedAt?: string | null;
   priority?: number;
+  workItemId?: string | null;
   /** Present on list/detail API responses */
   projectName?: string | null;
   taskName?: string | null;
@@ -153,6 +237,7 @@ export interface Attempt {
   resultCommit: string | null;
   prUrl: string | null;
   agentVersion: string | null;
+  agentAdapter: string | null;
   exitCode: number | null;
   handoffJson: string | null;
   startedAt: string | null;

@@ -73,6 +73,7 @@ describe('getDashboardImpact', () => {
       prUrl: 'http://forge.local/a/pulls/2',
       status: 'open',
       openedAt: '2026-07-10T02:00:00.000Z',
+      nextCheckAt: '2026-07-27T20:00:00.000Z',
     });
 
     const closedRun = makeRun(ctx);

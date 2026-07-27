@@ -9,7 +9,7 @@ import { commitAll, configLocal, execGit, initRepo } from '@/git/git';
 import { RunState } from '@shared/run-states';
 import { RunCoordinator } from '@/runs/coordinator';
 import { RunDispatcher } from '@/runs/dispatcher';
-import { Database, createRepositories } from '@/storage';
+import { Database, createRepositories, createWorkRepositories } from '@/storage';
 import type { Project, Task } from '@/storage/types';
 import { WorkspaceManager } from '@/workspace/manager';
 
@@ -28,6 +28,7 @@ describe('integration/run-coordinator', () => {
 
   async function setup(): Promise<{
     coordinator: RunCoordinator;
+    database: Database;
     repos: ReturnType<typeof createRepositories>;
     repoPath: string;
     paths: ReturnType<typeof resolvePaths>;
@@ -81,11 +82,11 @@ describe('integration/run-coordinator', () => {
       workspace: new WorkspaceManager(worktreesRoot),
     });
 
-    return { coordinator, repos, repoPath, paths, project, task };
+    return { coordinator, database: db, repos, repoPath, paths, project, task };
   }
 
   test('full flow: shell task, validation, commit-only, succeeded', async () => {
-    const { coordinator, repos, repoPath, paths, project, task } = await setup();
+    const { coordinator, database, repos, repoPath, paths, project, task } = await setup();
 
     const run = await coordinator.createRun({
       projectId: project.id,
@@ -94,6 +95,14 @@ describe('integration/run-coordinator', () => {
     });
 
     expect(run.state).toBe(RunState.Queued);
+    expect(run.workItemId).not.toBeNull();
+    const work = createWorkRepositories(database);
+    expect(work.runContexts.findByRun(run.id)).toMatchObject({
+      workItemId: run.workItemId,
+      taskName: "create-file",
+      prompt: task.prompt,
+      baseBranch: "main",
+    });
 
     const finished = await coordinator.executeRun(run.id);
     expect(finished.state).toBe(RunState.Succeeded);
@@ -119,6 +128,30 @@ describe('integration/run-coordinator', () => {
     };
     expect(handoff.runId).toBe(run.id);
     expect(handoff.status).toBe('completed');
+    expect(work.items.findById(run.workItemId ?? "")).toMatchObject({
+      execution: "terminal",
+      outcome: "succeeded",
+    });
+    expect(work.events.listByWorkItem(run.workItemId ?? "").map((event) => event.type)).toEqual(
+      expect.arrayContaining(["run.created", "run.state_changed", "run.finished"]),
+    );
+    expect(
+      database
+        .connection()
+        .query<{ count: number }, [string]>(
+          `SELECT COUNT(*) AS count FROM validations v
+           JOIN attempts a ON a.id = v.attempt_id WHERE a.run_id = ?`,
+        )
+        .get(run.id)?.count,
+    ).toBe(1);
+    expect(
+      database
+        .connection()
+        .query<{ path: string }, [string]>(
+          "SELECT path FROM artifacts WHERE run_id = ? AND kind = 'handoff'",
+        )
+        .get(run.id)?.path,
+    ).toBe(handoffPath);
   });
 
   test('validation failure writes artifact and rich errorMessage', async () => {

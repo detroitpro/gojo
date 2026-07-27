@@ -15,6 +15,7 @@ export type AssembleAgentPromptInput = {
   workspacePath: string;
   instructions?: InstructionsConfig;
   validationSteps: ValidationPromptStep[];
+  progressReporting?: boolean;
 };
 
 /** Resolve a repo-relative instruction path; reject escapes outside the worktree. */
@@ -144,5 +145,17 @@ export function assembleAgentPrompt(input: AssembleAgentPromptInput): string {
     input.workspacePath,
     input.instructions,
   );
-  return appendValidationPrompt(withInstructions, input.validationSteps);
+  const withValidation = appendValidationPrompt(withInstructions, input.validationSteps);
+  if (!input.progressReporting) {
+    return withValidation;
+  }
+  return `${withValidation.trimEnd()}
+
+## Gojo progress reporting
+
+Report your current focus when work starts or changes, and report blockers promptly.
+POST JSON with \`title\`, \`summary\`, optional \`blockedReason\`, and optional
+\`references\` to \`$GOJO_API_URL/runs/$GOJO_RUN_ID/progress\` using
+\`Authorization: Bearer $GOJO_API_TOKEN\`. The token is scoped to this run only.
+`;
 }

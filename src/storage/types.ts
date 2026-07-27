@@ -143,6 +143,7 @@ export interface Run {
   expiresAt: string | null;
   admittedAt: string | null;
   priority: number;
+  workItemId: string | null;
 }
 
 export interface CreateRunInput {
@@ -155,6 +156,7 @@ export interface CreateRunInput {
   notBeforeAt?: string | null;
   expiresAt?: string | null;
   priority?: number;
+  workItemId?: string | null;
 }
 
 export interface UpdateRunInput {
@@ -166,6 +168,7 @@ export interface UpdateRunInput {
   notBeforeAt?: string | null;
   expiresAt?: string | null;
   priority?: number;
+  workItemId?: string | null;
 }
 
 export interface Attempt {
@@ -180,6 +183,7 @@ export interface Attempt {
   /** Real PR URL or `local://pr/<branch>` placeholder after pull-request integrate. */
   prUrl: string | null;
   agentVersion: string | null;
+  agentAdapter: string | null;
   exitCode: number | null;
   handoffJson: string | null;
   startedAt: string | null;
@@ -202,6 +206,7 @@ export interface CreateAttemptInput {
   workspacePath?: string | null;
   branchName?: string | null;
   startingCommit?: string | null;
+  agentAdapter?: string | null;
 }
 
 export interface UpdateAttemptInput {

@@ -172,15 +172,33 @@ export type ProjectSummaryCounts = {
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
-  /** Currently-open gojo-tracked PRs (`run_integrations.status = 'open'`). */
+  /** Source-verified open PRs; stale last-known-open resources are excluded. */
   openPrCount: number;
 };
 
-const OPEN_PR_COUNT_SQL = `(SELECT COUNT(*) FROM run_integrations ri
-            INNER JOIN runs r ON r.id = ri.run_id
-            WHERE r.project_id = p.id
-              AND ri.status = 'open'
-              AND (ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL))`;
+const OPEN_PR_COUNT_SQL = `(
+  (SELECT COUNT(*) FROM work_items wi
+    WHERE wi.project_id = p.id
+      AND wi.kind = 'pull-request'
+      AND wi.delivery IN ('draft', 'open', 'review')
+      AND wi.sync_state = 'current'
+      AND wi.archived_at IS NULL)
+  +
+  (SELECT COUNT(*) FROM run_integrations ri
+    INNER JOIN runs r ON r.id = ri.run_id
+    WHERE r.project_id = p.id
+      AND ri.status = 'open'
+      AND ri.next_check_at IS NOT NULL
+      AND ri.last_error IS NULL
+      AND (ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM work_links wl
+        INNER JOIN work_items linked ON linked.id = wl.target_work_item_id
+        WHERE wl.source_work_item_id = r.work_item_id
+          AND wl.type = 'delivers'
+          AND linked.kind = 'pull-request'
+      ))
+)`;
 
 /** List row: summary counts, no heavy manifest blob. */
 export type ProjectListRow = Omit<Project, "manifestJson"> &
@@ -207,6 +225,7 @@ type SqlRunRow = {
   expires_at: string | null;
   admitted_at: string | null;
   priority: number;
+  work_item_id: string | null;
   project_name: string | null;
   task_name: string | null;
 };
