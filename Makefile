@@ -2,7 +2,8 @@
 # Prefer `make check` before opening/pushing a PR (same gate as CI).
 
 .PHONY: help check typecheck test coverage doctor build build-web build-site install install-cli \
-	dev dev-web dev-site service-install service-status service-start service-stop service-restart
+	dev dev-web dev-site screenshots-ui service-install service-status service-start service-stop \
+	service-restart
 
 help: ## Show targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,6 +66,9 @@ dev-web: ## Vite admin UI only (proxies /api → :7430)
 
 dev-site: ## Astro docs site dev server
 	bun run --cwd site dev
+
+screenshots-ui: ## Capture site/public/images/ui-*.png from live ops UI (:7430)
+	bun run screenshots:ui
 
 # ---------------------------------------------------------------------------
 # Service (requires `gojo` on PATH — run make install-cli first)

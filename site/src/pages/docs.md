@@ -31,7 +31,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos, open a project for health, Impact detail (category stats, per-task show/hide, auditable item list), structured config, and sync manifests.
+**Projects** — register Git repos via **Add project** (header → dialog), open a project for health, Impact detail (category stats, per-task show/hide, auditable item list), structured config, and sync manifests.
 
 ![gojo runs list](/images/ui-runs.png)
 

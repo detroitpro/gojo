@@ -239,7 +239,8 @@ pre code {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 72% 18%;
+  /* Bias to the main canvas under the taller ops chrome band */
+  object-position: 70% 22%;
   pointer-events: none;
   user-select: none;
   animation: hero-media-in 1.1s ease both;

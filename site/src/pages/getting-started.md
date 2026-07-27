@@ -70,9 +70,10 @@ gojo server doctor
 ## Add a project
 
 1. Open **Projects** in the web UI.
-2. Enter a short name (or leave it blank and let Browse fill it).
-3. Click **Browse…** and pick the repository folder on the host machine.
-4. Click **Add project**.
+2. Click **Add project** in the page header.
+3. Enter a short name (or leave it blank and let Browse fill it).
+4. Click **Browse** and pick the repository folder on the host machine.
+5. Confirm **Add project** in the dialog.
 
 ![gojo projects view](/images/ui-projects.png)
 
