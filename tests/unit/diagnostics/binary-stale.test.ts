@@ -14,4 +14,11 @@ describe('diagnostics/binary-stale', () => {
     expect(status.detail).toBeNull();
     expect(status.exePath).toBeTruthy();
   });
+
+  test('falls back when proc exe is unreadable and execPath is missing', () => {
+    const status = inspectRunningBinary(999_999_999, '/nonexistent/gojo-binary');
+    expect(status.stale).toBe(true);
+    expect(status.detail).toContain('missing on disk');
+    expect(status.exePath).toBe('/nonexistent/gojo-binary');
+  });
 });
