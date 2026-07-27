@@ -8,13 +8,26 @@ import type { DashboardOverviewRun } from "@/types";
 
 const SLOT_COUNT = 5;
 
+const LIVE_STATES = new Set([
+  "Preparing",
+  "Running",
+  "Validating",
+  "AwaitingApproval",
+  "Integrating",
+  "Reporting",
+]);
+
 const props = defineProps<{
   runs: DashboardOverviewRun[];
 }>();
 
 type Slot =
   | { kind: "empty"; key: string }
-  | { kind: "run"; key: string; run: DashboardOverviewRun };
+  | { kind: "run"; key: string; run: DashboardOverviewRun; live: boolean };
+
+function isLive(state: string): boolean {
+  return LIVE_STATES.has(state);
+}
 
 const slots = computed((): Slot[] => {
   const runs = props.runs.slice(-SLOT_COUNT);
@@ -27,9 +40,12 @@ const slots = computed((): Slot[] => {
     kind: "run" as const,
     key: run.id,
     run,
+    live: isLive(run.state),
   }));
   return [...empties, ...filled];
 });
+
+const hasLive = computed(() => slots.value.some((slot) => slot.kind === "run" && slot.live));
 
 const tip = ref<{
   show: boolean;
@@ -99,15 +115,19 @@ function hideTip() {
 </script>
 
 <template>
-  <div class="run-history-strip" aria-label="Last five runs">
+  <div
+    class="run-history-strip"
+    :class="{ 'is-live': hasLive }"
+    :aria-label="hasLive ? 'Last five runs — task is running' : 'Last five runs'"
+  >
     <template v-for="slot in slots" :key="slot.key">
       <span v-if="slot.kind === 'empty'" class="run-strip-cell run-strip-empty" title="No run" />
       <RouterLink
         v-else
         :to="{ name: 'run-detail', params: { id: slot.run.id } }"
         class="run-strip-cell"
-        :class="runStateBadgeClass(slot.run.state)"
-        :aria-label="`${slot.run.state} run ${shortId(slot.run.id)}`"
+        :class="[runStateBadgeClass(slot.run.state), { 'is-live': slot.live }]"
+        :aria-label="`${slot.run.state} run ${shortId(slot.run.id)}${slot.live ? ' (in progress)' : ''}`"
         @mouseenter="showTip($event, slot.run)"
         @mouseleave="hideTip"
         @focus="showTip($event, slot.run)"
@@ -138,6 +158,16 @@ function hideTip() {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.run-history-strip.is-live {
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 40%, transparent);
 }
 
 .run-strip-cell {
@@ -148,6 +178,23 @@ function hideTip() {
   border: 1px solid transparent;
   flex-shrink: 0;
   text-decoration: none;
+  transition:
+    width 0.15s ease,
+    height 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.run-strip-cell.is-live {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--blue) 70%, var(--text));
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--blue) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--blue) 50%, transparent);
+  animation: run-strip-live-pulse 1.15s ease-out infinite;
+  z-index: 1;
 }
 
 .run-strip-empty {
@@ -160,6 +207,35 @@ a.run-strip-cell:hover,
 a.run-strip-cell:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 1px;
+}
+
+@keyframes run-strip-live-pulse {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--blue) 60%, transparent),
+      0 0 12px color-mix(in srgb, var(--blue) 45%, transparent);
+    transform: scale(1);
+  }
+  55% {
+    box-shadow:
+      0 0 0 12px color-mix(in srgb, var(--blue) 0%, transparent),
+      0 0 22px color-mix(in srgb, var(--blue) 60%, transparent);
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--blue) 0%, transparent),
+      0 0 12px color-mix(in srgb, var(--blue) 40%, transparent);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-strip-cell.is-live {
+    animation: none;
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
 }
 </style>
 

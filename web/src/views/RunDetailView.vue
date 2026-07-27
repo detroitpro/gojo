@@ -14,6 +14,7 @@ import {
 } from "@/api";
 import RunActivityFeed from "@/components/RunActivityFeed.vue";
 import RunTimelineChart from "@/components/RunTimelineChart.vue";
+import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
@@ -62,8 +63,14 @@ const {
   pages: attemptPages,
   pageItems: attemptItems,
   total: attemptTotal,
+  sort: attemptSort,
+  order: attemptOrder,
+  setSort: setAttemptSort,
   rangeLabel: attemptRange,
-} = useClientPager(attempts, 25);
+} = useClientPager(attempts, 25, {
+  defaultSort: "attemptNumber",
+  defaultOrder: "asc",
+});
 
 let unsubscribe: (() => void) | null = null;
 let durationTick: ReturnType<typeof setInterval> | null = null;
@@ -773,13 +780,44 @@ onUnmounted(() => {
           <table class="data">
             <thead>
               <tr>
-                <th>#</th>
-                <th>State</th>
-                <th>Exit</th>
+                <SortableTh
+                  column="attemptNumber"
+                  label="#"
+                  :sort="attemptSort"
+                  :order="attemptOrder"
+                  @sort="setAttemptSort"
+                />
+                <SortableTh
+                  column="state"
+                  label="State"
+                  :sort="attemptSort"
+                  :order="attemptOrder"
+                  @sort="setAttemptSort"
+                />
+                <SortableTh
+                  column="exitCode"
+                  label="Exit"
+                  :sort="attemptSort"
+                  :order="attemptOrder"
+                  @sort="setAttemptSort"
+                />
                 <th>Duration</th>
-                <th>Cost</th>
+                <SortableTh
+                  column="totalCostUsd"
+                  label="Cost"
+                  :sort="attemptSort"
+                  :order="attemptOrder"
+                  default-order="desc"
+                  @sort="setAttemptSort"
+                />
                 <th>Tokens</th>
-                <th>Model</th>
+                <SortableTh
+                  column="model"
+                  label="Model"
+                  :sort="attemptSort"
+                  :order="attemptOrder"
+                  @sort="setAttemptSort"
+                />
                 <th>Start</th>
                 <th>Result</th>
                 <th>Branch</th>

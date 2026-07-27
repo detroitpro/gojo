@@ -55,7 +55,11 @@ const filtered = computed(() => {
   });
 });
 
-const { page, pages, pageItems, total, rangeLabel, reset } = useClientPager(filtered, PAGE_SIZE);
+const { page, pages, pageItems, total, sort, order, setSort, rangeLabel, reset } = useClientPager(
+  filtered,
+  PAGE_SIZE,
+  { defaultSort: "at", defaultOrder: "desc" },
+);
 
 // Auto-expand the newest assistant/stderr message so live thinking is visible.
 watch(
@@ -117,6 +121,32 @@ function statusClass(item: ActivityItem): string {
         aria-label="Search"
       />
       <span class="muted filter-bar-count">{{ total }} events</span>
+      <div class="activity-sort" role="group" aria-label="Sort activity">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="{ 'btn-primary': sort === 'at' }"
+          @click="setSort('at', 'desc')"
+        >
+          Time {{ sort === "at" ? (order === "asc" ? "↑" : "↓") : "" }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="{ 'btn-primary': sort === 'kind' }"
+          @click="setSort('kind', 'asc')"
+        >
+          Kind {{ sort === "kind" ? (order === "asc" ? "↑" : "↓") : "" }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="{ 'btn-primary': sort === 'title' }"
+          @click="setSort('title', 'asc')"
+        >
+          Title {{ sort === "title" ? (order === "asc" ? "↑" : "↓") : "" }}
+        </button>
+      </div>
     </div>
 
     <ul v-if="pageItems.length" class="activity-feed">

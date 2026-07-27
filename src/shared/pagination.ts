@@ -18,6 +18,24 @@ export type PageQueryInput = {
   offset?: string | null;
 };
 
+export type SortOrder = "asc" | "desc";
+
+export type SortParams = {
+  sort: string;
+  order: SortOrder;
+};
+
+export type SortQueryInput = {
+  sort?: string | null | undefined;
+  order?: string | null | undefined;
+};
+
+export type ParseSortParamsOptions = {
+  allowed: readonly string[];
+  defaultSort: string;
+  defaultOrder?: SortOrder;
+};
+
 function parseNonNegativeInt(value: string | null | undefined, fallback: number): number {
   if (value == null || value.trim() === "") {
     return fallback;
@@ -42,6 +60,52 @@ export function parsePageParamsFromUrl(url: URL): PageParams {
     limit: url.searchParams.get("limit"),
     offset: url.searchParams.get("offset"),
   });
+}
+
+/** Parse sort/order from query input; unknown sort falls back to default. */
+export function parseSortParams(
+  input: SortQueryInput,
+  options: ParseSortParamsOptions,
+): SortParams {
+  const defaultOrder = options.defaultOrder ?? "asc";
+  const sort =
+    input.sort && options.allowed.includes(input.sort) ? input.sort : options.defaultSort;
+  const rawOrder = input.order?.trim().toLowerCase();
+  const order: SortOrder = rawOrder === "asc" || rawOrder === "desc" ? rawOrder : defaultOrder;
+  return { sort, order };
+}
+
+export function parseSortParamsFromUrl(url: URL, options: ParseSortParamsOptions): SortParams {
+  return parseSortParams(
+    {
+      sort: url.searchParams.get("sort"),
+      order: url.searchParams.get("order"),
+    },
+    options,
+  );
+}
+
+/** Compare two values for client/memory sorts (nulls last). */
+export function compareSortValues(a: unknown, b: unknown, order: SortOrder): number {
+  const dir = order === "asc" ? 1 : -1;
+  if (a == null && b == null) {
+    return 0;
+  }
+  if (a == null) {
+    return 1;
+  }
+  if (b == null) {
+    return -1;
+  }
+  if (typeof a === "number" && typeof b === "number") {
+    return (a - b) * dir;
+  }
+  if (typeof a === "boolean" && typeof b === "boolean") {
+    return (Number(a) - Number(b)) * dir;
+  }
+  const as = String(a);
+  const bs = String(b);
+  return as.localeCompare(bs, undefined, { sensitivity: "base", numeric: true }) * dir;
 }
 
 export function paginateArray<T>(items: readonly T[], page: PageParams): PaginatedList<T> {

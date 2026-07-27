@@ -10,9 +10,10 @@ import {
   listSchedulesUpcoming,
 } from "@/api";
 import SchedulesTimelineChart from "@/components/SchedulesTimelineChart.vue";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
-import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import {
   formatAbsoluteInZone,
   formatRelativeNextRun,
@@ -20,12 +21,32 @@ import {
 } from "@/lib/schedule-format";
 import type { Project, Schedule, SchedulesUpcomingResult } from "@/types";
 
+const SCHEDULE_SORT_ALLOWED = [
+  "name",
+  "projectName",
+  "cronExpr",
+  "nextRunAt",
+  "lastRunAt",
+  "enabled",
+  "createdAt",
+] as const;
+
 const route = useRoute();
 const router = useRouter();
 
 function queryParam(key: string): string {
   const value = route.query[key];
   return typeof value === "string" ? value : "";
+}
+
+function initialSort(): string {
+  const value = queryParam("sort");
+  return (SCHEDULE_SORT_ALLOWED as readonly string[]).includes(value) ? value : "createdAt";
+}
+
+function initialOrder(): SortOrder {
+  const value = queryParam("order");
+  return value === "asc" || value === "desc" ? value : "asc";
 }
 
 const projects = ref<Project[]>([]);
@@ -44,14 +65,21 @@ const {
   total,
   loading,
   error,
+  sort,
+  order,
+  setSort,
   rangeLabel,
   load,
 } = useServerTable({
+  defaultSort: initialSort(),
+  defaultOrder: initialOrder(),
   watchSources: [projectFilter, enabledFilter, query],
-  fetchPage: ({ limit, offset }) =>
+  fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listSchedules({
       limit,
       offset,
+      sort: sortBy,
+      order: sortOrder,
       projectId: projectFilter.value || undefined,
       enabled: enabledFilter.value,
       q: query.value || undefined,
@@ -115,18 +143,27 @@ watch(
   },
 );
 
-watch(projectFilter, (value) => {
-  const current = queryParam("projectId");
-  if (value === current) {
-    return;
-  }
+watch([projectFilter, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
-  if (value) {
-    nextQuery.projectId = value;
+  if (projectFilter.value) {
+    nextQuery.projectId = projectFilter.value;
   } else {
     delete nextQuery.projectId;
   }
-  void router.replace({ query: nextQuery });
+  if (sort.value !== "createdAt" || order.value !== "asc") {
+    nextQuery.sort = sort.value;
+    nextQuery.order = order.value;
+  } else {
+    delete nextQuery.sort;
+    delete nextQuery.order;
+  }
+  const same =
+    (nextQuery.projectId ?? "") === queryParam("projectId") &&
+    (nextQuery.sort ?? "") === queryParam("sort") &&
+    (nextQuery.order ?? "") === queryParam("order");
+  if (!same) {
+    void router.replace({ query: nextQuery });
+  }
 });
 
 onMounted(() => {
@@ -254,13 +291,38 @@ onMounted(() => {
         <table class="data">
           <thead>
             <tr>
-              <th>Name</th>
+              <SortableTh column="name" label="Name" :sort="sort" :order="order" @sort="setSort" />
               <th>Task</th>
-              <th>Project</th>
-              <th>Schedule</th>
+              <SortableTh
+                column="projectName"
+                label="Project"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="cronExpr"
+                label="Schedule"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th>Overlap</th>
-              <th>Status</th>
-              <th>Next</th>
+              <SortableTh
+                column="enabled"
+                label="Status"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="nextRunAt"
+                label="Next"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th>Failures</th>
               <th></th>
             </tr>

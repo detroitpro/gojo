@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  compareSortValues,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   pageCount,
   paginateArray,
   parsePageParams,
+  parseSortParams,
   rangeLabel,
 } from "@shared/pagination";
 
@@ -36,5 +38,25 @@ describe("pagination", () => {
     expect(rangeLabel(40, 25, 25)).toBe("Showing 26–40 of 40");
     expect(pageCount(40, 25)).toBe(2);
     expect(pageCount(0, 25)).toBe(1);
+  });
+
+  test("parseSortParams whitelists sort and normalizes order", () => {
+    const allowed = ["createdAt", "name"] as const;
+    expect(
+      parseSortParams({ sort: "name", order: "DESC" }, { allowed, defaultSort: "createdAt" }),
+    ).toEqual({ sort: "name", order: "desc" });
+    expect(
+      parseSortParams({ sort: "evil", order: "asc" }, { allowed, defaultSort: "createdAt", defaultOrder: "desc" }),
+    ).toEqual({ sort: "createdAt", order: "asc" });
+    expect(
+      parseSortParams({ sort: "name", order: "nope" }, { allowed, defaultSort: "createdAt", defaultOrder: "desc" }),
+    ).toEqual({ sort: "name", order: "desc" });
+  });
+
+  test("compareSortValues nulls last and respects order", () => {
+    expect(compareSortValues("a", "b", "asc")).toBeLessThan(0);
+    expect(compareSortValues("a", "b", "desc")).toBeGreaterThan(0);
+    expect(compareSortValues(null, "a", "asc")).toBe(1);
+    expect(compareSortValues("a", null, "asc")).toBe(-1);
   });
 });

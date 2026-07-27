@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
   createProject,
@@ -12,13 +12,35 @@ import {
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
+import { type SortOrder } from "@/lib/pagination";
 import {
   computeProjectHealth,
   type ProjectHealthSummary,
 } from "@/lib/project-manifest";
 import type { Project } from "@/types";
+
+const PROJECT_SORT_ALLOWED = ["name", "createdAt", "updatedAt", "defaultBranch"] as const;
+
+const route = useRoute();
+const router = useRouter();
+
+function queryParam(key: string): string {
+  const value = route.query[key];
+  return typeof value === "string" ? value : "";
+}
+
+function initialSort(): string {
+  const value = queryParam("sort");
+  return (PROJECT_SORT_ALLOWED as readonly string[]).includes(value) ? value : "createdAt";
+}
+
+function initialOrder(): SortOrder {
+  const value = queryParam("order");
+  return value === "asc" || value === "desc" ? value : "asc";
+}
 
 const query = ref("");
 const busyId = ref<string | null>(null);
@@ -37,16 +59,40 @@ const {
   total,
   loading,
   error,
+  sort,
+  order,
+  setSort,
   rangeLabel,
   load,
 } = useServerTable({
+  defaultSort: initialSort(),
+  defaultOrder: initialOrder(),
   watchSources: [query],
-  fetchPage: ({ limit, offset }) =>
+  fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listProjects({
       limit,
       offset,
+      sort: sortBy,
+      order: sortOrder,
       q: query.value || undefined,
     }),
+});
+
+watch([sort, order], () => {
+  const nextQuery = { ...route.query } as Record<string, string>;
+  if (sort.value !== "createdAt" || order.value !== "asc") {
+    nextQuery.sort = sort.value;
+    nextQuery.order = order.value;
+  } else {
+    delete nextQuery.sort;
+    delete nextQuery.order;
+  }
+  const same =
+    (nextQuery.sort ?? "") === queryParam("sort") &&
+    (nextQuery.order ?? "") === queryParam("order");
+  if (!same) {
+    void router.replace({ query: nextQuery });
+  }
 });
 
 function basename(path: string): string {
@@ -289,15 +335,28 @@ onMounted(() => {
         <table class="data">
           <thead>
             <tr>
-              <th>Name</th>
+              <SortableTh column="name" label="Name" :sort="sort" :order="order" @sort="setSort" />
               <th>Repo path</th>
-              <th>Branch</th>
+              <SortableTh
+                column="defaultBranch"
+                label="Branch"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th>Config</th>
               <th>
                 Health
                 <span v-if="healthLoading" class="muted text-sm"> …</span>
               </th>
-              <th>Updated</th>
+              <SortableTh
+                column="updatedAt"
+                label="Updated"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
               <th></th>
             </tr>
           </thead>

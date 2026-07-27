@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { getQueue } from "@/api";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
 import type { QueueRunningItem, SchedulingPolicy } from "@/types";
@@ -18,12 +19,17 @@ const {
   total,
   loading,
   error,
+  sort,
+  order,
+  setSort,
   rangeLabel,
   load,
 } = useServerTable({
+  defaultSort: "position",
+  defaultOrder: "asc",
   watchSources: [],
-  fetchPage: async ({ limit, offset }) => {
-    const snap = await getQueue({ limit, offset });
+  fetchPage: async ({ limit, offset, sort: sortBy, order: sortOrder }) => {
+    const snap = await getQueue({ limit, offset, sort: sortBy, order: sortOrder });
     policy.value = snap.policy;
     running.value = snap.running;
     counts.value = snap.counts;
@@ -122,12 +128,48 @@ onMounted(() => {
             <table class="data">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Task</th>
-                  <th>Project</th>
-                  <th>Priority</th>
-                  <th>Suggested start</th>
-                  <th>Expires</th>
+                  <SortableTh
+                    column="position"
+                    label="#"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
+                  <SortableTh
+                    column="taskName"
+                    label="Task"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
+                  <SortableTh
+                    column="projectName"
+                    label="Project"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
+                  <SortableTh
+                    column="priority"
+                    label="Priority"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
+                  <SortableTh
+                    column="notBeforeAt"
+                    label="Suggested start"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
+                  <SortableTh
+                    column="expiresAt"
+                    label="Expires"
+                    :sort="sort"
+                    :order="order"
+                    @sort="setSort"
+                  />
                 </tr>
               </thead>
               <tbody>

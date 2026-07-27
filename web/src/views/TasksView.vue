@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listProjects, listTasks, runTask } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
-import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { Project } from "@/types";
+
+const TASK_SORT_ALLOWED = [
+  "name",
+  "projectName",
+  "enabled",
+  "createdAt",
+  "lastRunAt",
+  "successRate",
+] as const;
 
 const route = useRoute();
 const router = useRouter();
@@ -18,10 +28,25 @@ function queryParam(key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function initialSort(): string {
+  const value = queryParam("sort");
+  return (TASK_SORT_ALLOWED as readonly string[]).includes(value) ? value : "name";
+}
+
+function initialOrder(): SortOrder {
+  const value = queryParam("order");
+  return value === "asc" || value === "desc" ? value : "asc";
+}
+
+function initialEnabled(): "all" | "enabled" | "disabled" {
+  const value = queryParam("enabled");
+  return value === "all" || value === "disabled" ? value : "enabled";
+}
+
 const projects = ref<Project[]>([]);
 const projectFilter = ref(queryParam("projectId"));
-const enabledFilter = ref<"all" | "enabled" | "disabled">("enabled");
-const query = ref("");
+const enabledFilter = ref<"all" | "enabled" | "disabled">(initialEnabled());
+const query = ref(queryParam("q"));
 const busyId = ref<string | null>(null);
 
 const {
@@ -31,14 +56,21 @@ const {
   total,
   loading,
   error,
+  sort,
+  order,
+  setSort,
   rangeLabel,
   load,
 } = useServerTable({
+  defaultSort: initialSort(),
+  defaultOrder: initialOrder(),
   watchSources: [projectFilter, enabledFilter, query],
-  fetchPage: ({ limit, offset }) =>
+  fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listTasks({
       limit,
       offset,
+      sort: sortBy,
+      order: sortOrder,
       projectId: projectFilter.value || undefined,
       enabled: enabledFilter.value,
       q: query.value || undefined,
@@ -64,32 +96,77 @@ async function runNow(id: string) {
 }
 
 watch(
-  () => route.query.projectId,
-  (value) => {
-    const next = typeof value === "string" ? value : "";
-    if (projectFilter.value !== next) {
-      projectFilter.value = next;
+  () => [route.query.projectId, route.query.q, route.query.enabled] as const,
+  ([projectId, q, enabled]) => {
+    const nextProject = typeof projectId === "string" ? projectId : "";
+    const nextQ = typeof q === "string" ? q : "";
+    const nextEnabled =
+      enabled === "all" || enabled === "disabled" || enabled === "enabled"
+        ? enabled
+        : "enabled";
+    if (projectFilter.value !== nextProject) {
+      projectFilter.value = nextProject;
+    }
+    if (query.value !== nextQ) {
+      query.value = nextQ;
+    }
+    if (enabledFilter.value !== nextEnabled) {
+      enabledFilter.value = nextEnabled;
     }
   },
 );
 
-watch(projectFilter, (value) => {
-  const current = queryParam("projectId");
-  if (value === current) {
-    return;
-  }
+watch([projectFilter, enabledFilter, query, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
-  if (value) {
-    nextQuery.projectId = value;
+  if (projectFilter.value) {
+    nextQuery.projectId = projectFilter.value;
   } else {
     delete nextQuery.projectId;
   }
-  void router.replace({ query: nextQuery });
+  if (query.value) {
+    nextQuery.q = query.value;
+  } else {
+    delete nextQuery.q;
+  }
+  if (enabledFilter.value !== "enabled") {
+    nextQuery.enabled = enabledFilter.value;
+  } else {
+    delete nextQuery.enabled;
+  }
+  if (sort.value !== "name" || order.value !== "asc") {
+    nextQuery.sort = sort.value;
+    nextQuery.order = order.value;
+  } else {
+    delete nextQuery.sort;
+    delete nextQuery.order;
+  }
+  const same =
+    (nextQuery.projectId ?? "") === queryParam("projectId") &&
+    (nextQuery.q ?? "") === queryParam("q") &&
+    (nextQuery.enabled ?? "") === queryParam("enabled") &&
+    (nextQuery.sort ?? "") === queryParam("sort") &&
+    (nextQuery.order ?? "") === queryParam("order");
+  if (!same) {
+    void router.replace({ query: nextQuery });
+  }
 });
+
+/** Keep recent-run strip live while this page is open. */
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
   void loadProjects();
   void load();
+  refreshTimer = setInterval(() => {
+    void load();
+  }, 4_000);
+});
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
 });
 </script>
 
@@ -152,13 +229,40 @@ onMounted(() => {
         <table class="data tasks-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Project</th>
+              <SortableTh column="name" label="Name" :sort="sort" :order="order" @sort="setSort" />
+              <SortableTh
+                column="projectName"
+                label="Project"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th class="tasks-col-runs">Recent runs</th>
-              <th class="tasks-col-rate">Success</th>
-              <th>Enabled</th>
+              <SortableTh
+                column="successRate"
+                label="Success"
+                :sort="sort"
+                :order="order"
+                default-order="asc"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="enabled"
+                label="Enabled"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
               <th>Agent</th>
-              <th>Created</th>
+              <SortableTh
+                column="createdAt"
+                label="Created"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
               <th></th>
             </tr>
           </thead>
@@ -228,8 +332,10 @@ onMounted(() => {
 <style scoped>
 .tasks-table :deep(th.tasks-col-runs),
 .tasks-table :deep(td.tasks-col-runs) {
-  width: 9.5rem;
+  width: 12rem;
+  min-width: 12rem;
   text-align: right;
+  vertical-align: middle;
 }
 
 .tasks-table :deep(th.tasks-col-rate),

@@ -3,11 +3,21 @@ import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { getQueue, listProjects, listRuns, listTasks, runTask } from "@/api";
+import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
-import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import type { Project, Task } from "@/types";
+
+const RUN_SORT_ALLOWED = [
+  "createdAt",
+  "finishedAt",
+  "state",
+  "trigger",
+  "taskName",
+  "projectName",
+] as const;
 
 const RUN_STATES = [
   "Scheduled",
@@ -40,6 +50,16 @@ function queryParam(key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function initialSort(): string {
+  const value = queryParam("sort");
+  return (RUN_SORT_ALLOWED as readonly string[]).includes(value) ? value : "createdAt";
+}
+
+function initialOrder(): SortOrder {
+  const value = queryParam("order");
+  return value === "asc" || value === "desc" ? value : "desc";
+}
+
 const projects = ref<Project[]>([]);
 const tasks = ref<Task[]>([]);
 const projectFilter = ref(queryParam("projectId"));
@@ -57,14 +77,21 @@ const {
   total,
   loading,
   error,
+  sort,
+  order,
+  setSort,
   rangeLabel,
   load,
 } = useServerTable({
+  defaultSort: initialSort(),
+  defaultOrder: initialOrder(),
   watchSources: [projectFilter, taskFilter, stateFilter, triggerFilter, query],
-  fetchPage: ({ limit, offset }) =>
+  fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listRuns({
       limit,
       offset,
+      sort: sortBy,
+      order: sortOrder,
       projectId: projectFilter.value || undefined,
       taskId: taskFilter.value || undefined,
       state: stateFilter.value || undefined,
@@ -150,7 +177,7 @@ watch(
   },
 );
 
-watch([projectFilter, taskFilter], () => {
+watch([projectFilter, taskFilter, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
   if (projectFilter.value) {
     nextQuery.projectId = projectFilter.value;
@@ -162,9 +189,18 @@ watch([projectFilter, taskFilter], () => {
   } else {
     delete nextQuery.taskId;
   }
+  if (sort.value !== "createdAt" || order.value !== "desc") {
+    nextQuery.sort = sort.value;
+    nextQuery.order = order.value;
+  } else {
+    delete nextQuery.sort;
+    delete nextQuery.order;
+  }
   const same =
     (nextQuery.projectId ?? "") === queryParam("projectId") &&
-    (nextQuery.taskId ?? "") === queryParam("taskId");
+    (nextQuery.taskId ?? "") === queryParam("taskId") &&
+    (nextQuery.sort ?? "") === queryParam("sort") &&
+    (nextQuery.order ?? "") === queryParam("order");
   if (!same) {
     void router.replace({ query: nextQuery });
   }
@@ -285,13 +321,51 @@ onMounted(() => {
         <table class="data">
           <thead>
             <tr>
-              <th>Task</th>
-              <th>Project</th>
-              <th>State</th>
-              <th>Trigger</th>
+              <SortableTh
+                column="taskName"
+                label="Task"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="projectName"
+                label="Project"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="state"
+                label="State"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="trigger"
+                label="Trigger"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th>Run ID</th>
-              <th>Created</th>
-              <th>Finished</th>
+              <SortableTh
+                column="createdAt"
+                label="Created"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="finishedAt"
+                label="Finished"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
             </tr>
           </thead>
           <tbody>
@@ -299,14 +373,18 @@ onMounted(() => {
               <td>
                 <RouterLink
                   :to="{
-                    name: 'runs',
-                    query: { taskId: run.taskId, projectId: run.projectId },
+                    name: 'tasks',
+                    query: {
+                      projectId: run.projectId,
+                      q: run.taskId,
+                      enabled: 'all',
+                    },
                   }"
                   class="entity-name"
                 >
                   {{ run.taskName || "Unknown task" }}
+                  <div class="mono muted text-sm">{{ run.taskId.slice(0, 10) }}…</div>
                 </RouterLink>
-                <div class="mono muted text-sm">{{ run.taskId.slice(0, 10) }}…</div>
               </td>
               <td>
                 <div>{{ run.projectName || "Unknown project" }}</div>

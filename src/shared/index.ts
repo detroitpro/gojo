@@ -17,15 +17,25 @@ export type {
 } from './api';
 
 export {
+  compareSortValues,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   pageCount,
   paginateArray,
   parsePageParams,
   parsePageParamsFromUrl,
+  parseSortParams,
+  parseSortParamsFromUrl,
   rangeLabel,
 } from './pagination';
-export type { PageParams, PageQueryInput, PaginatedList } from './pagination';
+export type {
+  PageParams,
+  PageQueryInput,
+  PaginatedList,
+  SortOrder,
+  SortParams,
+  SortQueryInput,
+} from './pagination';
 
 export {
   AgentHandoffReportSchema,

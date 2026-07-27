@@ -56,4 +56,91 @@ describe("listTasksPage recentRuns", () => {
 
     db.close();
   });
+
+  test("sorts by successRate over the last 5 runs (nulls last)", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+
+    const project = repos.projects.create({ name: "ops", repoPath: "/tmp/ops" });
+    const healthy = repos.tasks.create({
+      projectId: project.id,
+      name: "healthy",
+      prompt: "ok",
+    });
+    const flaky = repos.tasks.create({
+      projectId: project.id,
+      name: "flaky",
+      prompt: "maybe",
+    });
+    const broken = repos.tasks.create({
+      projectId: project.id,
+      name: "broken",
+      prompt: "no",
+    });
+    repos.tasks.create({
+      projectId: project.id,
+      name: "idle",
+      prompt: "never",
+    });
+
+    // healthy: 5/5 succeeded
+    for (let i = 0; i < 5; i += 1) {
+      repos.runs.create({
+        projectId: project.id,
+        taskId: healthy.id,
+        idempotencyKey: `h-${i}`,
+        trigger: "manual",
+        state: RunState.Succeeded,
+      });
+    }
+    // flaky: 2/4 succeeded (50%)
+    for (let i = 0; i < 4; i += 1) {
+      repos.runs.create({
+        projectId: project.id,
+        taskId: flaky.id,
+        idempotencyKey: `f-${i}`,
+        trigger: "manual",
+        state: i < 2 ? RunState.Succeeded : RunState.Failed,
+      });
+    }
+    // broken: 0/3 succeeded
+    for (let i = 0; i < 3; i += 1) {
+      repos.runs.create({
+        projectId: project.id,
+        taskId: broken.id,
+        idempotencyKey: `b-${i}`,
+        trigger: "manual",
+        state: RunState.Failed,
+      });
+    }
+
+    const worstFirst = listTasksPage(db, {
+      limit: 50,
+      offset: 0,
+      sort: "successRate",
+      order: "asc",
+    });
+    expect(worstFirst.items.map((task) => task.name)).toEqual([
+      "broken",
+      "flaky",
+      "healthy",
+      "idle",
+    ]);
+
+    const bestFirst = listTasksPage(db, {
+      limit: 50,
+      offset: 0,
+      sort: "successRate",
+      order: "desc",
+    });
+    expect(bestFirst.items.map((task) => task.name)).toEqual([
+      "healthy",
+      "flaky",
+      "broken",
+      "idle",
+    ]);
+
+    db.close();
+  });
 });

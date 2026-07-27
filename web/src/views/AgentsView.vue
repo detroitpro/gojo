@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import { listAgents, testAgent } from "@/api";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
 import type { AgentInfo, AgentTestResult } from "@/types";
@@ -33,7 +34,11 @@ const filtered = computed(() => {
   });
 });
 
-const { page, pages, pageItems, total, rangeLabel, reset } = useClientPager(filtered, 25);
+const { page, pages, pageItems, total, sort, order, setSort, rangeLabel, reset } = useClientPager(
+  filtered,
+  25,
+  { defaultSort: "name", defaultOrder: "asc" },
+);
 
 watch([query, installedFilter], () => {
   reset();
@@ -113,9 +118,22 @@ onMounted(load);
         <table class="data">
           <thead>
             <tr>
-              <th>Adapter</th>
-              <th>Installed</th>
-              <th>Version</th>
+              <SortableTh column="name" label="Adapter" :sort="sort" :order="order" @sort="setSort" />
+              <SortableTh
+                column="installed"
+                label="Installed"
+                :sort="sort"
+                :order="order"
+                default-order="desc"
+                @sort="setSort"
+              />
+              <SortableTh
+                column="version"
+                label="Version"
+                :sort="sort"
+                :order="order"
+                @sort="setSort"
+              />
               <th>Authenticated</th>
               <th></th>
             </tr>

@@ -60,6 +60,84 @@ describe("paged-lists", () => {
     db.close();
   });
 
+  test("listRunsPage sorts by whitelist columns", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
+    const taskA = repos.tasks.create({ projectId: project.id, name: "alpha", prompt: "a" });
+    const taskB = repos.tasks.create({ projectId: project.id, name: "beta", prompt: "b" });
+    repos.runs.create({
+      projectId: project.id,
+      taskId: taskB.id,
+      idempotencyKey: "b",
+      trigger: "manual",
+      state: RunState.Queued,
+    });
+    repos.runs.create({
+      projectId: project.id,
+      taskId: taskA.id,
+      idempotencyKey: "a",
+      trigger: "manual",
+      state: RunState.Queued,
+    });
+
+    const asc = listRunsPage(db, {
+      limit: 10,
+      offset: 0,
+      sort: "taskName",
+      order: "asc",
+    });
+    expect(asc.items.map((run) => run.taskName)).toEqual(["alpha", "beta"]);
+
+    const desc = listRunsPage(db, {
+      limit: 10,
+      offset: 0,
+      sort: "taskName",
+      order: "desc",
+    });
+    expect(desc.items.map((run) => run.taskName)).toEqual(["beta", "alpha"]);
+
+    const fallback = listRunsPage(db, {
+      limit: 10,
+      offset: 0,
+      sort: "not-a-column",
+      order: "asc",
+    });
+    expect(fallback.items).toHaveLength(2);
+
+    db.close();
+  });
+
+  test("listProjectsPage and listTasksPage honor sort", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    repos.projects.create({ name: "zeta", repoPath: "/tmp/z" });
+    const alpha = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
+    repos.tasks.create({ projectId: alpha.id, name: "z-task", prompt: "z" });
+    repos.tasks.create({ projectId: alpha.id, name: "a-task", prompt: "a" });
+
+    const projects = listProjectsPage(db, {
+      limit: 10,
+      offset: 0,
+      sort: "name",
+      order: "asc",
+    });
+    expect(projects.items.map((p) => p.name)).toEqual(["alpha", "zeta"]);
+
+    const tasks = listTasksPage(db, {
+      limit: 10,
+      offset: 0,
+      projectId: alpha.id,
+      sort: "name",
+      order: "asc",
+    });
+    expect(tasks.items.map((t) => t.name)).toEqual(["a-task", "z-task"]);
+
+    db.close();
+  });
+
   test("listTasksPage respects enabled filter", () => {
     const db = Database.open(":memory:");
     db.migrate();

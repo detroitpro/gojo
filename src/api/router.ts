@@ -44,13 +44,25 @@ import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import { getDashboardOverview } from "@/storage/dashboard-overview";
 import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
+  BACKUP_SORT_ALLOWED,
   listProjectsPage,
   toProjectDetailRow,
   listRunsPage,
   listSchedulesPage,
   listTasksPage,
+  PROJECT_SORT_ALLOWED,
+  QUEUE_SORT_ALLOWED,
+  RUN_SORT_ALLOWED,
+  SCHEDULE_SORT_ALLOWED,
+  TASK_SORT_ALLOWED,
+  TOKEN_SORT_ALLOWED,
 } from "@/storage/paged-lists";
-import { paginateArray, parsePageParamsFromUrl } from "@shared/pagination";
+import {
+  compareSortValues,
+  paginateArray,
+  parsePageParamsFromUrl,
+  parseSortParamsFromUrl,
+} from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
 
 type RunListItem = {
@@ -277,6 +289,11 @@ export async function handleApiRequest(
       return failure("unauthorized", "Authentication required", 401);
     }
     const page = parsePageParamsFromUrl(url);
+    const { sort, order } = parseSortParamsFromUrl(url, {
+      allowed: TOKEN_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "desc",
+    });
     const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
     const includeAgent = url.searchParams.get("includeAgent") === "1";
     const all = users
@@ -294,7 +311,11 @@ export async function handleApiRequest(
             token.name.toLowerCase().includes(q) || token.id.toLowerCase().includes(q),
         )
       : all;
-    const paged = paginateArray(filtered, page);
+    const sorted = [...filtered].sort((a, b) => {
+      const key = sort as keyof typeof a;
+      return compareSortValues(a[key], b[key], order);
+    });
+    const paged = paginateArray(sorted, page);
     return success({
       tokens: paged.items,
       total: paged.total,
@@ -339,8 +360,14 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/projects") {
     const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: PROJECT_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "asc",
+    });
     const result = listProjectsPage(ctx.db, {
       ...page,
+      ...sort,
       q: url.searchParams.get("q"),
     });
     return success({
@@ -445,8 +472,14 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/tasks") {
     const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: TASK_SORT_ALLOWED,
+      defaultSort: "name",
+      defaultOrder: "asc",
+    });
     const result = listTasksPage(ctx.db, {
       ...page,
+      ...sort,
       projectId: url.searchParams.get("projectId"),
       enabled: parseEnabledParam(url.searchParams.get("enabled")),
       q: url.searchParams.get("q"),
@@ -522,8 +555,14 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/schedules") {
     const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: SCHEDULE_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "asc",
+    });
     const result = listSchedulesPage(ctx.db, {
       ...page,
+      ...sort,
       projectId: url.searchParams.get("projectId"),
       enabled: parseEnabledParam(url.searchParams.get("enabled")),
       q: url.searchParams.get("q"),
@@ -568,8 +607,14 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/runs") {
     const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: RUN_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "desc",
+    });
     const result = listRunsPage(ctx.db, {
       ...page,
+      ...sort,
       projectId: url.searchParams.get("projectId"),
       taskId: url.searchParams.get("taskId"),
       state: url.searchParams.get("state"),
@@ -768,6 +813,11 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/queue") {
     const page = parsePageParamsFromUrl(url);
+    const { sort, order } = parseSortParamsFromUrl(url, {
+      allowed: QUEUE_SORT_ALLOWED,
+      defaultSort: "position",
+      defaultOrder: "asc",
+    });
     const policy = getSchedulingPolicy(ctx.db);
     const queued = ctx.repos.runs.listQueued();
     const runningByProject = ctx.repos.runs.countRunningByProject();
@@ -789,7 +839,11 @@ export async function handleApiRequest(
         position: index + 1,
       };
     });
-    const paged = paginateArray(waitingRows, page);
+    const sortedWaiting = [...waitingRows].sort((a, b) => {
+      const key = sort as keyof typeof a;
+      return compareSortValues(a[key], b[key], order);
+    });
+    const paged = paginateArray(sortedWaiting, page);
     const running = ctx.repos.runs
       .listNonTerminal()
       .filter((run) =>
@@ -924,6 +978,11 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/backups") {
     const page = parsePageParamsFromUrl(url);
+    const { sort, order } = parseSortParamsFromUrl(url, {
+      allowed: BACKUP_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "desc",
+    });
     const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
     const all = listBackups(ctx.paths);
     const filtered = q
@@ -932,7 +991,11 @@ export async function handleApiRequest(
             backup.name.toLowerCase().includes(q) || backup.path.toLowerCase().includes(q),
         )
       : all;
-    const paged = paginateArray(filtered, page);
+    const sorted = [...filtered].sort((a, b) => {
+      const key = sort as keyof typeof a;
+      return compareSortValues(a[key], b[key], order);
+    });
+    const paged = paginateArray(sorted, page);
     return success({
       backups: paged.items,
       total: paged.total,

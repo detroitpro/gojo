@@ -19,11 +19,11 @@ import {
   verifyBackup,
 } from "@/api";
 import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
+import { useServerTable } from "@/composables/useServerTable";
 import type {
-  ApiTokenInfo,
-  BackupInfo,
   HealthInfo,
   InstanceDoctorResult,
   InstanceInfo,
@@ -34,8 +34,6 @@ import type {
 const instance = ref<InstanceInfo | null>(null);
 const health = ref<HealthInfo | null>(null);
 const doctor = ref<InstanceDoctorResult | null>(null);
-const tokens = ref<ApiTokenInfo[]>([]);
-const backups = ref<BackupInfo[]>([]);
 const channels = ref<NotificationChannelMap>({});
 const tokenName = ref("");
 const createdToken = ref<string | null>(null);
@@ -67,27 +65,6 @@ const daemonPathSummary = computed(() => {
   return { entryCount: entries.length, hasBunBin };
 });
 
-const filteredTokens = computed(() => {
-  const q = tokenQuery.value.trim().toLowerCase();
-  if (!q) {
-    return tokens.value;
-  }
-  return tokens.value.filter(
-    (token) => token.name.toLowerCase().includes(q) || token.id.toLowerCase().includes(q),
-  );
-});
-
-const filteredBackups = computed(() => {
-  const q = backupQuery.value.trim().toLowerCase();
-  if (!q) {
-    return backups.value;
-  }
-  return backups.value.filter(
-    (backup) =>
-      backup.name.toLowerCase().includes(q) || backup.path.toLowerCase().includes(q),
-  );
-});
-
 const filteredDoctorAgents = computed(() => {
   const agents = doctor.value?.agents ?? [];
   const q = doctorQuery.value.trim().toLowerCase();
@@ -104,30 +81,68 @@ const filteredDoctorAgents = computed(() => {
 const {
   page: tokenPage,
   pages: tokenPages,
-  pageItems: tokenItems,
+  items: tokenItems,
   total: tokenTotal,
+  sort: tokenSort,
+  order: tokenOrder,
+  setSort: setTokenSort,
   rangeLabel: tokenRange,
-  reset: resetTokenPage,
-} = useClientPager(filteredTokens, 25);
+  load: loadTokens,
+  error: tokenError,
+} = useServerTable({
+  defaultSort: "createdAt",
+  defaultOrder: "desc",
+  watchSources: [tokenQuery],
+  fetchPage: ({ limit, offset, sort, order }) =>
+    listApiTokens({
+      limit,
+      offset,
+      sort,
+      order,
+      q: tokenQuery.value || undefined,
+    }),
+});
+
 const {
   page: backupPage,
   pages: backupPages,
-  pageItems: backupItems,
+  items: backupItems,
   total: backupTotal,
+  sort: backupSort,
+  order: backupOrder,
+  setSort: setBackupSort,
   rangeLabel: backupRange,
-  reset: resetBackupPage,
-} = useClientPager(filteredBackups, 25);
+  load: loadBackups,
+  error: backupError,
+} = useServerTable({
+  defaultSort: "createdAt",
+  defaultOrder: "desc",
+  watchSources: [backupQuery],
+  fetchPage: ({ limit, offset, sort, order }) =>
+    listBackups({
+      limit,
+      offset,
+      sort,
+      order,
+      q: backupQuery.value || undefined,
+    }),
+});
+
 const {
   page: doctorPage,
   pages: doctorPages,
   pageItems: doctorItems,
   total: doctorTotal,
+  sort: doctorSort,
+  order: doctorOrder,
+  setSort: setDoctorSort,
   rangeLabel: doctorRange,
   reset: resetDoctorPage,
-} = useClientPager(filteredDoctorAgents, 25);
+} = useClientPager(filteredDoctorAgents, 25, {
+  defaultSort: "name",
+  defaultOrder: "asc",
+});
 
-watch(tokenQuery, () => resetTokenPage());
-watch(backupQuery, () => resetBackupPage());
 watch(doctorQuery, () => resetDoctorPage());
 
 async function load() {
@@ -135,22 +150,24 @@ async function load() {
   error.value = "";
   message.value = "";
   try {
-    const [inst, h, toks, channelMap, backs, doc, policy] = await Promise.all([
+    const [inst, h, channelMap, doc, policy] = await Promise.all([
       getInstance(),
       getHealth(),
-      listApiTokens({ limit: 100, offset: 0 }),
       listNotificationChannels(),
-      listBackups({ limit: 100, offset: 0 }),
       getInstanceDoctor(),
       getSchedulingPolicy(),
     ]);
     instance.value = inst;
     health.value = h;
-    tokens.value = toks.items;
     channels.value = channelMap;
-    backups.value = backs.items;
     doctor.value = doc;
     scheduling.value = policy;
+    await Promise.all([loadTokens(), loadBackups()]);
+    if (tokenError.value) {
+      error.value = tokenError.value;
+    } else if (backupError.value) {
+      error.value = backupError.value;
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load settings";
   } finally {
@@ -226,7 +243,7 @@ async function createToken() {
     const created = await createApiToken(tokenName.value.trim());
     createdToken.value = created.token;
     tokenName.value = "";
-    tokens.value = (await listApiTokens({ limit: 100, offset: 0 })).items;
+    await loadTokens();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to create token";
   } finally {
@@ -242,7 +259,7 @@ async function revokeToken(id: string) {
   error.value = "";
   try {
     await revokeApiToken(id);
-    tokens.value = (await listApiTokens({ limit: 100, offset: 0 })).items;
+    await loadTokens();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to revoke token";
   } finally {
@@ -257,7 +274,7 @@ async function doCreateBackup() {
   try {
     const result = await createBackup();
     message.value = `Backup created: ${result.path}`;
-    backups.value = (await listBackups({ limit: 100, offset: 0 })).items;
+    await loadBackups();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Backup failed";
   } finally {
@@ -488,9 +505,28 @@ onMounted(load);
               <table class="data">
                 <thead>
                   <tr>
-                    <th>Agent</th>
-                    <th>Installed</th>
-                    <th>Version</th>
+                    <SortableTh
+                      column="name"
+                      label="Agent"
+                      :sort="doctorSort"
+                      :order="doctorOrder"
+                      @sort="setDoctorSort"
+                    />
+                    <SortableTh
+                      column="installed"
+                      label="Installed"
+                      :sort="doctorSort"
+                      :order="doctorOrder"
+                      default-order="desc"
+                      @sort="setDoctorSort"
+                    />
+                    <SortableTh
+                      column="version"
+                      label="Version"
+                      :sort="doctorSort"
+                      :order="doctorOrder"
+                      @sort="setDoctorSort"
+                    />
                   </tr>
                 </thead>
                 <tbody>
@@ -540,15 +576,29 @@ onMounted(load);
               />
             </div>
           </div>
-          <div v-if="tokens.length === 0" class="muted mt-5">No tokens</div>
-          <div v-else-if="tokenTotal === 0" class="muted mt-5">No tokens match these filters</div>
+          <div v-if="tokenTotal === 0" class="muted mt-5">
+            {{ tokenQuery.trim() ? "No tokens match these filters" : "No tokens" }}
+          </div>
           <template v-else>
             <div class="table-wrap mt-5">
               <table class="data">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Created</th>
+                    <SortableTh
+                      column="name"
+                      label="Name"
+                      :sort="tokenSort"
+                      :order="tokenOrder"
+                      @sort="setTokenSort"
+                    />
+                    <SortableTh
+                      column="createdAt"
+                      label="Created"
+                      :sort="tokenSort"
+                      :order="tokenOrder"
+                      default-order="desc"
+                      @sort="setTokenSort"
+                    />
                     <th></th>
                   </tr>
                 </thead>
@@ -613,16 +663,30 @@ onMounted(load);
               />
             </div>
           </div>
-          <div v-if="backups.length === 0" class="muted mt-5">No backups</div>
-          <div v-else-if="backupTotal === 0" class="muted mt-5">No backups match these filters</div>
+          <div v-if="backupTotal === 0" class="muted mt-5">
+            {{ backupQuery.trim() ? "No backups match these filters" : "No backups" }}
+          </div>
           <template v-else>
             <div class="table-wrap mt-5">
               <table class="data">
                 <thead>
                   <tr>
-                    <th>Name</th>
+                    <SortableTh
+                      column="name"
+                      label="Name"
+                      :sort="backupSort"
+                      :order="backupOrder"
+                      @sort="setBackupSort"
+                    />
                     <th>Size</th>
-                    <th>Created</th>
+                    <SortableTh
+                      column="createdAt"
+                      label="Created"
+                      :sort="backupSort"
+                      :order="backupOrder"
+                      default-order="desc"
+                      @sort="setBackupSort"
+                    />
                     <th></th>
                   </tr>
                 </thead>

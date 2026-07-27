@@ -5,6 +5,7 @@ import {
   pageCount,
   rangeLabel,
   type PaginatedResult,
+  type SortOrder,
 } from "@/lib/pagination";
 
 export function useServerTable<T>(options: {
@@ -12,7 +13,14 @@ export function useServerTable<T>(options: {
   watchSources?: WatchSource[];
   /** Debounce ms for refetch when watch sources change (search). Default 200. */
   debounceMs?: number;
-  fetchPage: (params: { limit: number; offset: number }) => Promise<PaginatedResult<T>>;
+  defaultSort?: string;
+  defaultOrder?: SortOrder;
+  fetchPage: (params: {
+    limit: number;
+    offset: number;
+    sort: string;
+    order: SortOrder;
+  }) => Promise<PaginatedResult<T>>;
 }) {
   const pageSize = options.pageSize ?? DEFAULT_PAGE_LIMIT;
   const page = ref(1);
@@ -22,6 +30,8 @@ export function useServerTable<T>(options: {
   const offset = ref(0);
   const loading = ref(false);
   const error = ref("");
+  const sort = ref(options.defaultSort ?? "createdAt");
+  const order = ref<SortOrder>(options.defaultOrder ?? "asc");
   let timer: ReturnType<typeof setTimeout> | null = null;
   let seq = 0;
 
@@ -34,7 +44,12 @@ export function useServerTable<T>(options: {
     error.value = "";
     try {
       const nextOffset = (page.value - 1) * pageSize;
-      const result = await options.fetchPage({ limit: pageSize, offset: nextOffset });
+      const result = await options.fetchPage({
+        limit: pageSize,
+        offset: nextOffset,
+        sort: sort.value,
+        order: order.value,
+      });
       if (my !== seq) {
         return;
       }
@@ -75,6 +90,20 @@ export function useServerTable<T>(options: {
     }, options.debounceMs ?? 200);
   }
 
+  function setSort(column: string, firstOrder: SortOrder = "asc") {
+    if (sort.value === column) {
+      order.value = order.value === "asc" ? "desc" : "asc";
+    } else {
+      sort.value = column;
+      order.value = firstOrder;
+    }
+    if (page.value !== 1) {
+      page.value = 1;
+      return;
+    }
+    scheduleLoad(true);
+  }
+
   watch(page, () => {
     scheduleLoad(true);
   });
@@ -98,6 +127,9 @@ export function useServerTable<T>(options: {
     offset,
     loading,
     error,
+    sort,
+    order,
+    setSort,
     rangeLabel: label,
     reload: () => scheduleLoad(true),
     load,

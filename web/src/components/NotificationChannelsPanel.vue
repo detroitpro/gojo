@@ -6,6 +6,7 @@ import {
   putNotificationChannels,
   testNotificationChannel,
 } from "@/api";
+import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
 import type {
@@ -60,9 +61,10 @@ const testOk = ref(false);
 const channelQuery = ref("");
 
 const entries = computed<NotificationChannelEntry[]>(() =>
-  Object.entries(channels.value)
-    .map(([channelName, config]) => ({ name: channelName, ...config }))
-    .sort((a, b) => a.name.localeCompare(b.name)),
+  Object.entries(channels.value).map(([channelName, config]) => ({
+    name: channelName,
+    ...config,
+  })),
 );
 
 const filteredEntries = computed(() => {
@@ -81,9 +83,15 @@ const {
   pages: channelPages,
   pageItems: channelItems,
   total: channelTotal,
+  sort: channelSort,
+  order: channelOrder,
+  setSort: setChannelSort,
   rangeLabel: channelRange,
   reset: resetChannelPage,
-} = useClientPager(filteredEntries, 25);
+} = useClientPager(filteredEntries, 25, {
+  defaultSort: "name",
+  defaultOrder: "asc",
+});
 
 watch(channelQuery, () => resetChannelPage());
 
@@ -340,8 +348,20 @@ defineExpose({ reload });
             <table class="data">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Type</th>
+                  <SortableTh
+                    column="name"
+                    label="Name"
+                    :sort="channelSort"
+                    :order="channelOrder"
+                    @sort="setChannelSort"
+                  />
+                  <SortableTh
+                    column="type"
+                    label="Type"
+                    :sort="channelSort"
+                    :order="channelOrder"
+                    @sort="setChannelSort"
+                  />
                   <th>Endpoint</th>
                   <th></th>
                 </tr>

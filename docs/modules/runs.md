@@ -26,6 +26,10 @@ All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — 
 - Priority: manual/api/web `10`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
 - API: `GET /api/v1/queue`, `GET|PATCH /api/v1/instance/scheduling`
 
+## List APIs (paging + sort)
+
+Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
+
 ## Prompt assembly
 
 For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, then the validation command section. Shell adapters skip instructions (script must stay executable) and only comment-append validation.

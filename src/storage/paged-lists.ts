@@ -1,6 +1,7 @@
 import type { SQLQueryBindings } from "bun:sqlite";
 
-import type { PageParams, PaginatedList } from "@shared/pagination";
+import type { PageParams, PaginatedList, SortOrder, SortParams } from "@shared/pagination";
+import { parseSortParams } from "@shared/pagination";
 import type { RunState } from "@shared/run-states";
 
 import { describeCron } from "@/scheduler/describe-cron";
@@ -9,29 +10,86 @@ import type { DashboardOverviewRun } from "@/storage/dashboard-overview";
 import type { Project, Run, RunTrigger, Schedule, Task } from "@/storage/types";
 import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
 
-export type ListProjectsPageInput = PageParams & {
-  q?: string | null;
-};
+export const PROJECT_SORT_ALLOWED = ["name", "createdAt", "updatedAt", "defaultBranch"] as const;
+export const TASK_SORT_ALLOWED = [
+  "name",
+  "projectName",
+  "enabled",
+  "createdAt",
+  "lastRunAt",
+  /** Share of Succeeded among the last 5 runs (same window as the Success column). */
+  "successRate",
+] as const;
+export const RUN_SORT_ALLOWED = [
+  "createdAt",
+  "finishedAt",
+  "state",
+  "trigger",
+  "taskName",
+  "projectName",
+] as const;
+export const SCHEDULE_SORT_ALLOWED = [
+  "name",
+  "projectName",
+  "cronExpr",
+  "nextRunAt",
+  "lastRunAt",
+  "enabled",
+  "createdAt",
+] as const;
+export const QUEUE_SORT_ALLOWED = [
+  "position",
+  "priority",
+  "notBeforeAt",
+  "expiresAt",
+  "projectName",
+  "taskName",
+] as const;
+export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
+export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
 
-export type ListTasksPageInput = PageParams & {
-  projectId?: string | null;
-  enabled?: boolean | null;
-  q?: string | null;
-};
+export type ListProjectsPageInput = PageParams &
+  Partial<SortParams> & {
+    q?: string | null;
+  };
 
-export type ListRunsPageInput = PageParams & {
-  projectId?: string | null;
-  taskId?: string | null;
-  state?: string | null;
-  trigger?: string | null;
-  q?: string | null;
-};
+export type ListTasksPageInput = PageParams &
+  Partial<SortParams> & {
+    projectId?: string | null;
+    enabled?: boolean | null;
+    q?: string | null;
+  };
 
-export type ListSchedulesPageInput = PageParams & {
-  projectId?: string | null;
-  enabled?: boolean | null;
-  q?: string | null;
-};
+export type ListRunsPageInput = PageParams &
+  Partial<SortParams> & {
+    projectId?: string | null;
+    taskId?: string | null;
+    state?: string | null;
+    trigger?: string | null;
+    q?: string | null;
+  };
+
+export type ListSchedulesPageInput = PageParams &
+  Partial<SortParams> & {
+    projectId?: string | null;
+    enabled?: boolean | null;
+    q?: string | null;
+  };
+
+/** Map whitelist sort key → SQL expression (never pass raw client strings). */
+function sqlOrderBy(
+  sort: string,
+  order: SortOrder,
+  columns: Record<string, string>,
+  tieBreaker: string,
+): string {
+  const expr = columns[sort];
+  if (!expr) {
+    throw new Error(`Unmapped sort column: ${sort}`);
+  }
+  const dir = order === "asc" ? "ASC" : "DESC";
+  return `ORDER BY ${expr} ${dir}, ${tieBreaker}`;
+}
 
 export type RunListRow = Run & {
   projectName: string | null;
@@ -239,6 +297,22 @@ export function listProjectsPage(
     enabled_schedule_count: number;
   };
 
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    { allowed: PROJECT_SORT_ALLOWED, defaultSort: "createdAt", defaultOrder: "asc" },
+  );
+  const orderBy = sqlOrderBy(
+    sort,
+    order,
+    {
+      name: "p.name COLLATE NOCASE",
+      createdAt: "p.created_at",
+      updatedAt: "p.updated_at",
+      defaultBranch: "p.default_branch COLLATE NOCASE",
+    },
+    "p.id ASC",
+  );
+
   const rows = sqlite
     .query(
       `SELECT
@@ -254,7 +328,7 @@ export function listProjectsPage(
             WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count
        FROM projects p
        ${where}
-       ORDER BY p.created_at
+       ${orderBy}
        LIMIT ? OFFSET ?`,
     )
     .all(...params, input.limit, input.offset) as ProjectListSqlRow[];
@@ -316,7 +390,19 @@ export function listTasksPage(
       SELECT id, task_id, state, created_at,
              ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY created_at DESC) AS rn
       FROM runs
-    ) lr ON lr.task_id = t.id AND lr.rn = 1`;
+    ) lr ON lr.task_id = t.id AND lr.rn = 1
+    LEFT JOIN (
+      SELECT task_id,
+             CAST(SUM(CASE WHEN state = 'Succeeded' THEN 1 ELSE 0 END) AS REAL)
+               / COUNT(*) AS success_rate
+      FROM (
+        SELECT task_id, state,
+               ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY created_at DESC) AS rn
+        FROM runs
+      )
+      WHERE rn <= 5
+      GROUP BY task_id
+    ) sr ON sr.task_id = t.id`;
 
   const total =
     sqlite
@@ -327,12 +413,35 @@ export function listTasksPage(
       )
       .get(...params)?.count ?? 0;
 
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    { allowed: TASK_SORT_ALLOWED, defaultSort: "name", defaultOrder: "asc" },
+  );
+  const orderBy =
+    sort === "successRate"
+      ? // Nulls (no runs) last in both directions — ops triage cares about tasks with history.
+        `ORDER BY (sr.success_rate IS NULL) ASC, sr.success_rate ${
+          order === "asc" ? "ASC" : "DESC"
+        }, t.id ASC`
+      : sqlOrderBy(
+          sort,
+          order,
+          {
+            name: "t.name COLLATE NOCASE",
+            projectName: "IFNULL(p.name, '') COLLATE NOCASE",
+            enabled: "t.enabled",
+            createdAt: "t.created_at",
+            lastRunAt: "lr.created_at",
+          },
+          "t.id ASC",
+        );
+
   const rows = sqlite
     .query<SqlTaskRow, SQLQueryBindings[]>(
       `SELECT t.*, p.name AS project_name, a.name AS agent_profile_name,
               lr.id AS last_run_id, lr.state AS last_run_state, lr.created_at AS last_run_created_at
        ${from} ${where}
-       ORDER BY t.name ASC, t.project_id ASC
+       ${orderBy}
        LIMIT ? OFFSET ?`,
     )
     .all(...params, input.limit, input.offset);
@@ -450,11 +559,29 @@ export function listRunsPage(
       .query<{ count: number }, SQLQueryBindings[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
       .get(...params)?.count ?? 0;
 
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    { allowed: RUN_SORT_ALLOWED, defaultSort: "createdAt", defaultOrder: "desc" },
+  );
+  const orderBy = sqlOrderBy(
+    sort,
+    order,
+    {
+      createdAt: "r.created_at",
+      finishedAt: "r.finished_at",
+      state: "r.state",
+      trigger: "r.trigger",
+      taskName: "IFNULL(t.name, '') COLLATE NOCASE",
+      projectName: "IFNULL(p.name, '') COLLATE NOCASE",
+    },
+    "r.id ASC",
+  );
+
   const rows = sqlite
     .query<SqlRunRow, SQLQueryBindings[]>(
       `SELECT r.*, p.name AS project_name, t.name AS task_name
        ${from} ${where}
-       ORDER BY r.created_at DESC
+       ${orderBy}
        LIMIT ? OFFSET ?`,
     )
     .all(...params, input.limit, input.offset);
@@ -510,11 +637,30 @@ export function listSchedulesPage(
       .query<{ count: number }, SQLQueryBindings[]>(`SELECT COUNT(*) AS count ${from} ${where}`)
       .get(...params)?.count ?? 0;
 
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    { allowed: SCHEDULE_SORT_ALLOWED, defaultSort: "createdAt", defaultOrder: "asc" },
+  );
+  const orderBy = sqlOrderBy(
+    sort,
+    order,
+    {
+      name: "s.name COLLATE NOCASE",
+      projectName: "IFNULL(p.name, '') COLLATE NOCASE",
+      cronExpr: "s.cron_expr",
+      nextRunAt: "s.next_run_at",
+      lastRunAt: "s.last_run_at",
+      enabled: "s.enabled",
+      createdAt: "s.created_at",
+    },
+    "s.id ASC",
+  );
+
   const rows = sqlite
     .query<SqlScheduleRow, SQLQueryBindings[]>(
       `SELECT s.*, t.name AS task_name, t.project_id AS project_id, p.name AS project_name
        ${from} ${where}
-       ORDER BY s.created_at
+       ${orderBy}
        LIMIT ? OFFSET ?`,
     )
     .all(...params, input.limit, input.offset);

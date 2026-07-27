@@ -407,6 +407,42 @@ table.data th {
   font-weight: 500;
 }
 
+table.data th.sortable-th {
+  padding: 0;
+}
+
+.sortable-th__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  margin: 0;
+  padding: 7px var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sortable-th__btn:hover,
+.sortable-th__btn.is-active {
+  color: var(--text);
+}
+
+.sortable-th__ind {
+  opacity: 0.45;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.sortable-th__btn.is-active .sortable-th__ind {
+  opacity: 0.9;
+}
+
 table.data tr:last-child td {
   border-bottom: none;
 }
@@ -810,6 +846,12 @@ table.data tr:hover td {
 
 .activity-filters {
   margin-bottom: var(--space-4);
+}
+
+.activity-sort {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .activity-filters .input,

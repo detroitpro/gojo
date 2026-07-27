@@ -13,6 +13,8 @@ export type PaginatedResult<T> = {
   offset: number;
 };
 
+export type SortOrder = "asc" | "desc";
+
 export type ListQuery = {
   limit?: number;
   offset?: number;
@@ -22,6 +24,8 @@ export type ListQuery = {
   state?: string;
   trigger?: string;
   enabled?: "all" | "enabled" | "disabled" | "true" | "false" | boolean;
+  sort?: string;
+  order?: SortOrder;
 };
 
 export function rangeLabel(total: number, limit: number, offset: number): string {
@@ -70,6 +74,12 @@ export function buildListQuery(params: ListQuery): string {
     ) {
       sp.set("enabled", "false");
     }
+  }
+  if (params.sort) {
+    sp.set("sort", params.sort);
+  }
+  if (params.order) {
+    sp.set("order", params.order);
   }
   const s = sp.toString();
   return s ? `?${s}` : "";
