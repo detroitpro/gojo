@@ -2,14 +2,15 @@
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { listProjects, listTasks, runTask } from "@/api";
+import { disableTask, enableTask, listProjects, listTasks, runTask } from "@/api";
+import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
-import type { Project } from "@/types";
+import type { Project, Task } from "@/types";
 
 const TASK_SORT_ALLOWED = [
   "name",
@@ -82,16 +83,84 @@ async function loadProjects() {
   projects.value = result.items;
 }
 
-async function runNow(id: string) {
-  busyId.value = id;
+function rowActions(task: Task): ActionMenuItem[] {
+  return [
+    {
+      id: "open",
+      label: "Open",
+      to: { name: "task-detail", params: { id: task.id } },
+    },
+    {
+      id: "run",
+      label: "Run now",
+      disabled: busyId.value === task.id || !task.enabled,
+    },
+    {
+      id: "view-runs",
+      label: "View runs",
+      to: {
+        name: "runs",
+        query: {
+          taskId: task.id,
+          ...(task.projectId ? { projectId: task.projectId } : {}),
+        },
+      },
+    },
+    {
+      id: "view-schedules",
+      label: "View schedules",
+      to: {
+        name: "schedules",
+        query: {
+          taskId: task.id,
+          ...(task.projectId ? { projectId: task.projectId } : {}),
+          enabled: "all",
+        },
+      },
+    },
+    {
+      id: "toggle-enabled",
+      label: task.enabled ? "Disable" : "Enable",
+      disabled: busyId.value === task.id,
+    },
+  ];
+}
+
+async function runNow(task: Task) {
+  busyId.value = task.id;
   error.value = "";
   try {
-    const run = await runTask(id);
+    const run = await runTask(task.id);
     await router.push(`/runs/${run.id}`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to start run";
   } finally {
     busyId.value = null;
+  }
+}
+
+async function toggleEnabled(task: Task) {
+  busyId.value = task.id;
+  error.value = "";
+  try {
+    if (task.enabled) {
+      await disableTask(task.id);
+    } else {
+      await enableTask(task.id);
+    }
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to update task";
+  } finally {
+    busyId.value = null;
+  }
+}
+
+function onAction(task: Task, actionId: string) {
+  if (actionId === "run") {
+    void runNow(task);
+  } else if (actionId === "toggle-enabled") {
+    void toggleEnabled(task);
   }
 }
 
@@ -270,49 +339,35 @@ onUnmounted(() => {
             <tr v-for="task in tasks" :key="task.id">
               <td>
                 <RouterLink
-                  :to="{
-                    name: 'runs',
-                    query: {
-                      taskId: task.id,
-                      ...(task.projectId ? { projectId: task.projectId } : {}),
-                    },
-                  }"
+                  :to="{ name: 'task-detail', params: { id: task.id } }"
                   class="entity-name"
                 >
                   {{ task.name }}
                 </RouterLink>
-                <div class="mono muted text-sm">{{ task.id.slice(0, 10) }}…</div>
                 <div v-if="task.description" class="muted text-sm">
                   {{ task.description }}
                 </div>
               </td>
-              <td>
-                <div>{{ task.projectName || "—" }}</div>
-                <div class="mono muted text-sm">{{ task.projectId.slice(0, 10) }}…</div>
-              </td>
+              <td>{{ task.projectName || "—" }}</td>
               <td class="tasks-col-runs">
                 <RunHistoryStrip :runs="task.recentRuns ?? []" />
               </td>
               <td class="tasks-col-rate mono">
                 {{ formatRunSuccessRate(task.recentRuns ?? []) }}
               </td>
-              <td>{{ task.enabled ? "yes" : "no" }}</td>
               <td>
-                <div>{{ task.agentProfileName || "—" }}</div>
-                <div v-if="task.agentProfileId" class="mono muted text-sm">
-                  {{ task.agentProfileId.slice(0, 10) }}…
-                </div>
+                <span v-if="task.enabled" class="badge badge-success">enabled</span>
+                <span v-else class="badge badge-neutral">disabled</span>
               </td>
+              <td>{{ task.agentProfileName || "—" }}</td>
               <td class="mono muted">{{ new Date(task.createdAt).toLocaleString() }}</td>
-              <td>
-                <button
-                  class="btn btn-sm btn-primary"
-                  type="button"
-                  :disabled="busyId === task.id || !task.enabled"
-                  @click="runNow(task.id)"
-                >
-                  Run now
-                </button>
+              <td class="actions-cell">
+                <ActionMenu
+                  :items="rowActions(task)"
+                  :disabled="busyId === task.id"
+                  :label="`Actions for ${task.name}`"
+                  @select="(id) => onAction(task, id)"
+                />
               </td>
             </tr>
           </tbody>

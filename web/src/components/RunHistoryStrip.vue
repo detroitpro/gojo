@@ -172,16 +172,54 @@ function hideTip() {
 
 .run-strip-cell {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 3px;
   border: 1px solid transparent;
   flex-shrink: 0;
   text-decoration: none;
+  /* Solid fills — badge-*-soft is too muted for 16px cells. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 18%, transparent);
   transition:
     width 0.15s ease,
     height 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+.run-strip-cell.badge-success {
+  background: var(--green);
+  border-color: color-mix(in srgb, var(--green) 70%, #000);
+  color: var(--green);
+}
+
+.run-strip-cell.badge-failed {
+  background: var(--red);
+  border-color: color-mix(in srgb, var(--red) 70%, #000);
+  color: var(--red);
+}
+
+.run-strip-cell.badge-running {
+  background: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 70%, #000);
+  color: var(--blue);
+}
+
+.run-strip-cell.badge-queued {
+  background: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 70%, #000);
+  color: var(--amber);
+}
+
+.run-strip-cell.badge-warn {
+  background: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 70%, #000);
+  color: var(--warn);
+}
+
+.run-strip-cell.badge-neutral {
+  background: color-mix(in srgb, var(--text-muted) 55%, var(--bg));
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
 .run-strip-cell.is-live {
@@ -189,17 +227,18 @@ function hideTip() {
   height: 28px;
   border-radius: 6px;
   border-width: 2px;
-  border-color: color-mix(in srgb, var(--blue) 70%, var(--text));
+  border-color: color-mix(in srgb, var(--blue) 55%, #fff);
   box-shadow:
-    0 0 0 0 color-mix(in srgb, var(--blue) 55%, transparent),
-    0 0 14px color-mix(in srgb, var(--blue) 50%, transparent);
+    0 0 0 0 color-mix(in srgb, var(--blue) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--blue) 65%, transparent);
   animation: run-strip-live-pulse 1.15s ease-out infinite;
   z-index: 1;
 }
 
 .run-strip-empty {
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: none;
   pointer-events: none;
 }
 

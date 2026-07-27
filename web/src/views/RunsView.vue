@@ -349,7 +349,6 @@ onMounted(() => {
                 :order="order"
                 @sort="setSort"
               />
-              <th>Run ID</th>
               <SortableTh
                 column="createdAt"
                 label="Created"
@@ -383,15 +382,13 @@ onMounted(() => {
                   class="entity-name"
                 >
                   {{ run.taskName || "Unknown task" }}
-                  <div class="mono muted text-sm">{{ run.taskId.slice(0, 10) }}…</div>
                 </RouterLink>
               </td>
+              <td>{{ run.projectName || "Unknown project" }}</td>
               <td>
-                <div>{{ run.projectName || "Unknown project" }}</div>
-                <div class="mono muted text-sm">{{ run.projectId.slice(0, 10) }}…</div>
-              </td>
-              <td>
-                <StateBadge :state="run.state" />
+                <RouterLink :to="{ name: 'run-detail', params: { id: run.id } }">
+                  <StateBadge :state="run.state" />
+                </RouterLink>
                 <div
                   v-if="(run.state === 'Queued' || run.state === 'Scheduled') && queuePositions[run.id]"
                   class="mono muted text-sm"
@@ -400,11 +397,6 @@ onMounted(() => {
                 </div>
               </td>
               <td class="mono">{{ run.trigger }}</td>
-              <td>
-                <RouterLink :to="{ name: 'run-detail', params: { id: run.id } }" class="mono">
-                  {{ run.id.slice(0, 12) }}…
-                </RouterLink>
-              </td>
               <td class="mono muted">{{ fmtTime(run.createdAt) }}</td>
               <td class="mono muted">{{ fmtTime(run.finishedAt) }}</td>
             </tr>

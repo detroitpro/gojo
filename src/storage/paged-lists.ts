@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import type { SQLQueryBindings } from "bun:sqlite";
 
 import type { PageParams, PaginatedList, SortOrder, SortParams } from "@shared/pagination";
@@ -6,6 +9,7 @@ import type { RunState } from "@shared/run-states";
 
 import { describeCron } from "@/scheduler/describe-cron";
 import type { Database } from "@/storage";
+import { createRepositories } from "@/storage";
 import type { DashboardOverviewRun } from "@/storage/dashboard-overview";
 import type { Project, Run, RunTrigger, Schedule, Task } from "@/storage/types";
 import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
@@ -72,9 +76,22 @@ export type ListRunsPageInput = PageParams &
 export type ListSchedulesPageInput = PageParams &
   Partial<SortParams> & {
     projectId?: string | null;
+    taskId?: string | null;
     enabled?: boolean | null;
     q?: string | null;
   };
+
+export type TaskSourceInfo = {
+  repoPath: string;
+  manifestPath: string | null;
+  promptFile: string | null;
+  promptAbsolutePath: string | null;
+};
+
+/** Task detail: list enrichments + YAML/prompt provenance for ops (not an editor). */
+export type TaskDetailRow = TaskListRow & {
+  source: TaskSourceInfo;
+};
 
 /** Map whitelist sort key → SQL expression (never pass raw client strings). */
 function sqlOrderBy(
@@ -467,6 +484,73 @@ export function listTasksPage(
   };
 }
 
+function resolveTaskSource(project: Project, taskName: string): TaskSourceInfo {
+  const repoPath = project.repoPath;
+  const gojoYaml = join(repoPath, "gojo.yaml");
+  const legacyYaml = join(repoPath, ".gojo", "project.yaml");
+  const onDisk =
+    (existsSync(gojoYaml) ? gojoYaml : null) ?? (existsSync(legacyYaml) ? legacyYaml : null);
+
+  let promptFile: string | null = null;
+  let inSyncedManifest = false;
+  try {
+    const parsed = JSON.parse(project.manifestJson) as {
+      tasks?: Record<string, { promptFile?: unknown }>;
+    };
+    const entry = parsed.tasks?.[taskName];
+    if (entry) {
+      inSyncedManifest = true;
+      if (typeof entry.promptFile === "string" && entry.promptFile.trim()) {
+        promptFile = entry.promptFile.trim();
+      }
+    }
+  } catch {
+    // Stored manifest may be empty or non-JSON; treat as no source.
+  }
+
+  const manifestPath = onDisk ?? (inSyncedManifest ? gojoYaml : null);
+  const promptAbsolutePath = promptFile ? join(repoPath, promptFile) : null;
+
+  return {
+    repoPath,
+    manifestPath,
+    promptFile,
+    promptAbsolutePath,
+  };
+}
+
+/** Single-task detail for ops inspect (enriched row + YAML/prompt paths). */
+export function getTaskDetail(db: Database, taskId: string): TaskDetailRow | null {
+  const repos = createRepositories(db);
+  const task = repos.tasks.findById(taskId);
+  if (!task) {
+    return null;
+  }
+
+  const project = repos.projects.findById(task.projectId);
+  const agent = task.agentProfileId ? repos.agentProfiles.findById(task.agentProfileId) : null;
+  const recentRuns = loadRecentRunsForTasks(db, [task.id]).get(task.id) ?? [];
+  const last = recentRuns.at(-1) ?? null;
+
+  return {
+    ...task,
+    projectName: project?.name ?? null,
+    agentProfileName: agent?.name ?? null,
+    lastRunId: last?.id ?? null,
+    lastRunState: last?.state ?? null,
+    lastRunCreatedAt: last?.createdAt ?? null,
+    recentRuns,
+    source: project
+      ? resolveTaskSource(project, task.name)
+      : {
+          repoPath: "",
+          manifestPath: null,
+          promptFile: null,
+          promptAbsolutePath: null,
+        },
+  };
+}
+
 type RecentRunRow = {
   id: string;
   task_id: string;
@@ -612,6 +696,9 @@ export function listSchedulesPage(
 
   if (input.projectId) {
     buildWhere(clauses, params, "t.project_id = ?", input.projectId);
+  }
+  if (input.taskId) {
+    buildWhere(clauses, params, "s.task_id = ?", input.taskId);
   }
   if (input.enabled === true) {
     buildWhere(clauses, params, "s.enabled = ?", 1);

@@ -319,6 +319,13 @@ export interface HealthInfo {
   version: string;
 }
 
+export interface TaskSource {
+  repoPath: string;
+  manifestPath: string | null;
+  promptFile: string | null;
+  promptAbsolutePath: string | null;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -340,6 +347,8 @@ export interface Task {
   lastRunCreatedAt?: string | null;
   /** Present on list API: up to 5 recent runs, oldest → newest. */
   recentRuns?: DashboardOverviewRun[];
+  /** Present on GET /tasks/:id */
+  source?: TaskSource;
 }
 
 export interface ApiTokenInfo {

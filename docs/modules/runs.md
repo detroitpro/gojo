@@ -30,6 +30,10 @@ All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — 
 
 Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
 
+Task enable/disable mirrors schedules: `POST /api/v1/tasks/:id/enable|disable`, `gojo task enable|disable <id>`, and the Tasks UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable tasks absent from `gojo.yaml`.
+
+Task detail (`GET /api/v1/tasks/:id`, `gojo task inspect <id>`, UI `/tasks/:id`) is **ops/inspect only**: prompt and policy JSON are read-only snapshots from the last Sync. Edit `gojo.yaml` + `promptFile` in the repo (or via an agent), then Project Sync. The response includes a `source` block (`repoPath`, `manifestPath`, `promptFile`, `promptAbsolutePath`) when the task appears in the project’s synced manifest. Schedules lists accept `taskId` for linked schedules.
+
 ## Prompt assembly
 
 For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, then the validation command section. Shell adapters skip instructions (script must stay executable) and only comment-append validation.

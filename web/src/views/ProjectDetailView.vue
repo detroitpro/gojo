@@ -550,11 +550,8 @@ onMounted(() => {
                         <RouterLink
                           v-if="tasksByName.get(task.name)"
                           :to="{
-                            name: 'runs',
-                            query: {
-                              taskId: tasksByName.get(task.name)!.id,
-                              projectId: project.id,
-                            },
+                            name: 'task-detail',
+                            params: { id: tasksByName.get(task.name)!.id },
                           }"
                           class="entity-name"
                         >

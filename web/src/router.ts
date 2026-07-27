@@ -12,6 +12,7 @@ import RunDetailView from "./views/RunDetailView.vue";
 import RunsView from "./views/RunsView.vue";
 import SchedulesView from "./views/SchedulesView.vue";
 import SettingsView from "./views/SettingsView.vue";
+import TaskDetailView from "./views/TaskDetailView.vue";
 import TasksView from "./views/TasksView.vue";
 
 const router = createRouter({
@@ -31,6 +32,7 @@ const router = createRouter({
         { path: "projects", name: "projects", component: ProjectsView },
         { path: "projects/:id", name: "project-detail", component: ProjectDetailView },
         { path: "tasks", name: "tasks", component: TasksView },
+        { path: "tasks/:id", name: "task-detail", component: TaskDetailView },
         { path: "runs", name: "runs", component: RunsView },
         { path: "runs/:id", name: "run-detail", component: RunDetailView },
         { path: "queue", name: "queue", component: QueueView },

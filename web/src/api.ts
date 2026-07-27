@@ -347,9 +347,24 @@ export async function listTasks(query: ListQuery = {}): Promise<PaginatedResult<
   };
 }
 
+export async function getTask(id: string): Promise<Task> {
+  const { data } = await request<{ task: Task }>(`/tasks/${id}`);
+  return data.task;
+}
+
 export async function runTask(id: string): Promise<Run> {
   const { data } = await request<{ run: Run }>(`/tasks/${id}/run`, { method: "POST" });
   return data.run;
+}
+
+export async function enableTask(id: string): Promise<Task> {
+  const { data } = await request<{ task: Task }>(`/tasks/${id}/enable`, { method: "POST" });
+  return data.task;
+}
+
+export async function disableTask(id: string): Promise<Task> {
+  const { data } = await request<{ task: Task }>(`/tasks/${id}/disable`, { method: "POST" });
+  return data.task;
 }
 
 export async function listRuns(query: ListQuery = {}): Promise<PaginatedResult<Run>> {

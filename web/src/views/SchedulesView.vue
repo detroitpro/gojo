@@ -49,10 +49,16 @@ function initialOrder(): SortOrder {
   return value === "asc" || value === "desc" ? value : "asc";
 }
 
+function initialEnabled(): "all" | "enabled" | "disabled" {
+  const value = queryParam("enabled");
+  return value === "all" || value === "disabled" ? value : "enabled";
+}
+
 const projects = ref<Project[]>([]);
 const projectFilter = ref(queryParam("projectId"));
-const enabledFilter = ref<"all" | "enabled" | "disabled">("enabled");
-const query = ref("");
+const taskFilter = ref(queryParam("taskId"));
+const enabledFilter = ref<"all" | "enabled" | "disabled">(initialEnabled());
+const query = ref(queryParam("q"));
 const busyId = ref<string | null>(null);
 const horizonHours = ref(168);
 const upcoming = ref<SchedulesUpcomingResult | null>(null);
@@ -73,7 +79,7 @@ const {
 } = useServerTable({
   defaultSort: initialSort(),
   defaultOrder: initialOrder(),
-  watchSources: [projectFilter, enabledFilter, query],
+  watchSources: [projectFilter, taskFilter, enabledFilter, query],
   fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listSchedules({
       limit,
@@ -81,6 +87,7 @@ const {
       sort: sortBy,
       order: sortOrder,
       projectId: projectFilter.value || undefined,
+      taskId: taskFilter.value || undefined,
       enabled: enabledFilter.value,
       q: query.value || undefined,
     }),
@@ -134,21 +141,52 @@ watch([projectFilter, enabledFilter, query, horizonHours], () => {
 });
 
 watch(
-  () => route.query.projectId,
-  (projectId) => {
-    const next = typeof projectId === "string" ? projectId : "";
-    if (next !== projectFilter.value) {
-      projectFilter.value = next;
+  () =>
+    [route.query.projectId, route.query.taskId, route.query.q, route.query.enabled] as const,
+  ([projectId, taskId, q, enabled]) => {
+    const nextProject = typeof projectId === "string" ? projectId : "";
+    const nextTask = typeof taskId === "string" ? taskId : "";
+    const nextQ = typeof q === "string" ? q : "";
+    const nextEnabled =
+      enabled === "all" || enabled === "disabled" || enabled === "enabled"
+        ? enabled
+        : "enabled";
+    if (projectFilter.value !== nextProject) {
+      projectFilter.value = nextProject;
+    }
+    if (taskFilter.value !== nextTask) {
+      taskFilter.value = nextTask;
+    }
+    if (query.value !== nextQ) {
+      query.value = nextQ;
+    }
+    if (enabledFilter.value !== nextEnabled) {
+      enabledFilter.value = nextEnabled;
     }
   },
 );
 
-watch([projectFilter, sort, order], () => {
+watch([projectFilter, taskFilter, enabledFilter, query, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
   if (projectFilter.value) {
     nextQuery.projectId = projectFilter.value;
   } else {
     delete nextQuery.projectId;
+  }
+  if (taskFilter.value) {
+    nextQuery.taskId = taskFilter.value;
+  } else {
+    delete nextQuery.taskId;
+  }
+  if (query.value) {
+    nextQuery.q = query.value;
+  } else {
+    delete nextQuery.q;
+  }
+  if (enabledFilter.value !== "enabled") {
+    nextQuery.enabled = enabledFilter.value;
+  } else {
+    delete nextQuery.enabled;
   }
   if (sort.value !== "createdAt" || order.value !== "asc") {
     nextQuery.sort = sort.value;
@@ -159,6 +197,9 @@ watch([projectFilter, sort, order], () => {
   }
   const same =
     (nextQuery.projectId ?? "") === queryParam("projectId") &&
+    (nextQuery.taskId ?? "") === queryParam("taskId") &&
+    (nextQuery.q ?? "") === queryParam("q") &&
+    (nextQuery.enabled ?? "") === queryParam("enabled") &&
     (nextQuery.sort ?? "") === queryParam("sort") &&
     (nextQuery.order ?? "") === queryParam("order");
   if (!same) {

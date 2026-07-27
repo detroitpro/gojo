@@ -461,6 +461,198 @@ describe("api/router", () => {
     expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunCreatedAt");
   });
 
+  test("GET task by id returns enriched task with source and 404", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const projectRes = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "detail-demo", repoPath: tempDir ?? "/tmp/demo" }),
+    });
+    expect(projectRes.status).toBe(201);
+    const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
+
+    ctx!.repos.projects.update(projectBody.data.project.id, {
+      manifestJson: JSON.stringify({
+        version: 1,
+        project: { name: "detail-demo" },
+        repository: { defaultBranch: "main" },
+        agents: { shell: { adapter: "shell", command: "bash" } },
+        validationProfiles: { none: { steps: [] } },
+        tasks: {
+          "detail-task": {
+            description: "A task",
+            agent: "shell",
+            promptFile: ".gojo/prompts/detail.md",
+            validationProfile: "none",
+          },
+        },
+      }),
+    });
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        projectId: projectBody.data.project.id,
+        name: "detail-task",
+        prompt: "do work",
+        description: "A task",
+      }),
+    });
+    expect(taskRes.status).toBe(201);
+    const taskBody = (await taskRes.json()) as { data: { task: { id: string } } };
+    const taskId = taskBody.data.task.id;
+
+    const got = await fetch(`${baseUrl}/api/v1/tasks/${taskId}`, { headers: auth });
+    expect(got.status).toBe(200);
+    const body = (await got.json()) as {
+      data: {
+        task: {
+          id: string;
+          name: string;
+          projectName: string | null;
+          recentRuns: unknown[];
+          source: {
+            repoPath: string;
+            manifestPath: string | null;
+            promptFile: string | null;
+            promptAbsolutePath: string | null;
+          };
+        };
+      };
+    };
+    expect(body.data.task.id).toBe(taskId);
+    expect(body.data.task.name).toBe("detail-task");
+    expect(body.data.task.projectName).toBe("detail-demo");
+    expect(Array.isArray(body.data.task.recentRuns)).toBe(true);
+    expect(body.data.task.source.promptFile).toBe(".gojo/prompts/detail.md");
+    expect(body.data.task.source.promptAbsolutePath).toContain(".gojo/prompts/detail.md");
+
+    const missing = await fetch(`${baseUrl}/api/v1/tasks/does-not-exist`, { headers: auth });
+    expect(missing.status).toBe(404);
+  });
+
+  test("schedules list filters by taskId", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const projectRes = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "sched-filter", repoPath: tempDir ?? "/tmp/demo" }),
+    });
+    const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
+
+    const createTask = async (name: string) => {
+      const res = await fetch(`${baseUrl}/api/v1/tasks`, {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          projectId: projectBody.data.project.id,
+          name,
+          prompt: "run",
+        }),
+      });
+      const body = (await res.json()) as { data: { task: { id: string } } };
+      return body.data.task.id;
+    };
+
+    const taskA = await createTask("task-a");
+    const taskB = await createTask("task-b");
+    ctx!.repos.schedules.create({
+      taskId: taskA,
+      name: "for-a",
+      cronExpr: "0 * * * *",
+      timezone: "UTC",
+    });
+    ctx!.repos.schedules.create({
+      taskId: taskB,
+      name: "for-b",
+      cronExpr: "0 0 * * *",
+      timezone: "UTC",
+    });
+
+    const list = await fetch(
+      `${baseUrl}/api/v1/schedules?taskId=${encodeURIComponent(taskA)}`,
+      { headers: auth },
+    );
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as {
+      data: { schedules: Array<{ name: string; taskId: string }>; total: number };
+    };
+    expect(listBody.data.total).toBe(1);
+    expect(listBody.data.schedules).toHaveLength(1);
+    expect(listBody.data.schedules[0]?.name).toBe("for-a");
+    expect(listBody.data.schedules[0]?.taskId).toBe(taskA);
+  });
+
+  test("task enable and disable toggle enabled flag", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const projectRes = await fetch(`${baseUrl}/api/v1/projects`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "toggle-demo", repoPath: tempDir ?? "/tmp/demo" }),
+    });
+    expect(projectRes.status).toBe(201);
+    const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        projectId: projectBody.data.project.id,
+        name: "toggle-me",
+        prompt: "echo ok",
+      }),
+    });
+    expect(taskRes.status).toBe(201);
+    const taskBody = (await taskRes.json()) as {
+      data: { task: { id: string; enabled: boolean } };
+    };
+    expect(taskBody.data.task.enabled).toBe(true);
+    const taskId = taskBody.data.task.id;
+
+    const disabled = await fetch(`${baseUrl}/api/v1/tasks/${taskId}/disable`, {
+      method: "POST",
+      headers: auth,
+    });
+    expect(disabled.status).toBe(200);
+    const disabledBody = (await disabled.json()) as {
+      data: { task: { id: string; enabled: boolean } };
+    };
+    expect(disabledBody.data.task.id).toBe(taskId);
+    expect(disabledBody.data.task.enabled).toBe(false);
+
+    const enabled = await fetch(`${baseUrl}/api/v1/tasks/${taskId}/enable`, {
+      method: "POST",
+      headers: auth,
+    });
+    expect(enabled.status).toBe(200);
+    const enabledBody = (await enabled.json()) as {
+      data: { task: { id: string; enabled: boolean } };
+    };
+    expect(enabledBody.data.task.enabled).toBe(true);
+
+    const missing = await fetch(`${baseUrl}/api/v1/tasks/does-not-exist/disable`, {
+      method: "POST",
+      headers: auth,
+    });
+    expect(missing.status).toBe(404);
+  });
+
   test("schedules list includes cronDescription and upcoming fires", async () => {
     const { baseUrl, token } = await boot();
     const auth = {

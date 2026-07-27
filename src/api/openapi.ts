@@ -76,8 +76,17 @@ export const openApiDocument = {
       },
       post: { summary: "Create task" },
     },
+    "/api/v1/tasks/{id}": {
+      get: { summary: "Get task detail (ops inspect + source paths)" },
+    },
     "/api/v1/tasks/{id}/run": {
       post: { summary: "Queue task run" },
+    },
+    "/api/v1/tasks/{id}/enable": {
+      post: { summary: "Enable task" },
+    },
+    "/api/v1/tasks/{id}/disable": {
+      post: { summary: "Disable task" },
     },
     "/api/v1/schedules": {
       get: {
@@ -86,6 +95,7 @@ export const openApiDocument = {
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "taskId", in: "query", schema: { type: "string" } },
           { name: "enabled", in: "query", schema: { type: "string" } },
           { name: "q", in: "query", schema: { type: "string" } },
         ],

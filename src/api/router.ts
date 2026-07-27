@@ -45,6 +45,7 @@ import { getDashboardOverview } from "@/storage/dashboard-overview";
 import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
   BACKUP_SORT_ALLOWED,
+  getTaskDetail,
   listProjectsPage,
   toProjectDetailRow,
   listRunsPage,
@@ -535,6 +536,16 @@ export async function handleApiRequest(
     return success({ task }, 201);
   }
 
+  const taskGetMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)$/);
+  if (method === "GET" && taskGetMatch) {
+    const taskId = taskGetMatch[1] ?? "";
+    const task = getTaskDetail(ctx.db, taskId);
+    if (!task) {
+      return failure("not_found", "Task not found", 404);
+    }
+    return success({ task });
+  }
+
   const taskRunMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)\/run$/);
   if (method === "POST" && taskRunMatch) {
     const taskId = taskRunMatch[1] ?? "";
@@ -553,6 +564,19 @@ export async function handleApiRequest(
     return success({ run }, 202);
   }
 
+  const taskActionMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)\/(enable|disable)$/);
+  if (method === "POST" && taskActionMatch) {
+    const taskId = taskActionMatch[1] ?? "";
+    const action = taskActionMatch[2];
+    const task = ctx.repos.tasks.findById(taskId);
+    if (!task) {
+      return failure("not_found", "Task not found", 404);
+    }
+
+    const updated = ctx.repos.tasks.update(taskId, { enabled: action === "enable" });
+    return success({ task: updated });
+  }
+
   if (method === "GET" && pathname === "/api/v1/schedules") {
     const page = parsePageParamsFromUrl(url);
     const sort = parseSortParamsFromUrl(url, {
@@ -564,6 +588,7 @@ export async function handleApiRequest(
       ...page,
       ...sort,
       projectId: url.searchParams.get("projectId"),
+      taskId: url.searchParams.get("taskId"),
       enabled: parseEnabledParam(url.searchParams.get("enabled")),
       q: url.searchParams.get("q"),
     });

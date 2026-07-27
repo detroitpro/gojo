@@ -1287,10 +1287,6 @@ table.data tr:hover td {
 }
 
 .action-menu-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
   min-width: 9rem;
   padding: 0.25rem;
   background: var(--bg-elevated);
@@ -1299,6 +1295,12 @@ table.data tr:hover td {
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
+}
+
+/* Teleported to body so table-wrap overflow does not clip or scroll the menu. */
+.action-menu-panel-floating {
+  position: fixed;
+  z-index: 1000;
 }
 
 .action-menu-item {

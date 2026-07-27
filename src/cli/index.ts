@@ -11,6 +11,7 @@ import { defaultBackupDest } from "@/backup/list";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
+import { getTaskDetail } from "@/storage/paged-lists";
 import {
   installService,
   resolveServiceLaunch,
@@ -277,6 +278,18 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         printOutput(format, { tasks: ctx.repos.tasks.listByProject(projectId) });
         break;
       }
+      case "inspect": {
+        const taskId = parsed.positional[0];
+        if (!taskId) {
+          die("usage: gojo task inspect <taskId>", format);
+        }
+        const task = getTaskDetail(ctx.db, taskId);
+        if (!task) {
+          die("task not found", format);
+        }
+        printOutput(format, { task });
+        break;
+      }
       case "run": {
         const taskId = parsed.positional[0];
         if (!taskId) {
@@ -297,6 +310,28 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         await ctx.dispatcher.waitForTerminal(run.id);
         const finished = ctx.repos.runs.findById(run.id);
         printOutput(format, { run: finished });
+        break;
+      }
+      case "enable": {
+        const taskId = parsed.positional[0];
+        if (!taskId) {
+          die("usage: gojo task enable <taskId>", format);
+        }
+        if (!ctx.repos.tasks.findById(taskId)) {
+          die("task not found", format);
+        }
+        printOutput(format, { task: ctx.repos.tasks.update(taskId, { enabled: true }) });
+        break;
+      }
+      case "disable": {
+        const taskId = parsed.positional[0];
+        if (!taskId) {
+          die("usage: gojo task disable <taskId>", format);
+        }
+        if (!ctx.repos.tasks.findById(taskId)) {
+          die("task not found", format);
+        }
+        printOutput(format, { task: ctx.repos.tasks.update(taskId, { enabled: false }) });
         break;
       }
       case "cancel": {
@@ -557,7 +592,7 @@ Commands:
   service install|uninstall|start|stop|restart|status|logs
   project add|list|inspect|sync|doctor|remove
   agent detect|list|inspect|test
-  task list|run|cancel|retry
+  task list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next
   run list|inspect|logs|diff|approve|reject|artifacts
   backup create|verify|restore
