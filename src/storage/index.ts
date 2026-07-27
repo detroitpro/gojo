@@ -14,6 +14,19 @@ export type {
   TaskRepository,
 } from "./repositories";
 export { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
+export {
+  getInstanceSetting,
+  getSchedulingPolicy,
+  isInstancePaused,
+  setInstancePaused,
+  setInstanceSetting,
+  setSchedulingPolicy,
+} from "./instance-settings";
+export {
+  acquireSchedulerLease,
+  refreshSchedulerLease,
+  releaseSchedulerLease,
+} from "./scheduler-leases";
 export type { RunState } from "@shared/run-states";
 export type {
   AgentProfile,

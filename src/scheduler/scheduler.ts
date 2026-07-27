@@ -1,7 +1,11 @@
-import { RunState, isTerminal } from "@shared/run-states";
-
 import { createRepositories } from "@/storage";
 import type { Database } from "@/storage";
+import { isInstancePaused } from "@/storage/instance-settings";
+import {
+  acquireSchedulerLease,
+  refreshSchedulerLease,
+  releaseSchedulerLease,
+} from "@/storage/scheduler-leases";
 import type { Schedule } from "@/storage/types";
 
 import { missedOccurrences, nextOccurrence } from "./cron";
@@ -35,44 +39,6 @@ export interface SchedulerDeps {
 
 function parsePolicy<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
-}
-
-function isInstancePaused(db: Database): boolean {
-  const row = db
-    .connection()
-    .query<{ value_json: string }, [string]>("SELECT value_json FROM instance_settings WHERE key = ?")
-    .get("paused");
-
-  if (!row) {
-    return false;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(row.value_json);
-    return parsed === true || (typeof parsed === "object" && parsed !== null && "paused" in parsed && (parsed as { paused: unknown }).paused === true);
-  } catch {
-    return false;
-  }
-}
-
-function countActiveRuns(db: Database, scheduleId: string): number {
-  const rows = db
-    .connection()
-    .query<{ state: string }, [string]>("SELECT state FROM runs WHERE schedule_id = ?")
-    .all(scheduleId);
-
-  return rows.filter((row) => !isTerminal(row.state as (typeof RunState)[keyof typeof RunState])).length;
-}
-
-function countQueuedRuns(db: Database, scheduleId: string): number {
-  const row = db
-    .connection()
-    .query<{ count: number }, [string, string]>(
-      "SELECT COUNT(*) as count FROM runs WHERE schedule_id = ? AND state = ?",
-    )
-    .get(scheduleId, RunState.Queued);
-
-  return row?.count ?? 0;
 }
 
 export class Scheduler {
@@ -169,50 +135,15 @@ export class Scheduler {
   }
 
   async acquireLease(ttlMs: number): Promise<boolean> {
-    const sqlite = this.db.connection();
-    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-    const nowIso = new Date().toISOString();
-
-    const existing = sqlite
-      .query<{ holder: string; expires_at: string }, [string]>(
-        "SELECT holder, expires_at FROM scheduler_leases WHERE id = ?",
-      )
-      .get(LEASE_ID);
-
-    if (!existing) {
-      sqlite
-        .query("INSERT INTO scheduler_leases (id, holder, expires_at) VALUES (?, ?, ?)")
-        .run(LEASE_ID, this.leaseHolderId, expiresAt);
-      return true;
-    }
-
-    if (existing.holder === this.leaseHolderId || existing.expires_at <= nowIso) {
-      sqlite
-        .query("UPDATE scheduler_leases SET holder = ?, expires_at = ? WHERE id = ?")
-        .run(this.leaseHolderId, expiresAt, LEASE_ID);
-      return true;
-    }
-
-    return false;
+    return acquireSchedulerLease(this.db, LEASE_ID, this.leaseHolderId, ttlMs);
   }
 
   async refreshLease(ttlMs: number): Promise<boolean> {
-    const sqlite = this.db.connection();
-    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-    const result = sqlite
-      .query(
-        "UPDATE scheduler_leases SET expires_at = ? WHERE id = ? AND holder = ?",
-      )
-      .run(expiresAt, LEASE_ID, this.leaseHolderId);
-
-    return result.changes > 0;
+    return refreshSchedulerLease(this.db, LEASE_ID, this.leaseHolderId, ttlMs);
   }
 
   private releaseLease(): void {
-    this.db
-      .connection()
-      .query("DELETE FROM scheduler_leases WHERE id = ? AND holder = ?")
-      .run(LEASE_ID, this.leaseHolderId);
+    releaseSchedulerLease(this.db, LEASE_ID, this.leaseHolderId);
   }
 
   private async processDueSchedule(schedule: Schedule, now: Date): Promise<void> {
@@ -243,8 +174,8 @@ export class Scheduler {
     let lastFiredAt: Date | null = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
 
     for (const fireAt of fireTimes) {
-      const hasActiveRun = countActiveRuns(this.db, schedule.id) > 0;
-      const queuedCount = countQueuedRuns(this.db, schedule.id);
+      const hasActiveRun = this.repos.runs.countActiveBySchedule(schedule.id) > 0;
+      const queuedCount = this.repos.runs.countQueuedBySchedule(schedule.id);
       const decision = shouldStartGivenOverlap(overlapPolicy, hasActiveRun, queuedCount);
 
       if (decision === "skip") {

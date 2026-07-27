@@ -432,6 +432,9 @@ export interface RunRepository {
     trigger: Run["trigger"],
     since: string,
   ): number;
+  /** Non-terminal runs for a schedule (overlap policy). */
+  countActiveBySchedule(scheduleId: string): number;
+  countQueuedBySchedule(scheduleId: string): number;
   update(id: string, input: UpdateRunInput): Run | null;
   delete(id: string): boolean;
 }
@@ -1031,6 +1034,28 @@ export function createRepositories(db: Database): Repositories {
            WHERE project_id = ? AND trigger = ? AND created_at >= ?`,
         )
         .get(projectId, trigger, since);
+      return row?.count ?? 0;
+    },
+
+    countActiveBySchedule(scheduleId) {
+      const row = sqlite
+        .query<{ count: number }, [string]>(
+          `SELECT COUNT(*) as count FROM runs
+           WHERE schedule_id = ? AND state NOT IN (
+             'Succeeded', 'Failed', 'Canceled', 'TimedOut', 'Skipped',
+             'Superseded', 'Abandoned', 'Blocked', 'Conflict', 'InfrastructureFailure'
+           )`,
+        )
+        .get(scheduleId);
+      return row?.count ?? 0;
+    },
+
+    countQueuedBySchedule(scheduleId) {
+      const row = sqlite
+        .query<{ count: number }, [string, string]>(
+          "SELECT COUNT(*) as count FROM runs WHERE schedule_id = ? AND state = ?",
+        )
+        .get(scheduleId, RunState.Queued);
       return row?.count ?? 0;
     },
 
