@@ -48,11 +48,13 @@ import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
   BACKUP_SORT_ALLOWED,
   getTaskDetail,
+  listOpenIntegrationsPage,
   listProjectsPage,
   toProjectDetailRow,
   listRunsPage,
   listSchedulesPage,
   listTasksPage,
+  OPEN_INTEGRATION_SORT_ALLOWED,
   PROJECT_SORT_ALLOWED,
   QUEUE_SORT_ALLOWED,
   RUN_SORT_ALLOWED,
@@ -368,13 +370,41 @@ export async function handleApiRequest(
       defaultSort: "createdAt",
       defaultOrder: "asc",
     });
+    const hasOpenPrsParam = url.searchParams.get("hasOpenPrs");
+    const hasOpenPrs =
+      hasOpenPrsParam === "true" || hasOpenPrsParam === "1"
+        ? true
+        : hasOpenPrsParam === "false" || hasOpenPrsParam === "0"
+          ? false
+          : null;
     const result = listProjectsPage(ctx.db, {
       ...page,
       ...sort,
       q: url.searchParams.get("q"),
+      hasOpenPrs,
     });
     return success({
       projects: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/v1/integrations/open") {
+    const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: OPEN_INTEGRATION_SORT_ALLOWED,
+      defaultSort: "openedAt",
+      defaultOrder: "desc",
+    });
+    const result = listOpenIntegrationsPage(ctx.db, {
+      ...page,
+      ...sort,
+      projectId: url.searchParams.get("projectId"),
+    });
+    return success({
+      integrations: result.items,
       total: result.total,
       limit: result.limit,
       offset: result.offset,

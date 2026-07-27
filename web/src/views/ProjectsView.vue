@@ -44,6 +44,7 @@ function initialOrder(): SortOrder {
 }
 
 const query = ref("");
+const hasOpenPrs = ref(queryParam("hasOpenPrs") === "1" || queryParam("hasOpenPrs") === "true");
 const busyId = ref<string | null>(null);
 const addOpen = ref(false);
 const creating = ref(false);
@@ -71,7 +72,7 @@ const {
 } = useServerTable({
   defaultSort: initialSort(),
   defaultOrder: initialOrder(),
-  watchSources: [query],
+  watchSources: [query, hasOpenPrs],
   fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listProjects({
       limit,
@@ -79,10 +80,11 @@ const {
       sort: sortBy,
       order: sortOrder,
       q: query.value || undefined,
+      ...(hasOpenPrs.value ? { hasOpenPrs: true } : {}),
     }),
 });
 
-watch([sort, order], () => {
+watch([sort, order, hasOpenPrs], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
   if (sort.value !== "createdAt" || order.value !== "asc") {
     nextQuery.sort = sort.value;
@@ -91,13 +93,29 @@ watch([sort, order], () => {
     delete nextQuery.sort;
     delete nextQuery.order;
   }
+  if (hasOpenPrs.value) {
+    nextQuery.hasOpenPrs = "1";
+  } else {
+    delete nextQuery.hasOpenPrs;
+  }
   const same =
     (nextQuery.sort ?? "") === queryParam("sort") &&
-    (nextQuery.order ?? "") === queryParam("order");
+    (nextQuery.order ?? "") === queryParam("order") &&
+    (nextQuery.hasOpenPrs ?? "") === queryParam("hasOpenPrs");
   if (!same) {
     void router.replace({ query: nextQuery });
   }
 });
+
+watch(
+  () => route.query.hasOpenPrs,
+  (value) => {
+    const next = value === "1" || value === "true";
+    if (hasOpenPrs.value !== next) {
+      hasOpenPrs.value = next;
+    }
+  },
+);
 
 function basename(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, "");
@@ -312,6 +330,13 @@ onMounted(() => {
           placeholder="Name, path, id…"
         />
       </div>
+      <div class="field">
+        <label for="project-open-prs">Open PRs</label>
+        <label class="checkbox-row" for="project-open-prs">
+          <input id="project-open-prs" v-model="hasOpenPrs" type="checkbox" />
+          Has open PRs
+        </label>
+      </div>
       <div class="field task-filter-count">
         <label>&nbsp;</label>
         <span class="muted">{{ total }} project{{ total === 1 ? "" : "s" }}</span>
@@ -321,7 +346,7 @@ onMounted(() => {
     <div v-if="loading && projects.length === 0" class="empty">Loading projects…</div>
     <div v-else-if="total === 0" class="empty">
       {{
-        query
+        query || hasOpenPrs
           ? "No projects match these filters"
           : "No projects yet — use Add project to register a repository"
       }}
@@ -341,6 +366,7 @@ onMounted(() => {
                 @sort="setSort"
               />
               <th>Config</th>
+              <th>Open PRs</th>
               <th>
                 Health
                 <span v-if="healthLoading" class="muted text-sm"> …</span>
@@ -370,6 +396,20 @@ onMounted(() => {
               <td class="mono muted">{{ project.repoPath }}</td>
               <td class="mono">{{ project.defaultBranch }}</td>
               <td class="muted">{{ configSummary(project) }}</td>
+              <td>
+                <RouterLink
+                  v-if="project.openPrCount > 0"
+                  :to="{
+                    name: 'project-detail',
+                    params: { id: project.id },
+                    hash: '#open-prs',
+                  }"
+                  class="entity-name"
+                >
+                  {{ project.openPrCount }}
+                </RouterLink>
+                <span v-else class="muted">—</span>
+              </td>
               <td>
                 <span class="badge" :class="healthBadgeClass(healthFor(project).level)">
                   {{ healthFor(project).label }}

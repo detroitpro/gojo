@@ -27,11 +27,11 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project tables of enabled tasks with a last-five-runs strip. Per-item impact audit lives on project detail and run detail.
+**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project tables of enabled tasks with a last-five-runs strip. **PRs open** links to projects with open automation PRs (or that project’s Open PRs panel when filtered). Per-item impact audit lives on project detail and run detail.
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos via **Add project** (header → dialog), open a project for health, Impact detail (category stats, per-task show/hide, auditable item list), structured config, and sync manifests.
+**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, currently-open PR list (with merge babysitter enqueue when `maintain-merge` exists), Impact detail, structured config, and sync manifests.
 
 **Tasks** — list synced tasks with success rate and last run. Open a task for read-only inspect: last-synced prompt, policy JSON (validation, integration, failure, concurrency), linked schedules, manifest source paths, and a recent-runs strip. Run now, enable/disable, and jump to filtered Runs or Schedules. Edit config in `gojo.yaml` + `promptFile`, then **Project Sync** — the detail page is ops inspect, not an editor.
 

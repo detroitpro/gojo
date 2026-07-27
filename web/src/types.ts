@@ -32,6 +32,25 @@ export interface ProjectSummaryCounts {
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
+  /** Currently-open gojo-tracked PRs (not Impact’s date window). */
+  openPrCount: number;
+}
+
+export interface OpenIntegration {
+  runId: string;
+  projectId: string;
+  projectName: string | null;
+  taskId: string;
+  taskName: string | null;
+  prNumber: number | null;
+  prUrl: string | null;
+  provider: string | null;
+  repo: string | null;
+  status: "open";
+  openedAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  branchName: string | null;
 }
 
 export interface Project extends ProjectSummaryCounts {

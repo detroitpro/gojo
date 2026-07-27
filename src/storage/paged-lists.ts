@@ -51,11 +51,41 @@ export const QUEUE_SORT_ALLOWED = [
 ] as const;
 export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
 export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
+export const OPEN_INTEGRATION_SORT_ALLOWED = [
+  "openedAt",
+  "projectName",
+  "taskName",
+  "prNumber",
+] as const;
 
 export type ListProjectsPageInput = PageParams &
   Partial<SortParams> & {
     q?: string | null;
+    /** When true, only projects with currently-open gojo-tracked PRs. */
+    hasOpenPrs?: boolean | null;
   };
+
+export type ListOpenIntegrationsPageInput = PageParams &
+  Partial<SortParams> & {
+    projectId?: string | null;
+  };
+
+export type OpenIntegrationListRow = {
+  runId: string;
+  projectId: string;
+  projectName: string | null;
+  taskId: string;
+  taskName: string | null;
+  prNumber: number | null;
+  prUrl: string | null;
+  provider: string | null;
+  repo: string | null;
+  status: "open";
+  openedAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  branchName: string | null;
+};
 
 export type ListTasksPageInput = PageParams &
   Partial<SortParams> & {
@@ -136,7 +166,15 @@ export type ProjectSummaryCounts = {
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
+  /** Currently-open gojo-tracked PRs (`run_integrations.status = 'open'`). */
+  openPrCount: number;
 };
+
+const OPEN_PR_COUNT_SQL = `(SELECT COUNT(*) FROM run_integrations ri
+            INNER JOIN runs r ON r.id = ri.run_id
+            WHERE r.project_id = p.id
+              AND ri.status = 'open'
+              AND (ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL))`;
 
 /** List row: summary counts, no heavy manifest blob. */
 export type ProjectListRow = Omit<Project, "manifestJson"> &
@@ -239,6 +277,7 @@ export function projectSummaryFor(
         enabled_task_count: number;
         schedule_count: number;
         enabled_schedule_count: number;
+        open_pr_count: number;
       },
       [string]
     >(
@@ -251,7 +290,8 @@ export function projectSummaryFor(
             WHERE t.project_id = p.id) AS schedule_count,
          (SELECT COUNT(*) FROM schedules s
             INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count
+            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
+         ${OPEN_PR_COUNT_SQL} AS open_pr_count
        FROM projects p
        WHERE p.id = ?`,
     )
@@ -265,6 +305,7 @@ export function projectSummaryFor(
     scheduleCount: row.schedule_count,
     enabledScheduleCount: row.enabled_schedule_count,
     hasManifest: manifestIsPresent(row.manifest_json),
+    openPrCount: row.open_pr_count,
   };
 }
 
@@ -278,6 +319,7 @@ export function toProjectDetailRow(
     scheduleCount: 0,
     enabledScheduleCount: 0,
     hasManifest: manifestIsPresent(project.manifestJson),
+    openPrCount: 0,
   };
   return { ...project, ...summary };
 }
@@ -299,6 +341,9 @@ export function listProjectsPage(
     );
     params.push(likePattern(q), likePattern(q));
   }
+  if (input.hasOpenPrs === true) {
+    clauses.push(`${OPEN_PR_COUNT_SQL} > 0`);
+  }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const total =
     sqlite
@@ -312,6 +357,7 @@ export function listProjectsPage(
     enabled_task_count: number;
     schedule_count: number;
     enabled_schedule_count: number;
+    open_pr_count: number;
   };
 
   const { sort, order } = parseSortParams(
@@ -342,7 +388,8 @@ export function listProjectsPage(
             WHERE t.project_id = p.id) AS schedule_count,
          (SELECT COUNT(*) FROM schedules s
             INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count
+            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
+         ${OPEN_PR_COUNT_SQL} AS open_pr_count
        FROM projects p
        ${where}
        ${orderBy}
@@ -366,8 +413,124 @@ export function listProjectsPage(
         scheduleCount: row.schedule_count,
         enabledScheduleCount: row.enabled_schedule_count,
         hasManifest: manifestIsPresent(row.manifest_json),
+        openPrCount: row.open_pr_count,
       };
     }),
+    total,
+    limit: input.limit,
+    offset: input.offset,
+  };
+}
+
+export function listOpenIntegrationsPage(
+  db: Database,
+  input: ListOpenIntegrationsPageInput,
+): PaginatedList<OpenIntegrationListRow> {
+  const sqlite = db.connection();
+  const clauses: string[] = [
+    "ri.status = 'open'",
+    "(ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)",
+  ];
+  const params: SQLQueryBindings[] = [];
+
+  if (input.projectId) {
+    buildWhere(clauses, params, "r.project_id = ?", input.projectId);
+  }
+
+  const where = `WHERE ${clauses.join(" AND ")}`;
+  const from = `FROM run_integrations ri
+    INNER JOIN runs r ON r.id = ri.run_id
+    LEFT JOIN projects p ON p.id = r.project_id
+    LEFT JOIN tasks t ON t.id = r.task_id
+    LEFT JOIN (
+      SELECT run_id, branch_name,
+             ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY attempt_number DESC) AS rn
+      FROM attempts
+    ) a ON a.run_id = r.id AND a.rn = 1`;
+
+  const total =
+    sqlite
+      .query<{ count: number }, SQLQueryBindings[]>(
+        `SELECT COUNT(*) AS count ${from} ${where}`,
+      )
+      .get(...params)?.count ?? 0;
+
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    {
+      allowed: OPEN_INTEGRATION_SORT_ALLOWED,
+      defaultSort: "openedAt",
+      defaultOrder: "desc",
+    },
+  );
+  const orderBy = sqlOrderBy(
+    sort,
+    order,
+    {
+      openedAt: "ri.opened_at",
+      projectName: "p.name COLLATE NOCASE",
+      taskName: "t.name COLLATE NOCASE",
+      prNumber: "ri.pr_number",
+    },
+    "ri.id DESC",
+  );
+
+  type OpenIntegrationSqlRow = {
+    run_id: string;
+    project_id: string;
+    project_name: string | null;
+    task_id: string;
+    task_name: string | null;
+    pr_number: number | null;
+    pr_url: string | null;
+    provider: string | null;
+    repo: string | null;
+    opened_at: string | null;
+    last_checked_at: string | null;
+    last_error: string | null;
+    branch_name: string | null;
+  };
+
+  const rows = sqlite
+    .query(
+      `SELECT
+         r.id AS run_id,
+         r.project_id AS project_id,
+         p.name AS project_name,
+         r.task_id AS task_id,
+         t.name AS task_name,
+         ri.pr_number AS pr_number,
+         ri.pr_url AS pr_url,
+         ri.provider AS provider,
+         ri.repo AS repo,
+         ri.opened_at AS opened_at,
+         ri.last_checked_at AS last_checked_at,
+         ri.last_error AS last_error,
+         a.branch_name AS branch_name
+       ${from}
+       ${where}
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...params, input.limit, input.offset) as OpenIntegrationSqlRow[];
+
+  return {
+    items: rows.map((row) => ({
+      runId: row.run_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      taskId: row.task_id,
+      taskName: row.task_name,
+      prNumber: row.pr_number,
+      prUrl: row.pr_url,
+      provider: row.provider,
+      repo: row.repo,
+      status: "open" as const,
+      openedAt: row.opened_at,
+      lastCheckedAt: row.last_checked_at,
+      lastError: row.last_error,
+      branchName: row.branch_name,
+    })),
     total,
     limit: input.limit,
     offset: input.offset,

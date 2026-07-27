@@ -794,6 +794,79 @@ describe("api/router", () => {
     expect(detailBody.data.impactItems).toHaveLength(1);
     expect(detailBody.data.integration?.status).toBe("merged");
   });
+
+  test("lists open integrations and filters projects by hasOpenPrs", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = { Authorization: `Bearer ${token}` };
+
+    const project = ctx!.repos.projects.create({
+      name: "open-prs",
+      repoPath: tempDir ?? "/tmp/open-prs",
+    });
+    const empty = ctx!.repos.projects.create({
+      name: "no-prs",
+      repoPath: `${tempDir ?? "/tmp"}/no-prs`,
+    });
+    const task = ctx!.repos.tasks.create({
+      projectId: project.id,
+      name: "maintain-quality",
+      prompt: "run",
+    });
+    const run = ctx!.repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "open-pr-key",
+      trigger: "manual",
+    });
+    ctx!.repos.runIntegrations.upsertForRun({
+      runId: run.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/app",
+      prNumber: 42,
+      prUrl: "https://github.com/me/app/pull/42",
+      status: "open",
+      openedAt: "2026-07-20T00:00:00.000Z",
+    });
+
+    const openRes = await fetch(`${baseUrl}/api/v1/integrations/open`, { headers: auth });
+    expect(openRes.status).toBe(200);
+    const openBody = (await openRes.json()) as {
+      data: {
+        integrations: Array<{ runId: string; prNumber: number | null; projectId: string }>;
+        total: number;
+      };
+    };
+    expect(openBody.data.total).toBeGreaterThanOrEqual(1);
+    expect(openBody.data.integrations.some((row) => row.runId === run.id)).toBe(true);
+
+    const filtered = await fetch(
+      `${baseUrl}/api/v1/integrations/open?projectId=${project.id}`,
+      { headers: auth },
+    );
+    const filteredBody = (await filtered.json()) as {
+      data: { integrations: Array<{ prNumber: number | null }>; total: number };
+    };
+    expect(filteredBody.data.total).toBe(1);
+    expect(filteredBody.data.integrations[0]?.prNumber).toBe(42);
+
+    const projectsRes = await fetch(`${baseUrl}/api/v1/projects?hasOpenPrs=true`, {
+      headers: auth,
+    });
+    expect(projectsRes.status).toBe(200);
+    const projectsBody = (await projectsRes.json()) as {
+      data: { projects: Array<{ id: string; openPrCount: number }>; total: number };
+    };
+    expect(projectsBody.data.projects.some((row) => row.id === project.id)).toBe(true);
+    expect(projectsBody.data.projects.every((row) => row.openPrCount > 0)).toBe(true);
+    expect(projectsBody.data.projects.some((row) => row.id === empty.id)).toBe(false);
+
+    const detail = await fetch(`${baseUrl}/api/v1/projects/${project.id}`, { headers: auth });
+    const detailBody = (await detail.json()) as {
+      data: { project: { openPrCount: number } };
+    };
+    expect(detailBody.data.project.openPrCount).toBe(1);
+  });
 });
 
 

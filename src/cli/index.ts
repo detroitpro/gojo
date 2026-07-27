@@ -11,7 +11,8 @@ import { defaultBackupDest } from "@/backup/list";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
-import { getTaskDetail } from "@/storage/paged-lists";
+import { getTaskDetail, listOpenIntegrationsPage } from "@/storage/paged-lists";
+import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
 import {
   installService,
   resolveServiceLaunch,
@@ -595,8 +596,40 @@ Commands:
   task list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next
   run list|inspect|logs|diff|approve|reject|artifacts
+  integration list --open [--project <id>]
   backup create|verify|restore
 `);
+}
+
+async function runIntegrationCommand(
+  parsed: ParsedArgv,
+  format: ReturnType<typeof getOutputFormat>,
+): Promise<void> {
+  const sub = parsed.command[1];
+  await withContext(getHome(parsed), async (ctx) => {
+    switch (sub) {
+      case "list": {
+        if (!hasFlag(parsed, "open")) {
+          die("usage: gojo integration list --open [--project <id>]", format);
+        }
+        const projectId = getFlagString(parsed, "project");
+        const result = listOpenIntegrationsPage(ctx.db, {
+          limit: DEFAULT_PAGE_LIMIT,
+          offset: 0,
+          ...(projectId ? { projectId } : {}),
+        });
+        printOutput(format, {
+          integrations: result.items,
+          total: result.total,
+          limit: result.limit,
+          offset: result.offset,
+        });
+        break;
+      }
+      default:
+        die(`unknown integration command: ${sub ?? ""}`, format);
+    }
+  });
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -666,6 +699,11 @@ async function main(argv: string[]): Promise<void> {
 
     if (group === "run") {
       await runRunCommand(parsed, format);
+      return;
+    }
+
+    if (group === "integration") {
+      await runIntegrationCommand(parsed, format);
       return;
     }
 

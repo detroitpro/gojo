@@ -207,7 +207,27 @@ onMounted(() => {
             </div>
             <div class="stat">
               <div class="label">PRs open</div>
-              <div class="value">{{ impact.totals.prsOpen }}</div>
+              <div class="value">
+                <RouterLink
+                  v-if="impact.totals.prsOpen > 0 && projectFilter"
+                  :to="{
+                    name: 'project-detail',
+                    params: { id: projectFilter },
+                    hash: '#open-prs',
+                  }"
+                  class="entity-name"
+                >
+                  {{ impact.totals.prsOpen }}
+                </RouterLink>
+                <RouterLink
+                  v-else-if="impact.totals.prsOpen > 0"
+                  :to="{ name: 'projects', query: { hasOpenPrs: '1' } }"
+                  class="entity-name"
+                >
+                  {{ impact.totals.prsOpen }}
+                </RouterLink>
+                <template v-else>{{ impact.totals.prsOpen }}</template>
+              </div>
             </div>
             <div class="stat">
               <div class="label">Merge rate</div>

@@ -24,6 +24,7 @@ export type ListQuery = {
   state?: string;
   trigger?: string;
   enabled?: "all" | "enabled" | "disabled" | "true" | "false" | boolean;
+  hasOpenPrs?: boolean;
   sort?: string;
   order?: SortOrder;
 };
@@ -74,6 +75,9 @@ export function buildListQuery(params: ListQuery): string {
     ) {
       sp.set("enabled", "false");
     }
+  }
+  if (params.hasOpenPrs === true) {
+    sp.set("hasOpenPrs", "true");
   }
   if (params.sort) {
     sp.set("sort", params.sort);

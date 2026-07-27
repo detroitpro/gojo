@@ -39,9 +39,29 @@ export const openApiDocument = {
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "q", in: "query", schema: { type: "string" } },
+          {
+            name: "hasOpenPrs",
+            in: "query",
+            schema: { type: "boolean" },
+            description: "When true, only projects with currently-open gojo-tracked PRs",
+          },
         ],
       },
       post: { summary: "Create project" },
+    },
+    "/api/v1/integrations/open": {
+      get: {
+        summary: "List currently-open gojo-tracked pull requests",
+        description:
+          "Rows from run_integrations with status=open (not Impact’s date window). Query: projectId, limit, offset, sort, order.",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "sort", in: "query", schema: { type: "string" } },
+          { name: "order", in: "query", schema: { type: "string" } },
+        ],
+      },
     },
     "/api/v1/projects/{id}": {
       get: { summary: "Get project" },

@@ -28,7 +28,9 @@ All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — 
 
 ## List APIs (paging + sort)
 
-Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
+Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations/open`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
+
+Currently-open gojo-tracked PRs are listed by `GET /api/v1/integrations/open` (and `gojo integration list --open`). Project summaries include `openPrCount`; `GET /projects?hasOpenPrs=true` filters to projects with at least one. This count is **not** Impact’s date window — it is live `run_integrations.status = 'open'`. The ops UI shows an Open PRs panel on project detail (with a **Run merge babysitter** CTA when an enabled `maintain-merge` task exists) and an Open PRs column on the projects list.
 
 Task enable/disable mirrors schedules: `POST /api/v1/tasks/:id/enable|disable`, `gojo task enable|disable <id>`, and the Tasks UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable tasks absent from `gojo.yaml`.
 
@@ -42,6 +44,7 @@ For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.sc
 
 - Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_TASK_ID`, and `GOJO_PROJECT_ID` into agent env (`agent-run-*` tokens are short-lived and revoked when the agent attempt finishes; Settings hides them by default).
 - On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts tasks/schedules by name and **soft-disables** tasks and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
+- Workspace branch/worktree names are `gojo/<task>/<project>/<date>/run-<fullRunId>` (optional `-aN` attempt suffix) under `$GOJO_HOME/worktrees`. Full ULID + project slug avoids collisions when many schedules fire in the same millisecond; task stays second so allowlists like `gojo/maintain-quality` still match. Orphan paths under the worktrees root are reclaimed before `git worktree add`.
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer task itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).
 

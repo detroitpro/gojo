@@ -40,5 +40,5 @@
     }
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
-  "exclude": ["node_modules", "dist", "web", "tests/unit/web"]
+  "exclude": ["node_modules", "dist", "web", "tests/unit/web", "scripts/screenshots"]
 }

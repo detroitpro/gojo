@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
 import {
+  listOpenIntegrationsPage,
   listProjectsPage,
   listRunsPage,
   listTasksPage,
@@ -305,7 +306,139 @@ describe("paged-lists", () => {
       scheduleCount: 2,
       enabledScheduleCount: 1,
       hasManifest: true,
+      openPrCount: 0,
     });
+
+    db.close();
+  });
+
+  test("open integrations: count, page, filter, and hasOpenPrs", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const withOpen = repos.projects.create({ name: "with-open", repoPath: "/tmp/a" });
+    const without = repos.projects.create({ name: "without", repoPath: "/tmp/b" });
+    const taskA = repos.tasks.create({
+      projectId: withOpen.id,
+      name: "maintain-quality",
+      prompt: "a",
+    });
+    const taskB = repos.tasks.create({
+      projectId: withOpen.id,
+      name: "maintain-docs",
+      prompt: "b",
+    });
+    const taskC = repos.tasks.create({
+      projectId: without.id,
+      name: "other",
+      prompt: "c",
+    });
+
+    const runOld = repos.runs.create({
+      projectId: withOpen.id,
+      taskId: taskA.id,
+      idempotencyKey: "old",
+      trigger: "manual",
+    });
+    const runNew = repos.runs.create({
+      projectId: withOpen.id,
+      taskId: taskB.id,
+      idempotencyKey: "new",
+      trigger: "manual",
+    });
+    const runMerged = repos.runs.create({
+      projectId: withOpen.id,
+      taskId: taskA.id,
+      idempotencyKey: "merged",
+      trigger: "manual",
+    });
+    const runOther = repos.runs.create({
+      projectId: without.id,
+      taskId: taskC.id,
+      idempotencyKey: "other",
+      trigger: "manual",
+    });
+
+    repos.attempts.create({
+      runId: runNew.id,
+      attemptNumber: 1,
+      branchName: "gojo/maintain-docs/branch",
+    });
+
+    repos.runIntegrations.upsertForRun({
+      runId: runOld.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/a",
+      prNumber: 1,
+      prUrl: "https://github.com/me/a/pull/1",
+      status: "open",
+      openedAt: "2026-07-01T00:00:00.000Z",
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: runNew.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/a",
+      prNumber: 2,
+      prUrl: "https://github.com/me/a/pull/2",
+      status: "open",
+      openedAt: "2026-07-10T00:00:00.000Z",
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: runMerged.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/a",
+      prNumber: 3,
+      prUrl: "https://github.com/me/a/pull/3",
+      status: "merged",
+      openedAt: "2026-07-05T00:00:00.000Z",
+      mergedAt: "2026-07-06T00:00:00.000Z",
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: runOther.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/b",
+      prNumber: 9,
+      prUrl: "https://github.com/me/b/pull/9",
+      status: "closed",
+      openedAt: "2026-07-02T00:00:00.000Z",
+      closedAt: "2026-07-03T00:00:00.000Z",
+    });
+
+    expect(projectSummaryFor(db, withOpen.id)?.openPrCount).toBe(2);
+    expect(projectSummaryFor(db, without.id)?.openPrCount).toBe(0);
+
+    const allOpen = listOpenIntegrationsPage(db, { limit: 25, offset: 0 });
+    expect(allOpen.total).toBe(2);
+    expect(allOpen.items.map((row) => row.prNumber)).toEqual([2, 1]);
+    expect(allOpen.items[0]?.branchName).toBe("gojo/maintain-docs/branch");
+    expect(allOpen.items[0]?.projectName).toBe("with-open");
+    expect(allOpen.items[0]?.taskName).toBe("maintain-docs");
+
+    const filtered = listOpenIntegrationsPage(db, {
+      limit: 25,
+      offset: 0,
+      projectId: withOpen.id,
+    });
+    expect(filtered.total).toBe(2);
+
+    const page = listOpenIntegrationsPage(db, {
+      limit: 1,
+      offset: 0,
+      sort: "openedAt",
+      order: "asc",
+    });
+    expect(page.total).toBe(2);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]?.prNumber).toBe(1);
+
+    const withPrs = listProjectsPage(db, { limit: 25, offset: 0, hasOpenPrs: true });
+    expect(withPrs.total).toBe(1);
+    expect(withPrs.items[0]?.id).toBe(withOpen.id);
+    expect(withPrs.items[0]?.openPrCount).toBe(2);
 
     db.close();
   });

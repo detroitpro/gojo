@@ -7,7 +7,9 @@ import {
   getDashboardImpact,
   getProject,
   getProjectDoctor,
+  listOpenIntegrations,
   listTasks,
+  runTask,
   syncProject,
 } from "@/api";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
@@ -20,6 +22,7 @@ import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
 import type {
   DashboardImpact,
+  OpenIntegration,
   Project,
   ProjectDoctorResult,
   ProjectSyncResult,
@@ -33,6 +36,9 @@ const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
 const projectTasks = ref<Task[]>([]);
+const openIntegrations = ref<OpenIntegration[]>([]);
+const openPrTotal = ref(0);
+const mergeBusy = ref(false);
 const loading = ref(true);
 const busy = ref(false);
 const error = ref("");
@@ -124,6 +130,55 @@ const tasksByName = computed(() => {
   return map;
 });
 
+const mergeBabysitter = computed(() =>
+  projectTasks.value.find((task) => task.name === "maintain-merge" && task.enabled) ?? null,
+);
+
+function prLabel(row: OpenIntegration): string {
+  if (row.repo && row.prNumber != null) {
+    return `${row.repo}#${row.prNumber}`;
+  }
+  if (row.prNumber != null) {
+    return `#${row.prNumber}`;
+  }
+  return row.prUrl ?? "Open PR";
+}
+
+function scrollToOpenPrs() {
+  document.getElementById("open-prs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function loadOpenPrs() {
+  try {
+    const result = await listOpenIntegrations({
+      limit: MAX_PAGE_LIMIT,
+      offset: 0,
+      projectId: projectId.value,
+    });
+    openIntegrations.value = result.items;
+    openPrTotal.value = result.total;
+  } catch {
+    openIntegrations.value = [];
+    openPrTotal.value = 0;
+  }
+}
+
+async function runMergeBabysitter() {
+  const task = mergeBabysitter.value;
+  if (!task) {
+    return;
+  }
+  mergeBusy.value = true;
+  error.value = "";
+  try {
+    const run = await runTask(task.id);
+    await router.push({ name: "run-detail", params: { id: run.id } });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to enqueue merge babysitter";
+    mergeBusy.value = false;
+  }
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
@@ -136,13 +191,19 @@ async function load() {
       projectId: projectId.value,
     });
     projectTasks.value = tasks.items;
+    await loadOpenPrs();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     project.value = null;
     doctor.value = null;
     projectTasks.value = [];
+    openIntegrations.value = [];
+    openPrTotal.value = 0;
   } finally {
     loading.value = false;
+    if (route.hash === "#open-prs") {
+      requestAnimationFrame(() => scrollToOpenPrs());
+    }
   }
 }
 
@@ -168,6 +229,7 @@ async function runSync() {
       projectId: project.value.id,
     });
     projectTasks.value = tasks.items;
+    await loadOpenPrs();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
   } finally {
@@ -202,6 +264,15 @@ watch(projectId, () => {
 watch(impactRange, () => {
   void loadImpact();
 });
+
+watch(
+  () => route.hash,
+  (hash) => {
+    if (hash === "#open-prs" && !loading.value) {
+      requestAnimationFrame(() => scrollToOpenPrs());
+    }
+  },
+);
 
 onMounted(() => {
   void load();
@@ -298,6 +369,96 @@ onMounted(() => {
         </div>
       </section>
 
+      <section id="open-prs" class="panel mb-7">
+        <div class="panel-header impact-header">
+          <span>Open PRs</span>
+          <div class="toolbar">
+            <button
+              v-if="mergeBabysitter && openPrTotal > 0"
+              class="btn btn-sm btn-primary"
+              type="button"
+              :disabled="mergeBusy"
+              @click="runMergeBabysitter()"
+            >
+              {{ mergeBusy ? "Enqueueing…" : "Run merge babysitter" }}
+            </button>
+            <RouterLink
+              v-else-if="openPrTotal > 0"
+              class="btn btn-sm"
+              :to="{ name: 'tasks', query: { projectId: project.id } }"
+            >
+              View tasks
+            </RouterLink>
+          </div>
+        </div>
+        <div class="panel-body">
+          <p class="muted text-sm mb-5">
+            Currently open gojo-tracked pull requests (not limited to the Impact date range).
+            <template v-if="openPrTotal > 0 && !mergeBabysitter">
+              Add an enabled <span class="mono">maintain-merge</span> task to babysit merges from
+              here.
+            </template>
+          </p>
+          <div v-if="openIntegrations.length === 0" class="muted text-sm">No open PRs</div>
+          <div v-else class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>PR</th>
+                  <th>Task</th>
+                  <th>Branch</th>
+                  <th>Opened</th>
+                  <th>Last check</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in openIntegrations" :key="row.runId">
+                  <td>
+                    <a
+                      v-if="row.prUrl && !row.prUrl.startsWith('local://')"
+                      :href="row.prUrl"
+                      class="entity-name"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ prLabel(row) }}
+                    </a>
+                    <span v-else class="mono">{{ prLabel(row) }}</span>
+                    <div v-if="row.lastError" class="muted text-sm">{{ row.lastError }}</div>
+                  </td>
+                  <td>
+                    <RouterLink
+                      v-if="row.taskId"
+                      :to="{ name: 'task-detail', params: { id: row.taskId } }"
+                      class="entity-name"
+                    >
+                      {{ row.taskName ?? row.taskId }}
+                    </RouterLink>
+                    <span v-else class="muted">—</span>
+                  </td>
+                  <td class="mono muted">{{ row.branchName ?? "—" }}</td>
+                  <td class="mono muted">
+                    {{ row.openedAt ? new Date(row.openedAt).toLocaleString() : "—" }}
+                  </td>
+                  <td class="mono muted">
+                    {{ row.lastCheckedAt ? new Date(row.lastCheckedAt).toLocaleString() : "—" }}
+                  </td>
+                  <td>
+                    <RouterLink
+                      :to="{ name: 'run-detail', params: { id: row.runId } }"
+                      class="btn btn-sm"
+                    >
+                      Run
+                    </RouterLink>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section v-if="impact" class="panel mb-7">
         <div class="panel-header impact-header">
           <span>Impact</span>
@@ -320,7 +481,17 @@ onMounted(() => {
             </div>
             <div class="stat">
               <div class="label">PRs open</div>
-              <div class="value">{{ impact.totals.prsOpen }}</div>
+              <div class="value">
+                <a
+                  v-if="openPrTotal > 0 || impact.totals.prsOpen > 0"
+                  href="#open-prs"
+                  class="entity-name"
+                  @click.prevent="scrollToOpenPrs"
+                >
+                  {{ openPrTotal || impact.totals.prsOpen }}
+                </a>
+                <template v-else>{{ impact.totals.prsOpen }}</template>
+              </div>
             </div>
             <div class="stat">
               <div class="label">Merge rate</div>

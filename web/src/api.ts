@@ -15,6 +15,7 @@ import type {
   InstanceInfo,
   NotificationChannelConfig,
   NotificationChannelMap,
+  OpenIntegration,
   Project,
   ProjectDoctorResult,
   ProjectSyncResponse,
@@ -274,6 +275,23 @@ export async function listProjects(query: ListQuery = {}): Promise<PaginatedResu
   }>(`/projects${buildListQuery(query)}`);
   return {
     items: data.projects,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
+}
+
+export async function listOpenIntegrations(
+  query: ListQuery = {},
+): Promise<PaginatedResult<OpenIntegration>> {
+  const { data } = await request<{
+    integrations: OpenIntegration[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/integrations/open${buildListQuery(query)}`);
+  return {
+    items: data.integrations,
     total: data.total,
     limit: data.limit,
     offset: data.offset,
