@@ -222,4 +222,96 @@ describe('IntegrationStatusReconciler', () => {
     expect(calls).toBe(1);
     db.close();
   });
+
+  test('marks due open integrations closed and stops polling', async () => {
+    const { db, repos } = openDb();
+    const integration = seedOpenIntegration(repos);
+
+    const reconciler = new IntegrationStatusReconciler({
+      db,
+      fetchStatus: async () => ({ state: 'closed', closedAt: '2026-07-01T02:00:00.000Z' }),
+    });
+    const summary = await reconciler.reconcile(new Date('2026-07-01T00:10:00.000Z'));
+    expect(summary).toEqual({ checked: 1, merged: 0, closed: 1, errors: 0 });
+
+    const updated = repos.runIntegrations.findByRun(integration.runId);
+    expect(updated?.status).toBe('closed');
+    expect(updated?.closedAt).toBe('2026-07-01T02:00:00.000Z');
+    expect(updated?.nextCheckAt).toBeNull();
+    db.close();
+  });
+
+  test('stops polling after the give-up threshold for still-open PRs', async () => {
+    const { db, repos } = openDb();
+    const integration = seedOpenIntegration(repos);
+    repos.runIntegrations.update(integration.id, { checkCount: 59 });
+
+    const reconciler = new IntegrationStatusReconciler({
+      db,
+      fetchStatus: async () => ({ state: 'open' }),
+    });
+    await reconciler.reconcile(new Date('2026-07-01T00:10:00.000Z'));
+
+    const updated = repos.runIntegrations.findByRun(integration.runId);
+    expect(updated?.status).toBe('open');
+    expect(updated?.checkCount).toBe(60);
+    expect(updated?.nextCheckAt).toBeNull();
+    db.close();
+  });
+
+  test('default fetch rejects incomplete Forgejo integration metadata', async () => {
+    const { db, repos } = openDb();
+    const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
+    const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+    const run = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: 'forgejo-missing-meta',
+      trigger: 'manual',
+    });
+    const integration = repos.runIntegrations.upsertForRun({
+      runId: run.id,
+      mode: 'pull-request',
+      provider: 'forgejo',
+      status: 'open',
+      openedAt: '2026-07-01T00:00:00.000Z',
+      nextCheckAt: '2026-07-01T00:05:00.000Z',
+    });
+
+    const reconciler = new IntegrationStatusReconciler({ db });
+    const summary = await reconciler.reconcile(new Date('2026-07-01T00:10:00.000Z'));
+    expect(summary.errors).toBe(1);
+
+    const updated = repos.runIntegrations.findByRun(integration.runId);
+    expect(updated?.lastError).toContain('Forgejo reconciliation requires');
+    db.close();
+  });
+
+  test('default fetch rejects unknown integration providers', async () => {
+    const { db, repos } = openDb();
+    const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
+    const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+    const run = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: 'unknown-provider',
+      trigger: 'manual',
+    });
+    const integration = repos.runIntegrations.upsertForRun({
+      runId: run.id,
+      mode: 'pull-request',
+      provider: 'gitlab',
+      status: 'open',
+      openedAt: '2026-07-01T00:00:00.000Z',
+      nextCheckAt: '2026-07-01T00:05:00.000Z',
+    });
+
+    const reconciler = new IntegrationStatusReconciler({ db });
+    const summary = await reconciler.reconcile(new Date('2026-07-01T00:10:00.000Z'));
+    expect(summary.errors).toBe(1);
+
+    const updated = repos.runIntegrations.findByRun(integration.runId);
+    expect(updated?.lastError).toContain('No status provider for integration provider: gitlab');
+    db.close();
+  });
 });
