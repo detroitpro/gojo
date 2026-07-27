@@ -58,11 +58,15 @@ Each **agent profile** picks an adapter (`shell`, `cursor`, `claude-code`), time
 
 A **task** is the unit of work: prompt, agent, validation profile, concurrency, integration, failure policy. Separate from **schedules** so the same task can run manually or on a timer.
 
+### Tasks UI
+
+In the web UI, **Tasks** lists synced tasks with success rate and last run. **Open** a task for read-only inspect: last-synced prompt, validation/integration/failure/concurrency policy JSON, linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change task config (`gojo task inspect <id>` mirrors the API for scripting).
+
 | Field | Role |
 | --- | --- |
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/task-prompts) |
 | `validationProfile` | Ordered checks after the agent exits |
-| `concurrency` | Synced onto the task row (`projectLimit`, `overlapPolicy`) for manifest intent; **starts** are gated by the instance **run admission** policy (Settings → Run admission / `GET /api/v1/instance/scheduling`). Per-schedule `overlapPolicy` still controls whether a cron tick enqueues while that schedule already has work |
+| `concurrency` | Synced onto the task row (`projectLimit`; manifest `overlapPolicy`: `skip` / `queue` / `cancel`) for intent documentation — **not** the same field as per-schedule overlap (`cancel_replace` / `allow_parallel`). **Starts** are gated by the instance **run admission** policy (Settings → Run admission / `GET /api/v1/instance/scheduling`). Per-schedule `overlapPolicy` still controls whether a cron tick enqueues while that schedule already has work |
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
 | `selfHeal` | Optional `{ task, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |

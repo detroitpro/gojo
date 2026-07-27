@@ -7,13 +7,14 @@ This page tracks the **live `src/` layout** as implemented.
 ## Runtime shape
 
 ```text
-CLI / HTTP API / scheduler (one process)
+CLI / HTTP API / scheduler tick (one process)
         │
         ├─ storage (SQLite)
+        ├─ runs: enqueue → dispatcher admits → coordinator executes
         ├─ workspace + git (isolated worktrees)
         ├─ agents (shell / cursor / claude-code adapters)
         ├─ validation
-        ├─ integration (commit / PR / merge queue)
+        ├─ integration (commit / PR / merge queue + PR status reconcile)
         └─ notifications, secrets, backup, telemetry
 ```
 
@@ -28,14 +29,14 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 |-----------|------|
 | `cli/` | Command entry and output formatting |
 | `api/` | HTTP router, server lifecycle, web static |
-| `app/` | Composition / context wiring |
+| `app/` | Composition / context wiring, `project-sync` |
 | `agents/` | Adapter registry and implementations |
-| `scheduler/` | Cron, overlap, disable policies |
-| `runs/` | Run coordinator, events, inspect |
+| `scheduler/` | Cron, overlap/missed-run, auto-disable; enqueue only (dispatcher admits) |
+| `runs/` | Coordinator, dispatcher/admission, heal, impact, prompt assembly, inspect |
 | `workspace/` | Worktree paths and attempt prep/cleanup (prefers `origin/<base>` when syncing) |
 | `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
 | `validation/` | Validation profile execution (inherits daemon PATH) |
-| `integration/` | Integration modes + merge queue |
+| `integration/` | Integration modes, merge queue, external PR status reconciler |
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |
 | `secrets/` | Encrypted secret store |
