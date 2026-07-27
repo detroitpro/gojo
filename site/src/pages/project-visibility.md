@@ -9,9 +9,9 @@ description: See what agents, people, bots, and external systems are working on 
 A project page is organized around four questions:
 
 - **Now:** What is running or queued, who owns it, and what is the current focus?
-- **Needs attention:** What is blocked, awaiting approval, stale, or failing to sync?
+- **Needs attention:** What is blocked, awaiting approval, stale, or failing to sync — and what should you do next?
 - **Delivery:** What pull requests, issues, tickets, incidents, or deployments are active?
-- **History:** What completed and how was it related to other work?
+- **History:** What completed, was verified terminal, or was marked resolved by an operator?
 
 Work is not limited to gojo-created pull requests. Human and bot work discovered
 from connected systems appears with explicit provenance and source.
@@ -24,9 +24,21 @@ If polling or webhook delivery fails, gojo keeps the last known record under
 **stale open** and **Needs attention** instead of continuing to present it as
 current.
 
-Repository sources poll active work every minute. Errors back off, but gojo
-never permanently abandons a nonterminal item. Webhooks make changes appear
-quickly; polling repairs missed events.
+When a complete source snapshot no longer includes an open item, gojo tries to
+verify that item individually. Confirmed merged or closed work moves to
+**History** automatically. If the provider cannot confirm the final state, the
+row stays under Needs attention with actions:
+
+- **Open in source** — inspect the upstream issue or pull request
+- **Recheck now** — verify one item against its provider
+- **Retry source** — refresh the whole source after a sync error
+- **Mark resolved** — clear attention without inventing merged/closed delivery;
+  the item stays in History and returns if the source later reports it active
+
+Repository sources poll active work every minute. Incomplete pages never mark
+unseen work stale. Errors back off, but gojo never permanently abandons a
+nonterminal item. Webhooks make changes appear quickly; polling repairs missed
+events.
 
 ## Supported sources
 
@@ -65,6 +77,15 @@ Agents can report a title, summary, blocker, and references while running. The
 project page uses this structured update; it does not scrape console output to
 guess what an agent is doing.
 
+## Live updates
+
+Dashboard, queue, runs, tasks, schedules, projects, impact, and project work
+refresh as durable changes arrive. The application shell shows **Live** while
+the event stream is connected and **Reconnecting** when it is using its
+degraded fallback. Reopening the page or restarting the daemon does not create
+a visibility gap: the browser resumes from its last event sequence and then
+reloads canonical API data.
+
 ## CLI
 
 ```bash
@@ -72,6 +93,8 @@ gojo project status <project-id>
 gojo project work <project-id>
 gojo project sources <project-id>
 gojo project refresh-source <project-id> <source-id>
+gojo project recheck-work <project-id> <work-item-id>
+gojo project resolve-work <project-id> <work-item-id> --note "closed upstream"
 ```
 
 Use `--output json` for automation.

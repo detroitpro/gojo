@@ -5,6 +5,7 @@
  */
 
 import { runProcess } from '@/process/supervisor';
+import { PlatformChangeFeed } from '@/events/platform-change-feed';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
 import { createWorkRepositories } from '@/storage/work-repositories';
@@ -167,12 +168,19 @@ export class IntegrationStatusReconciler {
   private readonly work: ReturnType<typeof createWorkRepositories>;
   private readonly fetchStatus: FetchPrStatus;
   private readonly batchLimit: number;
+  private readonly platformEvents: PlatformChangeFeed | null;
 
-  constructor(deps: { db: Database; fetchStatus?: FetchPrStatus; batchLimit?: number }) {
+  constructor(deps: {
+    db: Database;
+    fetchStatus?: FetchPrStatus;
+    batchLimit?: number;
+    platformEvents?: PlatformChangeFeed;
+  }) {
     this.repos = createRepositories(deps.db);
     this.work = createWorkRepositories(deps.db);
     this.fetchStatus = deps.fetchStatus ?? defaultFetchStatus;
     this.batchLimit = deps.batchLimit ?? 5;
+    this.platformEvents = deps.platformEvents ?? null;
   }
 
   /** Check due, nonterminal integrations in one bounded batch. */
@@ -275,10 +283,20 @@ export class IntegrationStatusReconciler {
     input: Parameters<ReturnType<typeof createWorkRepositories>["items"]["update"]>[1],
   ): void {
     const run = this.repos.runs.findById(integration.runId);
-    if (!run?.workItemId) return;
-    const delivery = this.work.links
-      .listByWorkItem(run.workItemId)
-      .find((link) => link.sourceWorkItemId === run.workItemId && link.type === "delivers");
-    if (delivery) this.work.items.update(delivery.targetWorkItemId, input);
+    if (!run) return;
+    if (run.workItemId) {
+      const delivery = this.work.links
+        .listByWorkItem(run.workItemId)
+        .find((link) => link.sourceWorkItemId === run.workItemId && link.type === "delivers");
+      if (delivery) this.work.items.update(delivery.targetWorkItemId, input);
+    }
+    this.platformEvents?.append({
+      projectId: run.projectId,
+      type: 'integration.observed',
+      entityKind: 'integration',
+      entityId: integration.id,
+      topics: ['dashboard', 'impact', 'projects', 'work'],
+      data: input,
+    });
   }
 }

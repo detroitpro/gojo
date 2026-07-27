@@ -17,6 +17,16 @@ export type {
 } from './api';
 
 export {
+  PlatformChangeEventSchema,
+  PlatformEventTopicSchema,
+} from './events';
+export type {
+  CreatePlatformChangeEventInput,
+  PlatformChangeEvent,
+  PlatformEventTopic,
+} from './events';
+
+export {
   compareSortValues,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
@@ -163,6 +173,8 @@ export {
   WorkLinkTypeSchema,
   WorkOutcomeSchema,
   WorkProvenanceSchema,
+  WorkRecheckStatusSchema,
+  WorkResolutionSchema,
 } from './work';
 export type {
   SourceCapabilities,
@@ -174,5 +186,9 @@ export type {
   WorkLinkType,
   WorkOutcome,
   WorkProvenance,
+  WorkRecheckResult,
+  WorkRecheckStatus,
+  WorkResolveInput,
+  WorkResolution,
   WorkStatus,
 } from './work';

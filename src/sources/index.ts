@@ -20,6 +20,8 @@ export {
   SourceAdapterRegistry,
   type NormalizedSourceItem,
   type SourceAdapter,
+  type SourceGetItemInput,
+  type SourceGetItemResult,
   type SourceListInput,
   type SourceListResult,
 } from "./types";

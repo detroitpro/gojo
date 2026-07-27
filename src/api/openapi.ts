@@ -6,6 +6,18 @@ export const openApiDocument = {
     description: "Scheduled software-agent orchestration platform",
   },
   paths: {
+    "/api/v1/events": {
+      get: {
+        summary: "Stream durable platform change events",
+        description:
+          "Authenticated SSE stream with Last-Event-ID replay. Optional projectId and repeatable topic filters scope invalidation events.",
+        parameters: [
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "topic", in: "query", schema: { type: "string" } },
+          { name: "after", in: "query", schema: { type: "integer", minimum: 0 } },
+        ],
+      },
+    },
     "/api/v1/health": {
       get: { summary: "Health check" },
     },
@@ -98,7 +110,11 @@ export const openApiDocument = {
       },
     },
     "/api/v1/projects/{id}/events": {
-      get: { summary: "SSE project work and source events" },
+      get: {
+        summary: "Stream project-scoped platform events",
+        description:
+          "Compatibility alias over the durable platform change stream, filtered to one project.",
+      },
     },
     "/api/v1/projects/{id}/sources": {
       get: { summary: "List project source connections and health" },
@@ -109,6 +125,20 @@ export const openApiDocument = {
     },
     "/api/v1/work/{id}": {
       get: { summary: "Get work detail, links, events, and immutable run context" },
+    },
+    "/api/v1/work/{id}/recheck": {
+      post: {
+        summary: "Recheck a source-backed work item against its provider",
+        description:
+          "Verifies one work item by native identity. Confirmed merged/closed items leave attention and enter History; unverifiable items remain stale.",
+      },
+    },
+    "/api/v1/work/{id}/resolve": {
+      post: {
+        summary: "Mark a work item resolved by an operator",
+        description:
+          "Clears attention without inventing a merged/closed delivery. The item remains in History and can reappear if the source later reports it active.",
+      },
     },
     "/api/v1/sources/{sourceId}/events": {
       post: { summary: "Ingest a signed generic source work event" },

@@ -11,6 +11,7 @@ Allowed and forbidden edges among daemon modules. Product rules (agent ≠ succe
 5. **SQLite access goes through `storage/`.** Don’t open ad-hoc DB handles from adapters or scheduler.
 6. **Sources preserve native truth.** Adapters normalize observations; they do not collapse provider-specific state into a forge-only model.
 7. **Work is the visibility read model.** UI/API counts come from the same ledger and must expose observation time and freshness.
+8. **Platform events invalidate; HTTP reads hydrate.** SSE payloads identify affected read models but never become a second entity store in the browser.
 
 ## Dependency sketch
 
@@ -23,6 +24,7 @@ agents ───────────► process (subprocess), not scheduler
 integration ──────► git, storage (merge queue)
 sources ──────────► storage, secrets, provider APIs (never scheduler lease)
 runs ─────────────► work storage (immutable context + semantic events)
+domain mutations ─► events (durable topic invalidation after state changes)
 validation ───────► process / shell in worktree
 workspace ────────► git
 ```
@@ -38,6 +40,8 @@ workspace ────────► git
 | Domain modules importing `api/` for manifest sync | `app/project-sync` (shared by CLI, API, coordinator) |
 | UI counting raw `run_integrations.status='open'` | Work status (`verifiedOpen` vs `staleOpen`) |
 | Provider conditionals spread through router/UI | A `sources/` adapter + declared capabilities |
+| Per-view polling or one EventSource per page | Shared platform event hub + topic-driven HTTP refresh |
+| Applying SSE payloads as canonical browser state | Invalidate and reload the owning API query |
 
 ## When you change a boundary
 

@@ -12,6 +12,7 @@ import { UserService } from "@/auth/users";
 import { NotificationDispatcher } from "@/notifications/dispatcher";
 import { wireNotificationHooks } from "@/notifications/hooks";
 import { IntegrationStatusReconciler } from "@/integration/status-reconciler";
+import { PlatformChangeFeed } from "@/events/platform-change-feed";
 import { RunCoordinator } from "@/runs/coordinator";
 import { RunDispatcher } from "@/runs/dispatcher";
 import { RunEventBus, RunEventHistory } from "@/runs/events";
@@ -57,6 +58,7 @@ export interface AppContext {
   sourceWebhooks: GenericWebhookIngestor;
   eventBus: RunEventBus;
   eventHistory: RunEventHistory;
+  platformEvents: PlatformChangeFeed;
   leaseHolderId: string;
   getSessionSecret(): string;
   isPaused(): boolean;
@@ -81,6 +83,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   const work = createWorkRepositories(db);
   const eventBus = new RunEventBus();
   const eventHistory = new RunEventHistory();
+  const platformEvents = new PlatformChangeFeed(db);
   eventBus.subscribe((event) => {
     eventHistory.record(event);
   });
@@ -107,10 +110,12 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   const sourceSync = new SourceSyncService({
     db,
     resolveSecret: resolveSourceSecret,
+    platformEvents,
   });
   const sourceWebhooks = new GenericWebhookIngestor({
     db,
     resolveSecret: resolveSourceSecret,
+    platformEvents,
   });
   const users = new UserService(db);
   users.purgeExpiredApiTokens();
@@ -120,6 +125,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     paths,
     workspace,
     eventBus,
+    platformEvents,
     apiBaseUrl,
     issueAgentToken: (runId) => {
       const admin = users.findFirstAdmin();
@@ -144,7 +150,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   });
   const notifications = new NotificationDispatcher(db);
   const leaseHolderId = ulid();
-  const integrationReconciler = new IntegrationStatusReconciler({ db });
+  const integrationReconciler = new IntegrationStatusReconciler({ db, platformEvents });
   const dispatcher = new RunDispatcher({ db, coordinator });
 
   eventBus.subscribe((event) => {
@@ -231,6 +237,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     sourceWebhooks,
     eventBus,
     eventHistory,
+    platformEvents,
     leaseHolderId,
     getSessionSecret() {
       const existing = secrets.get(SESSION_SECRET_NAME);
@@ -270,6 +277,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       await scheduler.stop();
       await sourceSync.stop();
       eventHistory.clear();
+      platformEvents.close();
       db.close();
     },
   };

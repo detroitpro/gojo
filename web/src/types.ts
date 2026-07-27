@@ -26,6 +26,31 @@ export interface User {
   role: string;
 }
 
+export type PlatformEventTopic =
+  | "dashboard"
+  | "overview"
+  | "impact"
+  | "queue"
+  | "runs"
+  | "tasks"
+  | "schedules"
+  | "projects"
+  | "work"
+  | "sources";
+
+export interface PlatformChangeEvent {
+  sequence: number;
+  id: string;
+  projectId: string | null;
+  type: string;
+  entityKind: string;
+  entityId: string;
+  topics: PlatformEventTopic[];
+  data: unknown;
+  occurredAt: string;
+  createdAt: string;
+}
+
 export interface ProjectSummaryCounts {
   taskCount: number;
   enabledTaskCount: number;
@@ -63,6 +88,9 @@ export type SourceSyncState =
   | "error"
   | "unsupported";
 
+export type WorkResolution = "operator";
+export type WorkRecheckStatus = "active" | "terminal" | "unresolved";
+
 export interface WorkItem {
   id: string;
   projectId: string;
@@ -84,10 +112,20 @@ export interface WorkItem {
   nextSyncAt: string | null;
   syncState: SourceSyncState;
   lastError: string | null;
+  resolution: WorkResolution | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+export interface WorkRecheckResult {
+  status: WorkRecheckStatus;
+  work: WorkItem;
+  detail: string | null;
 }
 
 export interface WorkStatus {

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Database, createRepositories } from "@/storage";
+import { Database, SCHEMA_VERSION, createRepositories } from "@/storage";
 
 describe("storage/db", () => {
   let db: Database | null = null;
@@ -71,7 +71,7 @@ describe("storage/db", () => {
         "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations",
       )
       .get()?.version;
-    expect(version).toBe(6);
+    expect(version).toBe(SCHEMA_VERSION);
 
     const columns = sqlite
       .query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')")

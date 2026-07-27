@@ -423,6 +423,18 @@ instructions, agent profile/adapter/model configuration, validation and
 integration policies, base branch, and schedule. Historical attribution must
 survive later project synchronization.
 
+### 7.18 Platform change event
+
+A durable, monotonically ordered invalidation emitted when a mutation changes
+an operator-facing read model. The event names the project and entity and
+declares affected topics such as dashboard, queue, runs, schedules, work, or
+sources.
+
+Authenticated SSE clients resume by sequence after disconnect or daemon
+restart. Events invalidate canonical HTTP queries; they do not replace work
+events, audit records, or source-native state. Delivery may be coalesced, and a
+bounded polling repair loop must cover missed live notifications.
+
 ---
 
 ## 8. Project Configuration

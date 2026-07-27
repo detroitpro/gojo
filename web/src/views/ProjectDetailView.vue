@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -11,10 +11,15 @@ import {
   listProjectSources,
   listProjectWork,
   listTasks,
+  recheckWorkItem,
+  refreshProjectSource,
+  resolveWorkItem,
   runTask,
   syncProject,
 } from "@/api";
+import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import {
   formatMergeRate,
   impactCountLabel,
@@ -22,6 +27,13 @@ import {
 } from "@/lib/impact-format";
 import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
+import {
+  attentionMenuItems,
+  attentionPrimaryAction,
+  attentionReasonLabel,
+  workExternalHref,
+} from "@/lib/work-attention";
+import { isVerifiedActiveDelivery } from "@/lib/work-visibility";
 import type {
   DashboardImpact,
   Project,
@@ -44,14 +56,15 @@ const openPrTotal = ref(0);
 const workItems = ref<WorkItem[]>([]);
 const workStatus = ref<WorkStatus | null>(null);
 const projectSources = ref<ProjectSource[]>([]);
-let workPoll: ReturnType<typeof setInterval> | null = null;
-let projectEvents: EventSource | null = null;
 const mergeBusy = ref(false);
 const loading = ref(true);
 const busy = ref(false);
+const attentionBusyId = ref("");
 const error = ref("");
 const notice = ref("");
 const removeOpen = ref(false);
+const resolveOpen = ref(false);
+const resolveTarget = ref<WorkItem | null>(null);
 
 type ImpactRange = "30d" | "90d" | "all";
 const impact = ref<DashboardImpact | null>(null);
@@ -150,14 +163,15 @@ const nowWork = computed(() =>
   workItems.value.filter((item) => item.execution !== "none" && item.execution !== "terminal"),
 );
 const attentionWork = computed(() =>
-  workItems.value.filter((item) => item.attention !== "none"),
+  workItems.value.filter((item) => item.attention !== "none" && item.resolution == null),
 );
 const deliveryWork = computed(() =>
-  workItems.value.filter((item) => ["draft", "open", "review", "blocked"].includes(item.delivery)),
+  workItems.value.filter(isVerifiedActiveDelivery),
 );
 const historyWork = computed(() =>
   workItems.value.filter(
     (item) =>
+      item.resolution != null ||
       item.execution === "terminal" ||
       item.delivery === "merged" ||
       item.delivery === "closed",
@@ -166,15 +180,131 @@ const historyWork = computed(() =>
 const sourceNames = computed(
   () => new Map(projectSources.value.map((source) => [source.id, source.displayName])),
 );
+const sourceWebUrls = computed(
+  () => new Map(projectSources.value.map((source) => [source.id, source.webUrl])),
+);
 
 function sourceLabel(item: WorkItem): string {
   if (item.sourceId) return sourceNames.value.get(item.sourceId) ?? item.sourceId;
   return item.provenance === "gojo-agent" ? "gojo" : "local";
 }
 
+function sourceWebUrl(item: WorkItem): string | null {
+  if (!item.sourceId) return null;
+  return sourceWebUrls.value.get(item.sourceId) ?? null;
+}
+
 function observedLabel(item: WorkItem): string {
   if (!item.observedAt) return "not observed";
   return new Date(item.observedAt).toLocaleString();
+}
+
+function attentionHref(item: WorkItem): string | null {
+  return workExternalHref(item, sourceWebUrl(item));
+}
+
+function primaryAttentionAction(item: WorkItem) {
+  return attentionPrimaryAction(item, sourceWebUrl(item));
+}
+
+function attentionActions(item: WorkItem): ActionMenuItem[] {
+  return attentionMenuItems(item, sourceWebUrl(item));
+}
+
+async function runAttentionRecheck(item: WorkItem) {
+  attentionBusyId.value = item.id;
+  error.value = "";
+  notice.value = "";
+  try {
+    const result = await recheckWorkItem(item.id);
+    await loadWork();
+    if (result.status === "terminal") {
+      notice.value = `Verified ${item.title} as ${result.work.delivery}`;
+    } else if (result.status === "active") {
+      notice.value = `${item.title} is active in the source again`;
+    } else {
+      error.value =
+        result.detail ??
+        "Source could not confirm the final state. You can open it upstream or mark it resolved.";
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Recheck failed";
+  } finally {
+    attentionBusyId.value = "";
+  }
+}
+
+async function runAttentionRetrySource(item: WorkItem) {
+  if (!item.sourceId) return;
+  attentionBusyId.value = item.id;
+  error.value = "";
+  notice.value = "";
+  try {
+    await refreshProjectSource(projectId.value, item.sourceId);
+    await loadWork();
+    notice.value = `Retried source ${sourceLabel(item)}`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Source retry failed";
+  } finally {
+    attentionBusyId.value = "";
+  }
+}
+
+function openResolveDialog(item: WorkItem) {
+  resolveTarget.value = item;
+  resolveOpen.value = true;
+}
+
+async function confirmResolve() {
+  const item = resolveTarget.value;
+  if (!item) return;
+  attentionBusyId.value = item.id;
+  error.value = "";
+  notice.value = "";
+  try {
+    await resolveWorkItem(item.id, {
+      note: "Marked resolved from project Needs attention",
+    });
+    resolveOpen.value = false;
+    resolveTarget.value = null;
+    await loadWork();
+    notice.value = `Resolved ${item.title}. It will reappear if the source reports it active again.`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Resolve failed";
+  } finally {
+    attentionBusyId.value = "";
+  }
+}
+
+async function onAttentionAction(item: WorkItem, actionId: string) {
+  if (actionId === "recheck-item") {
+    await runAttentionRecheck(item);
+    return;
+  }
+  if (actionId === "retry-source") {
+    await runAttentionRetrySource(item);
+    return;
+  }
+  if (actionId === "resolve") {
+    openResolveDialog(item);
+    return;
+  }
+  if (actionId === "open-source") {
+    const href = attentionHref(item);
+    if (href) window.open(href, "_blank", "noopener,noreferrer");
+  }
+}
+
+async function runPrimaryAttentionAction(item: WorkItem) {
+  const action = primaryAttentionAction(item);
+  if (!action || action.kind === "route" || action.kind === "href") return;
+  if (action.id === "recheck-item") {
+    await runAttentionRecheck(item);
+    return;
+  }
+  if (action.id === "retry-source") {
+    await runAttentionRetrySource(item);
+  }
 }
 
 async function loadWork() {
@@ -194,12 +324,6 @@ async function loadWork() {
     projectSources.value = [];
     openPrTotal.value = 0;
   }
-}
-
-function connectProjectEvents() {
-  projectEvents?.close();
-  projectEvents = new EventSource(`/api/v1/projects/${projectId.value}/events`);
-  projectEvents.onmessage = () => void loadWork();
 }
 
 async function runMergeBabysitter() {
@@ -230,16 +354,11 @@ async function load() {
       projectId: projectId.value,
     });
     projectTasks.value = tasks.items;
-    await loadWork();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     project.value = null;
     doctor.value = null;
     projectTasks.value = [];
-    workItems.value = [];
-    workStatus.value = null;
-    projectSources.value = [];
-    openPrTotal.value = 0;
   } finally {
     loading.value = false;
     if (route.hash === "#open-prs") {
@@ -301,7 +420,6 @@ watch(projectId, () => {
   void load();
   void loadImpact();
   void loadWork();
-  connectProjectEvents();
 });
 
 watch(impactRange, () => {
@@ -317,18 +435,20 @@ watch(
   },
 );
 
-onMounted(() => {
-  void load();
-  void loadImpact();
-  connectProjectEvents();
-  workPoll = setInterval(() => void loadWork(), 15_000);
+useLiveRefresh({
+  topics: ["projects", "tasks"],
+  projectId,
+  refresh: load,
 });
-
-onUnmounted(() => {
-  if (workPoll) clearInterval(workPoll);
-  workPoll = null;
-  projectEvents?.close();
-  projectEvents = null;
+useLiveRefresh({
+  topics: ["work", "sources"],
+  projectId,
+  refresh: loadWork,
+});
+useLiveRefresh({
+  topics: ["impact"],
+  projectId,
+  refresh: loadImpact,
 });
 </script>
 
@@ -531,16 +651,80 @@ onUnmounted(() => {
         <div class="panel-body">
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Work</th><th>Reason</th><th>Source</th><th>Last observation</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Work</th>
+                  <th>Reason</th>
+                  <th>Source</th>
+                  <th>Last observation</th>
+                  <th>Recommended</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="item in attentionWork" :key="item.id">
-                  <td>{{ item.title }}</td>
                   <td>
-                    <span class="badge badge-warn">{{ item.attention }}</span>
+                    <RouterLink
+                      v-if="item.kind === 'run' && item.nativeKey"
+                      :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
+                      class="entity-name"
+                    >{{ item.title }}</RouterLink>
+                    <a
+                      v-else-if="attentionHref(item)"
+                      :href="attentionHref(item)!"
+                      class="entity-name"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ item.title }}</a>
+                    <span v-else>{{ item.title }}</span>
+                    <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
+                  </td>
+                  <td>
+                    <span class="badge badge-warn">{{ attentionReasonLabel(item.attention) }}</span>
                     <div v-if="item.lastError" class="muted text-sm">{{ item.lastError }}</div>
                   </td>
                   <td>{{ sourceLabel(item) }}</td>
                   <td class="mono muted">{{ observedLabel(item) }}</td>
+                  <td>
+                    <RouterLink
+                      v-if="primaryAttentionAction(item)?.kind === 'route'"
+                      class="btn btn-sm btn-primary"
+                      :to="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'route' }>).to"
+                    >
+                      {{ primaryAttentionAction(item)?.label }}
+                    </RouterLink>
+                    <a
+                      v-else-if="primaryAttentionAction(item)?.kind === 'href'"
+                      class="btn btn-sm btn-primary"
+                      :href="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'href' }>).href"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ primaryAttentionAction(item)?.label }}
+                    </a>
+                    <button
+                      v-else-if="primaryAttentionAction(item)?.kind === 'action'"
+                      class="btn btn-sm btn-primary"
+                      type="button"
+                      :disabled="attentionBusyId === item.id"
+                      @click="runPrimaryAttentionAction(item)"
+                    >
+                      {{
+                        attentionBusyId === item.id
+                          ? "Working…"
+                          : primaryAttentionAction(item)?.label
+                      }}
+                    </button>
+                    <span v-else class="muted text-sm">No action available</span>
+                  </td>
+                  <td class="actions-col">
+                    <ActionMenu
+                      :items="attentionActions(item)"
+                      :disabled="attentionBusyId === item.id"
+                      :label="`Actions for ${item.title}`"
+                      @select="(id) => onAttentionAction(item, id)"
+                    />
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -603,11 +787,29 @@ onUnmounted(() => {
               <thead><tr><th>Work</th><th>Outcome</th><th>Source</th><th>Completed / updated</th></tr></thead>
               <tbody>
                 <tr v-for="item in historyWork.slice(0, 25)" :key="item.id">
-                  <td>{{ item.title }}</td>
-                  <td>{{ item.delivery !== "none" ? item.delivery : item.outcome }}</td>
+                  <td>
+                    <a
+                      v-if="attentionHref(item)"
+                      :href="attentionHref(item)!"
+                      class="entity-name"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ item.title }}</a>
+                    <span v-else>{{ item.title }}</span>
+                  </td>
+                  <td>
+                    <template v-if="item.resolution === 'operator'">Resolved by operator</template>
+                    <template v-else>
+                      {{ item.delivery !== "none" ? item.delivery : item.outcome }}
+                    </template>
+                  </td>
                   <td>{{ sourceLabel(item) }}</td>
                   <td class="mono muted">
-                    {{ new Date(item.completedAt ?? item.updatedAt).toLocaleString() }}
+                    {{
+                      new Date(
+                        item.resolvedAt ?? item.completedAt ?? item.updatedAt,
+                      ).toLocaleString()
+                    }}
                   </td>
                 </tr>
               </tbody>
@@ -958,6 +1160,24 @@ onUnmounted(() => {
       <p class="muted mt-3">
         This does <strong>not</strong> delete the git repository at
         <span class="mono">{{ project?.repoPath }}</span>.
+      </p>
+    </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="resolveOpen"
+      title="Mark work resolved?"
+      confirm-label="Mark resolved"
+      danger
+      @close="resolveOpen = false; resolveTarget = null"
+      @confirm="confirmResolve"
+    >
+      <p>
+        Remove <strong>{{ resolveTarget?.title }}</strong> from Needs attention and keep it in
+        History.
+      </p>
+      <p class="muted mt-3">
+        This does not invent a merged or closed delivery. If the source later reports the work as
+        active again, gojo will restore it to the command center.
       </p>
     </ConfirmDialog>
   </div>

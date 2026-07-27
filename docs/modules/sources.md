@@ -24,11 +24,17 @@ state. Native state and JSON are retained beside normalized Work fields.
 
 Repository identities are normalized from HTTPS or SSH remotes. Sync runs on a
 one-minute repair loop independently of the scheduler lease. Active resources
-are fetched with provider pagination. Successful observations remain current;
-an active item absent from a complete active snapshot becomes stale immediately
-and drops out of verified-open counts. A failed refresh marks the source's
-active items as sync errors, so last-known state remains visible without being
-reported as verified. Errors back off and remain visible.
+are fetched with provider pagination. Successful observations remain current.
+An active snapshot is authoritative only when pagination completes
+(`backfillComplete: true`). Incomplete pages never mark unseen open work stale.
+
+When a complete snapshot omits a previously open item, gojo verifies that item
+individually through the adapter `getItem` capability when available. Confirmed
+`merged` / `closed` results clear attention and move the item into History.
+404s, permission failures, and other non-authoritative responses leave the item
+stale and actionable instead of inventing a terminal delivery. A failed refresh
+marks the source's active items as sync errors, so last-known state remains
+visible without being reported as verified. Errors back off and remain visible.
 
 Webhooks provide fast updates; polling repairs missed delivery. Generic webhook
 events require an HMAC-SHA256 signature, durable delivery ID, and event time.
@@ -44,8 +50,9 @@ never stored in `project_sources` or native work metadata.
 
 - `GET /api/v1/projects/:id/sources`
 - `POST /api/v1/projects/:id/sources/:sourceId/refresh`
+- `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/sources/:sourceId/events`
-- `gojo project sources|refresh-source`
+- `gojo project sources|refresh-source|recheck-work`
 
-Connector health, observation time, errors, and cursor state are operator
-visible.
+Connector health, observation time, errors, cursor state, and backfill
+completeness are operator visible.

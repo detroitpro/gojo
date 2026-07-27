@@ -1,8 +1,10 @@
-import type { SourceCapabilities, WorkProvenance } from "@shared/work";
+import type { SourceCapabilities, WorkDelivery, WorkProvenance } from "@shared/work";
 
 import type {
   NormalizedSourceItem,
   SourceAdapter,
+  SourceGetItemInput,
+  SourceGetItemResult,
   SourceListInput,
   SourceListResult,
 } from "./types";
@@ -18,8 +20,19 @@ const REPOSITORY_CAPABILITIES: SourceCapabilities = {
   workKinds: ["pull-request", "issue"],
 };
 
+const MAX_PAGES = 100;
+const PAGE_SIZE = 100;
+
 function provenance(author: { bot?: boolean; type?: string } | null | undefined): WorkProvenance {
   return author?.bot || author?.type?.toLowerCase() === "bot" ? "bot" : "human";
+}
+
+async function getJsonResponse(
+  url: string,
+  headers: Record<string, string>,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  return fetchImpl(url, { headers });
 }
 
 async function getJson<T>(
@@ -27,7 +40,7 @@ async function getJson<T>(
   headers: Record<string, string>,
   fetchImpl: typeof fetch,
 ): Promise<T> {
-  const response = await fetchImpl(url, { headers });
+  const response = await getJsonResponse(url, headers, fetchImpl);
   if (!response.ok) {
     throw new Error(`Source sync failed (HTTP ${response.status}) for ${url}`);
   }
@@ -38,18 +51,54 @@ async function getAllPages<T>(
   url: string,
   headers: Record<string, string>,
   fetchImpl: typeof fetch,
-): Promise<T[]> {
+): Promise<{ items: T[]; complete: boolean }> {
   const items: T[] = [];
-  for (let page = 1; page <= 100; page += 1) {
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
     const batch = await getJson<T[]>(
       `${url}${url.includes("?") ? "&" : "?"}page=${page}`,
       headers,
       fetchImpl,
     );
     items.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < PAGE_SIZE) {
+      return { items, complete: true };
+    }
   }
-  return items;
+  return { items, complete: false };
+}
+
+function deliveryFromState(
+  kind: "pull-request" | "issue",
+  state: string,
+  options: { draft?: boolean; merged?: boolean } = {},
+): WorkDelivery {
+  const normalized = state.toLowerCase();
+  if (kind === "pull-request" && (options.merged || normalized === "merged")) {
+    return "merged";
+  }
+  if (normalized === "closed") return "closed";
+  if (kind === "pull-request" && options.draft) return "draft";
+  if (normalized === "open" || normalized === "opened" || normalized === "reopened") {
+    return "open";
+  }
+  return "open";
+}
+
+function parseGitLabNativeKey(
+  kind: string,
+  nativeKey: string,
+): { kind: "pull-request" | "issue"; iid: string } | null {
+  const prefixed = nativeKey.match(/^(pull-request|issue):(\d+)$/);
+  if (prefixed) {
+    return {
+      kind: prefixed[1] as "pull-request" | "issue",
+      iid: prefixed[2] ?? "",
+    };
+  }
+  if ((kind === "pull-request" || kind === "issue") && /^\d+$/.test(nativeKey)) {
+    return { kind, iid: nativeKey };
+  }
+  return null;
 }
 
 interface GitLabItem {
@@ -63,6 +112,33 @@ interface GitLabItem {
   author?: { name?: string; username?: string; bot?: boolean };
   labels?: string[];
   merge_status?: string;
+  merged_at?: string | null;
+}
+
+function mapGitLabItem(
+  item: GitLabItem,
+  kind: "pull-request" | "issue",
+  observedFallback: string,
+): NormalizedSourceItem {
+  return {
+    kind,
+    nativeKey: `${kind}:${item.iid}`,
+    title: item.title,
+    summary: item.description ?? "",
+    delivery: deliveryFromState(kind, item.state, {
+      ...(item.draft === undefined ? {} : { draft: item.draft }),
+      merged: Boolean(item.merged_at) || item.state === "merged",
+    }),
+    outcome: "pending",
+    provenance: provenance(item.author),
+    actorName: item.author?.name ?? item.author?.username ?? null,
+    labels: item.labels ?? [],
+    nativeState: item.state,
+    nativeJson: JSON.stringify(item),
+    webUrl: item.web_url ?? null,
+    observedAt: item.updated_at ?? observedFallback,
+    mergeability: item.merge_status ?? null,
+  };
 }
 
 export class GitLabSourceAdapter implements SourceAdapter {
@@ -91,30 +167,51 @@ export class GitLabSourceAdapter implements SourceAdapter {
       ),
     ]);
     const observedFallback = new Date().toISOString();
-    const map = (item: GitLabItem, kind: "pull-request" | "issue"): NormalizedSourceItem => ({
-      kind,
-      // GitLab allocates issue and merge-request IIDs independently.
-      nativeKey: `${kind}:${item.iid}`,
-      title: item.title,
-      summary: item.description ?? "",
-      delivery: kind === "pull-request" && item.draft ? "draft" : "open",
-      outcome: "pending",
-      provenance: provenance(item.author),
-      actorName: item.author?.name ?? item.author?.username ?? null,
-      labels: item.labels ?? [],
-      nativeState: item.state,
-      nativeJson: JSON.stringify(item),
-      webUrl: item.web_url ?? null,
-      observedAt: item.updated_at ?? observedFallback,
-      mergeability: item.merge_status ?? null,
-    });
     return {
       items: [
-        ...mergeRequests.map((item) => map(item, "pull-request")),
-        ...issues.map((item) => map(item, "issue")),
+        ...mergeRequests.items.map((item) => mapGitLabItem(item, "pull-request", observedFallback)),
+        ...issues.items.map((item) => mapGitLabItem(item, "issue", observedFallback)),
       ],
       cursor: null,
-      backfillComplete: false,
+      backfillComplete: mergeRequests.complete && issues.complete,
+    };
+  }
+
+  async getItem(input: SourceGetItemInput): Promise<SourceGetItemResult> {
+    const parsed = parseGitLabNativeKey(input.kind, input.nativeKey);
+    if (!parsed) {
+      return { status: "unresolved", detail: `Unsupported GitLab native key: ${input.nativeKey}` };
+    }
+    const fetchImpl = input.fetchImpl ?? fetch;
+    const base = input.baseUrl.replace(/\/+$/, "");
+    const api = base.endsWith("/api/v4") ? base : `${base}/api/v4`;
+    const project = encodeURIComponent(input.externalKey);
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(input.token ? { "PRIVATE-TOKEN": input.token } : {}),
+    };
+    const path =
+      parsed.kind === "pull-request"
+        ? `merge_requests/${parsed.iid}`
+        : `issues/${parsed.iid}`;
+    const response = await getJsonResponse(
+      `${api}/projects/${project}/${path}`,
+      headers,
+      fetchImpl,
+    );
+    if (response.status === 404) {
+      return { status: "unresolved", detail: `GitLab ${parsed.kind} ${parsed.iid} was not found` };
+    }
+    if (!response.ok) {
+      return {
+        status: "unresolved",
+        detail: `GitLab item lookup failed (HTTP ${response.status})`,
+      };
+    }
+    const item = (await response.json()) as GitLabItem;
+    return {
+      status: "found",
+      item: mapGitLabItem(item, parsed.kind, new Date().toISOString()),
     };
   }
 }
@@ -130,10 +227,38 @@ interface GitHubPull {
   user?: { login?: string; type?: string };
   labels?: Array<{ name?: string }>;
   mergeable_state?: string;
+  merged?: boolean;
+  pull_request?: unknown;
 }
 
 interface GitHubIssue extends GitHubPull {
   pull_request?: unknown;
+}
+
+function mapGitHubItem(
+  item: GitHubPull,
+  kind: "pull-request" | "issue",
+  observedFallback: string,
+): NormalizedSourceItem {
+  return {
+    kind,
+    nativeKey: String(item.number),
+    title: item.title,
+    summary: item.body ?? "",
+    delivery: deliveryFromState(kind, item.state, {
+      ...(item.draft === undefined ? {} : { draft: item.draft }),
+      merged: Boolean(item.merged),
+    }),
+    outcome: "pending",
+    provenance: provenance(item.user),
+    actorName: item.user?.login ?? null,
+    labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
+    nativeState: item.state,
+    nativeJson: JSON.stringify(item),
+    webUrl: item.html_url ?? null,
+    observedAt: item.updated_at ?? observedFallback,
+    mergeability: item.mergeable_state ?? null,
+  };
 }
 
 export class GitHubSourceAdapter implements SourceAdapter {
@@ -161,31 +286,57 @@ export class GitHubSourceAdapter implements SourceAdapter {
       ),
     ]);
     const observedFallback = new Date().toISOString();
-    const map = (item: GitHubPull, kind: "pull-request" | "issue"): NormalizedSourceItem => ({
-      kind,
-      nativeKey: String(item.number),
-      title: item.title,
-      summary: item.body ?? "",
-      delivery: kind === "pull-request" && item.draft ? "draft" : "open",
-      outcome: "pending",
-      provenance: provenance(item.user),
-      actorName: item.user?.login ?? null,
-      labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
-      nativeState: item.state,
-      nativeJson: JSON.stringify(item),
-      webUrl: item.html_url ?? null,
-      observedAt: item.updated_at ?? observedFallback,
-      mergeability: item.mergeable_state ?? null,
-    });
     return {
       items: [
-        ...pulls.map((item) => map(item, "pull-request")),
-        ...allIssues
+        ...pulls.items.map((item) => mapGitHubItem(item, "pull-request", observedFallback)),
+        ...allIssues.items
           .filter((item) => item.pull_request == null)
-          .map((item) => map(item, "issue")),
+          .map((item) => mapGitHubItem(item, "issue", observedFallback)),
       ],
       cursor: null,
-      backfillComplete: false,
+      backfillComplete: pulls.complete && allIssues.complete,
+    };
+  }
+
+  async getItem(input: SourceGetItemInput): Promise<SourceGetItemResult> {
+    if ((input.kind !== "pull-request" && input.kind !== "issue") || !/^\d+$/.test(input.nativeKey)) {
+      return {
+        status: "unresolved",
+        detail: `Unsupported GitHub native key: ${input.kind}/${input.nativeKey}`,
+      };
+    }
+    const fetchImpl = input.fetchImpl ?? fetch;
+    const base = input.baseUrl.replace(/\/+$/, "");
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(input.token ? { Authorization: `Bearer ${input.token}` } : {}),
+    };
+    const path =
+      input.kind === "pull-request"
+        ? `pulls/${input.nativeKey}`
+        : `issues/${input.nativeKey}`;
+    const response = await getJsonResponse(
+      `${base}/repos/${input.externalKey}/${path}`,
+      headers,
+      fetchImpl,
+    );
+    if (response.status === 404) {
+      return {
+        status: "unresolved",
+        detail: `GitHub ${input.kind} ${input.nativeKey} was not found`,
+      };
+    }
+    if (!response.ok) {
+      return {
+        status: "unresolved",
+        detail: `GitHub item lookup failed (HTTP ${response.status})`,
+      };
+    }
+    const item = (await response.json()) as GitHubPull;
+    return {
+      status: "found",
+      item: mapGitHubItem(item, input.kind, new Date().toISOString()),
     };
   }
 }
@@ -201,6 +352,34 @@ interface ForgejoItem {
   user?: { login?: string; type?: string };
   labels?: Array<{ name?: string }>;
   mergeable?: boolean;
+  merged?: boolean;
+}
+
+function mapForgejoItem(
+  item: ForgejoItem,
+  kind: "pull-request" | "issue",
+  observedFallback: string,
+): NormalizedSourceItem {
+  return {
+    kind,
+    nativeKey: String(item.number),
+    title: item.title,
+    summary: item.body ?? "",
+    delivery: deliveryFromState(kind, item.state, {
+      ...(item.draft === undefined ? {} : { draft: item.draft }),
+      merged: Boolean(item.merged),
+    }),
+    outcome: "pending",
+    provenance: provenance(item.user),
+    actorName: item.user?.login ?? null,
+    labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
+    nativeState: item.state,
+    nativeJson: JSON.stringify(item),
+    webUrl: item.html_url ?? null,
+    observedAt: item.updated_at ?? observedFallback,
+    mergeability:
+      item.mergeable === undefined ? null : item.mergeable ? "mergeable" : "conflicting",
+  };
 }
 
 export class ForgejoSourceAdapter implements SourceAdapter {
@@ -228,30 +407,55 @@ export class ForgejoSourceAdapter implements SourceAdapter {
       ),
     ]);
     const observedFallback = new Date().toISOString();
-    const map = (item: ForgejoItem, kind: "pull-request" | "issue"): NormalizedSourceItem => ({
-      kind,
-      nativeKey: String(item.number),
-      title: item.title,
-      summary: item.body ?? "",
-      delivery: kind === "pull-request" && item.draft ? "draft" : "open",
-      outcome: "pending",
-      provenance: provenance(item.user),
-      actorName: item.user?.login ?? null,
-      labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
-      nativeState: item.state,
-      nativeJson: JSON.stringify(item),
-      webUrl: item.html_url ?? null,
-      observedAt: item.updated_at ?? observedFallback,
-      mergeability:
-        item.mergeable === undefined ? null : item.mergeable ? "mergeable" : "conflicting",
-    });
     return {
       items: [
-        ...pulls.map((item) => map(item, "pull-request")),
-        ...issues.map((item) => map(item, "issue")),
+        ...pulls.items.map((item) => mapForgejoItem(item, "pull-request", observedFallback)),
+        ...issues.items.map((item) => mapForgejoItem(item, "issue", observedFallback)),
       ],
       cursor: null,
-      backfillComplete: false,
+      backfillComplete: pulls.complete && issues.complete,
+    };
+  }
+
+  async getItem(input: SourceGetItemInput): Promise<SourceGetItemResult> {
+    if ((input.kind !== "pull-request" && input.kind !== "issue") || !/^\d+$/.test(input.nativeKey)) {
+      return {
+        status: "unresolved",
+        detail: `Unsupported Forgejo native key: ${input.kind}/${input.nativeKey}`,
+      };
+    }
+    const fetchImpl = input.fetchImpl ?? fetch;
+    const base = input.baseUrl.replace(/\/+$/, "");
+    const api = base.endsWith("/api/v1") ? base : `${base}/api/v1`;
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(input.token ? { Authorization: `token ${input.token}` } : {}),
+    };
+    const path =
+      input.kind === "pull-request"
+        ? `pulls/${input.nativeKey}`
+        : `issues/${input.nativeKey}`;
+    const response = await getJsonResponse(
+      `${api}/repos/${input.externalKey}/${path}`,
+      headers,
+      fetchImpl,
+    );
+    if (response.status === 404) {
+      return {
+        status: "unresolved",
+        detail: `Forgejo ${input.kind} ${input.nativeKey} was not found`,
+      };
+    }
+    if (!response.ok) {
+      return {
+        status: "unresolved",
+        detail: `Forgejo item lookup failed (HTTP ${response.status})`,
+      };
+    }
+    const item = (await response.json()) as ForgejoItem;
+    return {
+      status: "found",
+      item: mapForgejoItem(item, input.kind, new Date().toISOString()),
     };
   }
 }

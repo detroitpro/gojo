@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { getQueue, listProjects, listRuns, listTasks, runTask } from "@/api";
 import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import type { Project, Task } from "@/types";
@@ -223,11 +224,17 @@ async function loadQueuePositions() {
   }
 }
 
-onMounted(() => {
-  void loadProjects();
-  void loadTaskOptions();
-  void load();
-  void loadQueuePositions();
+useLiveRefresh({
+  topics: ["runs", "queue"],
+  refresh: async () => {
+    await Promise.all([load(), loadQueuePositions()]);
+  },
+});
+useLiveRefresh({
+  topics: ["projects", "tasks"],
+  refresh: async () => {
+    await Promise.all([loadProjects(), loadTaskOptions()]);
+  },
 });
 </script>
 

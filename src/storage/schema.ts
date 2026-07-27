@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -307,6 +307,10 @@ CREATE TABLE IF NOT EXISTS work_items (
   next_sync_at TEXT,
   sync_state TEXT NOT NULL DEFAULT 'pending',
   last_error TEXT,
+  resolution TEXT,
+  resolved_at TEXT,
+  resolved_by TEXT,
+  resolution_note TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   started_at TEXT,
@@ -333,6 +337,19 @@ CREATE TABLE IF NOT EXISTS work_events (
   type TEXT NOT NULL,
   data_json TEXT NOT NULL DEFAULT '{}',
   source TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS platform_change_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  project_id TEXT,
+  type TEXT NOT NULL,
+  entity_kind TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  topics_json TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}',
   occurred_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
@@ -603,6 +620,32 @@ ALTER TABLE runs ADD COLUMN work_item_id TEXT REFERENCES work_items(id) ON DELET
 ALTER TABLE attempts ADD COLUMN agent_adapter TEXT;
 `,
   },
+  {
+    version: 7,
+    sql: `
+CREATE TABLE IF NOT EXISTS platform_change_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  project_id TEXT,
+  type TEXT NOT NULL,
+  entity_kind TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  topics_json TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+`,
+  },
+  {
+    version: 8,
+    sql: `
+ALTER TABLE work_items ADD COLUMN resolution TEXT;
+ALTER TABLE work_items ADD COLUMN resolved_at TEXT;
+ALTER TABLE work_items ADD COLUMN resolved_by TEXT;
+ALTER TABLE work_items ADD COLUMN resolution_note TEXT;
+`,
+  },
 ];
 
 /** Applied after incremental migrations so upgraded DBs have columns first. */
@@ -613,8 +656,10 @@ CREATE INDEX IF NOT EXISTS idx_project_sources_sync ON project_sources(sync_stat
 CREATE INDEX IF NOT EXISTS idx_source_webhooks_received ON source_webhook_deliveries(received_at);
 CREATE INDEX IF NOT EXISTS idx_work_items_project_updated ON work_items(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_work_items_project_state ON work_items(project_id, execution, delivery, attention);
+CREATE INDEX IF NOT EXISTS idx_work_items_project_resolution ON work_items(project_id, resolution);
 CREATE INDEX IF NOT EXISTS idx_work_events_project_sequence ON work_events(project_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_work_events_item_sequence ON work_events(work_item_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_platform_events_project_sequence ON platform_change_events(project_id, sequence);
 `;
 
 export const EXPECTED_TABLES = [
@@ -643,6 +688,7 @@ export const EXPECTED_TABLES = [
   "work_items",
   "work_links",
   "work_events",
+  "platform_change_events",
   "external_resources",
   "run_context",
 ] as const;

@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 
 import { logout } from "@/api";
+import { usePlatformEvents } from "@/composables/usePlatformEvents";
 
 const route = useRoute();
 const router = useRouter();
@@ -56,6 +57,16 @@ const nav = [
 
 const collapsed = ref(false);
 const mobileOpen = ref(false);
+const { status: eventStatus, reconnect: reconnectEvents } = usePlatformEvents({
+  topics: [],
+  onEvent: () => {},
+});
+const eventStatusLabel = computed(() => {
+  if (eventStatus.value === "connected") return "Live";
+  if (eventStatus.value === "degraded") return "Reconnecting";
+  if (eventStatus.value === "connecting") return "Connecting";
+  return "Offline";
+});
 
 const activeName = computed(() => {
   if (route.name === "run-detail") {
@@ -127,6 +138,15 @@ async function signOut() {
         </svg>
       </button>
       <RouterLink to="/" class="brand brand-mobile" title="Dashboard">gojo</RouterLink>
+      <button
+        class="live-status live-status-mobile"
+        type="button"
+        :title="`Updates: ${eventStatusLabel}`"
+        @click="reconnectEvents"
+      >
+        <span class="live-dot" :class="`live-dot-${eventStatus}`" />
+        <span>{{ eventStatusLabel }}</span>
+      </button>
     </header>
 
     <div
@@ -202,6 +222,15 @@ async function signOut() {
       </nav>
 
       <div class="sidebar-footer">
+        <button
+          class="live-status"
+          type="button"
+          :title="`Updates: ${eventStatusLabel}`"
+          @click="reconnectEvents"
+        >
+          <span class="live-dot" :class="`live-dot-${eventStatus}`" />
+          <span class="live-label">{{ eventStatusLabel }}</span>
+        </button>
         <button class="btn btn-sm" type="button" @click="signOut">Sign out</button>
       </div>
     </aside>
@@ -211,3 +240,52 @@ async function signOut() {
     </main>
   </div>
 </template>
+
+<style scoped>
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0;
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.live-dot-connected {
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.live-dot-connecting {
+  background: var(--amber);
+}
+
+.live-dot-degraded {
+  background: var(--red);
+}
+
+.live-status-mobile {
+  margin-left: auto;
+}
+
+.sidebar-collapsed .live-label {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .live-status-mobile {
+    display: none;
+  }
+}
+</style>

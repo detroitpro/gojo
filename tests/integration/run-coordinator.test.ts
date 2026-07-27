@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { setSchedulingPolicy } from '@/app/instance-settings';
 import { resolvePaths } from '@/config/paths';
+import { PlatformChangeFeed } from '@/events/platform-change-feed';
 import { commitAll, configLocal, execGit, initRepo } from '@/git/git';
 import { RunState } from '@shared/run-states';
 import { RunCoordinator } from '@/runs/coordinator';
@@ -34,6 +35,7 @@ describe('integration/run-coordinator', () => {
     paths: ReturnType<typeof resolvePaths>;
     project: Project;
     task: Task;
+    platformEvents: PlatformChangeFeed;
   }> {
     tempDir = mkdtempSync(join(tmpdir(), 'gojo-run-coordinator-test-'));
     const paths = resolvePaths(tempDir);
@@ -76,17 +78,20 @@ describe('integration/run-coordinator', () => {
       }),
     });
 
+    const platformEvents = new PlatformChangeFeed(db);
     const coordinator = new RunCoordinator({
       db,
       paths,
       workspace: new WorkspaceManager(worktreesRoot),
+      platformEvents,
     });
 
-    return { coordinator, database: db, repos, repoPath, paths, project, task };
+    return { coordinator, database: db, repos, repoPath, paths, project, task, platformEvents };
   }
 
   test('full flow: shell task, validation, commit-only, succeeded', async () => {
-    const { coordinator, database, repos, repoPath, paths, project, task } = await setup();
+    const { coordinator, database, repos, repoPath, paths, project, task, platformEvents } =
+      await setup();
 
     const run = await coordinator.createRun({
       projectId: project.id,
@@ -135,6 +140,12 @@ describe('integration/run-coordinator', () => {
     expect(work.events.listByWorkItem(run.workItemId ?? "").map((event) => event.type)).toEqual(
       expect.arrayContaining(["run.created", "run.state_changed", "run.finished"]),
     );
+    expect(
+      platformEvents
+        .list({ afterSequence: 0, projectId: project.id })
+        .filter((event) => event.entityId === run.id)
+        .map((event) => event.type),
+    ).toEqual(expect.arrayContaining(["run.created", "run.state_changed", "run.finished"]));
     expect(
       database
         .connection()

@@ -33,6 +33,7 @@ import type {
   Task,
   User,
   WorkItem,
+  WorkRecheckResult,
   WorkStatus,
 } from "./types";
 import { ApiError } from "./types";
@@ -375,6 +376,24 @@ export async function refreshProjectSource(
   await request(`/projects/${projectId}/sources/${sourceId}/refresh`, {
     method: "POST",
   });
+}
+
+export async function recheckWorkItem(workItemId: string): Promise<WorkRecheckResult> {
+  const { data } = await request<{ result: WorkRecheckResult }>(`/work/${workItemId}/recheck`, {
+    method: "POST",
+  });
+  return data.result;
+}
+
+export async function resolveWorkItem(
+  workItemId: string,
+  input: { note?: string | null } = {},
+): Promise<WorkItem> {
+  const { data } = await request<{ work: WorkItem }>(`/work/${workItemId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ note: input.note ?? null }),
+  });
+  return data.work;
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

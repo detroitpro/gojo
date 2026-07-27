@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { getQueue } from "@/api";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import type { QueueRunningItem, SchedulingPolicy } from "@/types";
 
@@ -49,8 +50,9 @@ function fmtTime(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
-onMounted(() => {
-  void load();
+useLiveRefresh({
+  topics: ["queue"],
+  refresh: load,
 });
 </script>
 

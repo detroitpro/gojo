@@ -8,6 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc -b --noEmit",
+    "test": "vitest run",
     "test:build": "bun run build && test -f dist/index.html"
   },
   "dependencies": {
@@ -17,8 +18,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.11.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
+    "vitest": "^4.1.10",
     "vue-tsc": "^2.2.12"
   }
 }

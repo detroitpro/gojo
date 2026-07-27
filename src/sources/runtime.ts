@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
+import { PlatformChangeFeed } from "@/events/platform-change-feed";
 import type { Database } from "@/storage";
 import {
   createRepositories,
@@ -8,6 +9,7 @@ import {
   type ProjectSource,
   type SourceConnection,
 } from "@/storage";
+import type { WorkItem, WorkRecheckResult, WorkResolveInput } from "@shared/work";
 import {
   SourceCapabilitiesSchema,
   WorkDeliverySchema,
@@ -26,10 +28,13 @@ import {
   SourceAdapterRegistry,
   type NormalizedSourceItem,
   type SourceAdapter,
+  type SourceGetItemResult,
 } from "./types";
 
 const ACTIVE_SYNC_INTERVAL_MS = 60_000;
 const ERROR_SYNC_INTERVAL_MS = 2 * 60_000;
+const TERMINAL_DELIVERIES = new Set(["merged", "closed"]);
+const ACTIVE_DELIVERIES = new Set(["draft", "open", "review", "blocked"]);
 
 export interface SourceSyncSummary {
   sourceId: string;
@@ -77,6 +82,7 @@ export class SourceSyncService {
     | ((name: string, projectId: string) => string | null)
     | null;
   private readonly resolveDefaultToken: (adapter: string) => string | null;
+  private readonly platformEvents: PlatformChangeFeed | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
   private activeTick: Promise<void> | null = null;
@@ -86,6 +92,7 @@ export class SourceSyncService {
     registry?: SourceAdapterRegistry;
     resolveSecret?: (name: string, projectId: string) => string | null;
     resolveDefaultToken?: (adapter: string) => string | null;
+    platformEvents?: PlatformChangeFeed;
   }) {
     this.work = createWorkRepositories(input.db);
     this.registry =
@@ -98,6 +105,7 @@ export class SourceSyncService {
       ]);
     this.resolveSecret = input.resolveSecret ?? null;
     this.resolveDefaultToken = input.resolveDefaultToken ?? defaultToken;
+    this.platformEvents = input.platformEvents ?? null;
   }
 
   start(): void {
@@ -210,31 +218,35 @@ export class SourceSyncService {
         if (!observedAt || item.observedAt > observedAt) observedAt = item.observedAt;
       }
       const completedAt = now.toISOString();
-      const seen = new Set(result.items.map((item) => `${item.kind}:${item.nativeKey}`));
-      const sourceWebUrl = source.webUrl?.replace(/\.git\/?$/i, "").replace(/\/+$/, "");
-      for (const existing of this.work.items
-        .listByProject(source.projectId, { limit: 10_000, offset: 0 })
-        .items.filter(
-          (item) =>
-            (item.sourceId === source.id ||
-              (item.sourceId === null &&
-                Boolean(sourceWebUrl) &&
-                Boolean(item.webUrl?.startsWith(`${sourceWebUrl}/`)))) &&
-            ["draft", "open", "review", "blocked"].includes(item.delivery),
-        )) {
-        if (
-          !existing.nativeKey ||
-          seen.has(`${existing.kind}:${existing.nativeKey}`)
-        ) {
-          continue;
+      if (result.backfillComplete) {
+        const seen = new Set(result.items.map((item) => `${item.kind}:${item.nativeKey}`));
+        const sourceWebUrl = source.webUrl?.replace(/\.git\/?$/i, "").replace(/\/+$/, "");
+        for (const existing of this.work.items
+          .listByProject(source.projectId, { limit: 10_000, offset: 0 })
+          .items.filter(
+            (item) =>
+              item.resolution == null &&
+              (item.sourceId === source.id ||
+                (item.sourceId === null &&
+                  Boolean(sourceWebUrl) &&
+                  Boolean(item.webUrl?.startsWith(`${sourceWebUrl}/`)))) &&
+              ACTIVE_DELIVERIES.has(item.delivery),
+          )) {
+          if (
+            !existing.nativeKey ||
+            seen.has(`${existing.kind}:${existing.nativeKey}`)
+          ) {
+            continue;
+          }
+          await this.verifyAbsentItem({
+            source,
+            connection,
+            adapter,
+            token,
+            workItem: existing,
+            now,
+          });
         }
-        this.work.items.update(existing.id, {
-          attention: "stale",
-          syncState: "stale",
-          observedAt: completedAt,
-          nextSyncAt: new Date(now.getTime() + ACTIVE_SYNC_INTERVAL_MS).toISOString(),
-          lastError: "No longer present in the source active-work snapshot",
-        });
       }
       this.work.sync.updateCursor({
         sourceId: source.id,
@@ -249,6 +261,15 @@ export class SourceSyncService {
         nextSyncAt: new Date(now.getTime() + ACTIVE_SYNC_INTERVAL_MS).toISOString(),
         lastError: null,
       });
+      this.platformEvents?.append({
+        projectId: source.projectId,
+        type: "source.refreshed",
+        entityKind: "source",
+        entityId: source.id,
+        topics: ["dashboard", "overview", "impact", "projects", "work", "sources"],
+        data: { upserted: result.items.length, backfillComplete: result.backfillComplete },
+        occurredAt: completedAt,
+      });
       return {
         sourceId,
         upserted: result.items.length,
@@ -260,6 +281,255 @@ export class SourceSyncService {
       this.recordFailure(source, message, now);
       return { sourceId, upserted: 0, errors: 1, observedAt: source.observedAt };
     }
+  }
+
+  async recheckWorkItem(workItemId: string, now = new Date()): Promise<WorkRecheckResult> {
+    const workItem = this.work.items.findById(workItemId);
+    if (!workItem) {
+      throw new Error(`Work item not found: ${workItemId}`);
+    }
+    if (!workItem.sourceId || !workItem.nativeKey) {
+      return {
+        status: "unresolved",
+        work: workItem,
+        detail: "Work item is not bound to a source-native identity",
+      };
+    }
+    const source = this.work.sources.findById(workItem.sourceId);
+    if (!source) {
+      return {
+        status: "unresolved",
+        work: workItem,
+        detail: "Project source is not configured",
+      };
+    }
+    const connection = source.connectionId
+      ? this.work.connections.findById(source.connectionId)
+      : null;
+    if (!connection) {
+      return {
+        status: "unresolved",
+        work: workItem,
+        detail: "Source connection is not configured",
+      };
+    }
+    const adapter = this.registry.get(connection.adapter);
+    if (!adapter?.getItem) {
+      return {
+        status: "unresolved",
+        work: workItem,
+        detail: `Source adapter does not support item verification: ${connection.adapter}`,
+      };
+    }
+    const config = parseConfig(connection);
+    const tokenSecretName =
+      typeof config["tokenSecretName"] === "string" ? config["tokenSecretName"] : null;
+    const token = tokenSecretName
+      ? this.resolveSecret?.(tokenSecretName, source.projectId) ?? null
+      : this.resolveDefaultToken(adapter.type);
+    const lookup = await adapter.getItem({
+      baseUrl: connection.baseUrl ?? "",
+      externalKey: source.externalKey,
+      kind: workItem.kind,
+      nativeKey: workItem.nativeKey,
+      token,
+    });
+    return this.applyLookup({
+      source,
+      workItem,
+      lookup,
+      now,
+      eventSource: adapter.type,
+    });
+  }
+
+  resolveWorkItem(workItemId: string, input: WorkResolveInput = {}): WorkItem {
+    const existing = this.work.items.findById(workItemId);
+    if (!existing) {
+      throw new Error(`Work item not found: ${workItemId}`);
+    }
+    const resolved = this.work.items.resolve(workItemId, input);
+    if (!resolved) {
+      throw new Error(`Work item not found: ${workItemId}`);
+    }
+    this.work.events.append({
+      projectId: resolved.projectId,
+      workItemId: resolved.id,
+      type: "work.resolved",
+      source: "operator",
+      dataJson: JSON.stringify({
+        resolvedBy: input.resolvedBy ?? null,
+        note: input.note ?? null,
+      }),
+    });
+    this.platformEvents?.append({
+      projectId: resolved.projectId,
+      type: "work.resolved",
+      entityKind: "work",
+      entityId: resolved.id,
+      topics: ["dashboard", "overview", "impact", "projects", "work"],
+      data: { resolution: resolved.resolution },
+    });
+    return resolved;
+  }
+
+  private async verifyAbsentItem(input: {
+    source: ProjectSource;
+    connection: SourceConnection;
+    adapter: SourceAdapter;
+    token: string | null;
+    workItem: WorkItem;
+    now: Date;
+  }): Promise<void> {
+    const { source, connection, adapter, token, workItem, now } = input;
+    if (!workItem.nativeKey) return;
+    if (!adapter.getItem) {
+      this.markStale(workItem, now, "No longer present in the source active-work snapshot");
+      return;
+    }
+    let lookup: SourceGetItemResult;
+    try {
+      lookup = await adapter.getItem({
+        baseUrl: connection.baseUrl ?? "",
+        externalKey: source.externalKey,
+        kind: workItem.kind,
+        nativeKey: workItem.nativeKey,
+        token,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.markStale(workItem, now, detail);
+      return;
+    }
+    await this.applyLookup({
+      source,
+      workItem,
+      lookup,
+      now,
+      eventSource: adapter.type,
+      absentFromSnapshot: true,
+    });
+  }
+
+  private applyLookup(input: {
+    source: ProjectSource;
+    workItem: WorkItem;
+    lookup: SourceGetItemResult;
+    now: Date;
+    eventSource: string;
+    absentFromSnapshot?: boolean;
+  }): WorkRecheckResult {
+    const { source, workItem, lookup, now, eventSource } = input;
+    if (lookup.status === "unresolved") {
+      const stale =
+        this.markStale(
+          workItem,
+          now,
+          input.absentFromSnapshot
+            ? "No longer present in the source active-work snapshot"
+            : lookup.detail,
+        ) ?? workItem;
+      return { status: "unresolved", work: stale, detail: lookup.detail };
+    }
+
+    const item = lookup.item;
+    if (TERMINAL_DELIVERIES.has(item.delivery)) {
+      const updated = this.work.items.update(workItem.id, {
+        title: item.title,
+        summary: item.summary,
+        delivery: item.delivery,
+        outcome: item.outcome,
+        attention: "none",
+        nativeState: item.nativeState,
+        nativeJson: item.nativeJson,
+        webUrl: item.webUrl ?? workItem.webUrl,
+        observedAt: item.observedAt,
+        nextSyncAt: null,
+        syncState: "current",
+        lastError: null,
+        completedAt: item.observedAt,
+      });
+      if (updated?.resolution) {
+        this.work.items.clearResolution(updated.id);
+      }
+      const terminal = this.work.items.findById(workItem.id) ?? updated ?? workItem;
+      this.work.events.append({
+        projectId: source.projectId,
+        workItemId: terminal.id,
+        type: "work.verified_terminal",
+        source: eventSource,
+        occurredAt: item.observedAt,
+        dataJson: JSON.stringify({
+          delivery: item.delivery,
+          nativeKey: item.nativeKey,
+          nativeState: item.nativeState,
+        }),
+      });
+      this.platformEvents?.append({
+        projectId: source.projectId,
+        type: "work.verified_terminal",
+        entityKind: "work",
+        entityId: terminal.id,
+        topics: ["dashboard", "overview", "impact", "projects", "work", "sources"],
+        data: { delivery: item.delivery },
+        occurredAt: item.observedAt,
+      });
+      return { status: "terminal", work: terminal, detail: null };
+    }
+
+    const active = this.upsertItem(source, item);
+    this.work.events.append({
+      projectId: source.projectId,
+      workItemId: active.id,
+      type: "source.observed",
+      source: eventSource,
+      occurredAt: item.observedAt,
+      dataJson: JSON.stringify({
+        nativeKey: item.nativeKey,
+        nativeState: item.nativeState,
+        recheck: true,
+      }),
+    });
+    this.platformEvents?.append({
+      projectId: source.projectId,
+      type: "work.rechecked",
+      entityKind: "work",
+      entityId: active.id,
+      topics: ["dashboard", "overview", "impact", "projects", "work", "sources"],
+      data: { status: "active" },
+      occurredAt: item.observedAt,
+    });
+    return { status: "active", work: active, detail: null };
+  }
+
+  private markStale(workItem: WorkItem, now: Date, detail: string): WorkItem | null {
+    const updated = this.work.items.update(workItem.id, {
+      attention: "stale",
+      syncState: "stale",
+      observedAt: now.toISOString(),
+      nextSyncAt: new Date(now.getTime() + ACTIVE_SYNC_INTERVAL_MS).toISOString(),
+      lastError: detail,
+    });
+    if (updated) {
+      this.work.events.append({
+        projectId: updated.projectId,
+        workItemId: updated.id,
+        type: "work.stale",
+        source: "source-sync",
+        occurredAt: now.toISOString(),
+        dataJson: JSON.stringify({ detail }),
+      });
+      this.platformEvents?.append({
+        projectId: updated.projectId,
+        type: "work.stale",
+        entityKind: "work",
+        entityId: updated.id,
+        topics: ["dashboard", "overview", "impact", "projects", "work", "sources"],
+        data: { detail },
+        occurredAt: now.toISOString(),
+      });
+    }
+    return updated;
   }
 
   private upsertItem(source: ProjectSource, item: NormalizedSourceItem) {
@@ -284,6 +554,7 @@ export class SourceSyncService {
       reviewJson: item.reviewJson ?? "{}",
       checksJson: item.checksJson ?? "{}",
       mergeability: item.mergeability ?? null,
+      completedAt: TERMINAL_DELIVERIES.has(item.delivery) ? item.observedAt : null,
     });
   }
 
@@ -300,6 +571,15 @@ export class SourceSyncService {
       cursor: this.work.sync.cursor(source.id)?.cursor ?? null,
       backfillComplete: this.work.sync.cursor(source.id)?.backfillComplete ?? false,
       lastError: message,
+    });
+    this.platformEvents?.append({
+      projectId: source.projectId,
+      type: "source.sync_failed",
+      entityKind: "source",
+      entityId: source.id,
+      topics: ["dashboard", "projects", "work", "sources"],
+      data: { message },
+      occurredAt: now.toISOString(),
     });
   }
 }
@@ -336,13 +616,16 @@ function validSignature(body: string, signature: string, secret: string): boolea
 export class GenericWebhookIngestor {
   private readonly work;
   private readonly resolveSecret: (name: string, projectId: string) => string | null;
+  private readonly platformEvents: PlatformChangeFeed | null;
 
   constructor(input: {
     db: Database;
     resolveSecret: (name: string, projectId: string) => string | null;
+    platformEvents?: PlatformChangeFeed;
   }) {
     this.work = createWorkRepositories(input.db);
     this.resolveSecret = input.resolveSecret;
+    this.platformEvents = input.platformEvents ?? null;
   }
 
   async ingest(
@@ -413,6 +696,15 @@ export class GenericWebhookIngestor {
       observedAt: envelope.occurredAt,
       nextSyncAt: null,
       lastError: null,
+    });
+    this.platformEvents?.append({
+      projectId: source.projectId,
+      type: "source.webhook",
+      entityKind: item.kind,
+      entityId: item.id,
+      topics: ["dashboard", "overview", "impact", "projects", "work", "sources"],
+      data: { sourceId: source.id, deliveryId: envelope.id },
+      occurredAt: envelope.occurredAt,
     });
     return { accepted: true, duplicate: false, workItemId: item.id };
   }

@@ -7,6 +7,7 @@ import { listAdapters } from "@/agents";
 import { UserService } from "@/auth/users";
 import type { AppContext } from "@/app/context";
 import { computeScheduleNextRun } from "@/app/context";
+import { createPlatformEventStream } from "@/events/platform-event-stream";
 import {
   createBackup,
   defaultBackupDest,
@@ -72,6 +73,7 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
+import { PlatformEventTopicSchema, type PlatformEventTopic } from "@shared/events";
 import type {
   WorkAttention,
   WorkDelivery,
@@ -194,6 +196,18 @@ function parseJsonValue(value: string): unknown {
   } catch {
     return {};
   }
+}
+
+function parseEventTopics(url: URL): PlatformEventTopic[] {
+  const raw = url.searchParams
+    .getAll("topic")
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return raw.flatMap((value) => {
+    const parsed = PlatformEventTopicSchema.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 function publicUser(user: { id: string; username: string; role: string }) {
@@ -346,6 +360,15 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/openapi.json") {
     return success(openApiDocument);
+  }
+
+  if (method === "GET" && pathname === "/api/v1/events") {
+    const projectId = url.searchParams.get("projectId");
+    const topics = parseEventTopics(url);
+    return createPlatformEventStream(ctx.platformEvents, request, {
+      ...(projectId ? { projectId } : {}),
+      ...(topics.length ? { topics } : {}),
+    });
   }
 
   if (method === "POST" && pathname === "/api/v1/setup") {
@@ -546,6 +569,13 @@ export async function handleApiRequest(
     } catch {
       // Repository discovery is best-effort; source health exposes failures.
     }
+    ctx.platformEvents.append({
+      projectId: project.id,
+      type: "project.created",
+      entityKind: "project",
+      entityId: project.id,
+      topics: ["dashboard", "overview", "projects", "sources"],
+    });
 
     return success({ project: toProjectDetailRow(ctx.db, project) }, 201);
   }
@@ -565,6 +595,15 @@ export async function handleApiRequest(
 
     if (method === "DELETE" && !action) {
       const removed = ctx.repos.projects.delete(projectId);
+      if (removed) {
+        ctx.platformEvents.append({
+          projectId,
+          type: "project.deleted",
+          entityKind: "project",
+          entityId: projectId,
+          topics: ["dashboard", "overview", "impact", "projects"],
+        });
+      }
       return success({ removed });
     }
 
@@ -598,47 +637,10 @@ export async function handleApiRequest(
     }
 
     if (method === "GET" && action === "events") {
-      const last = Number(request.headers.get("Last-Event-ID") ?? "0");
-      const stream = new ReadableStream({
-        start(controller) {
-          const encoder = new TextEncoder();
-          let sequence = Number.isFinite(last) ? last : 0;
-          let closed = false;
-          const sendAvailable = () => {
-            if (closed) return;
-            for (const event of ctx.work.events.listByProject(projectId, sequence, 500)) {
-              sequence = event.sequence;
-              controller.enqueue(
-                encoder.encode(
-                  `id: ${event.sequence}\ndata: ${JSON.stringify(event)}\n\n`,
-                ),
-              );
-            }
-          };
-          sendAvailable();
-          const timer = setInterval(sendAvailable, 1_000);
-          request.signal.addEventListener(
-            "abort",
-            () => {
-              closed = true;
-              clearInterval(timer);
-              try {
-                controller.close();
-              } catch {
-                // already closed
-              }
-            },
-            { once: true },
-          );
-        },
-      });
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-          "X-Accel-Buffering": "no",
-        },
+      const topics = parseEventTopics(url);
+      return createPlatformEventStream(ctx.platformEvents, request, {
+        projectId,
+        ...(topics.length ? { topics } : {}),
       });
     }
 
@@ -689,6 +691,13 @@ export async function handleApiRequest(
         displayName: body.displayName ?? body.externalKey,
         webUrl: body.webUrl ?? null,
       });
+      ctx.platformEvents.append({
+        projectId,
+        type: "source.attached",
+        entityKind: "source",
+        entityId: source.id,
+        topics: ["dashboard", "projects", "work", "sources"],
+      });
       return success({ source, connection }, 201);
     }
 
@@ -706,6 +715,22 @@ export async function handleApiRequest(
       const result = syncProjectFromManifest(ctx.repos, project);
       ensureProjectRepositorySource(ctx.db, project.id);
       const refreshed = ctx.repos.projects.findById(projectId);
+      ctx.platformEvents.append({
+        projectId,
+        type: "project.synced",
+        entityKind: "project",
+        entityId: projectId,
+        topics: [
+          "dashboard",
+          "overview",
+          "projects",
+          "tasks",
+          "schedules",
+          "work",
+          "sources",
+        ],
+        data: result,
+      });
       return success({
         project: refreshed ? toProjectDetailRow(ctx.db, refreshed) : null,
         sync: result,
@@ -713,20 +738,54 @@ export async function handleApiRequest(
     }
   }
 
-  const workDetailMatch = pathname.match(/^\/api\/v1\/work\/([^/]+)$/);
-  if (method === "GET" && workDetailMatch) {
-    const workItemId = workDetailMatch[1] ?? "";
+  const workActionMatch = pathname.match(/^\/api\/v1\/work\/([^/]+)(?:\/(recheck|resolve))?$/);
+  if (workActionMatch) {
+    const workItemId = workActionMatch[1] ?? "";
+    const action = workActionMatch[2] ?? null;
     const work = ctx.work.items.findById(workItemId);
     if (!work) return failure("not_found", "Work item not found", 404);
-    return success({
-      work,
-      links: ctx.work.links.listByWorkItem(workItemId),
-      events: ctx.work.events.listByWorkItem(workItemId),
-      runContext:
-        work.kind === "run" && work.nativeKey
-          ? ctx.work.runContexts.findByRun(work.nativeKey)
-          : null,
-    });
+
+    if (method === "GET" && !action) {
+      return success({
+        work,
+        links: ctx.work.links.listByWorkItem(workItemId),
+        events: ctx.work.events.listByWorkItem(workItemId),
+        runContext:
+          work.kind === "run" && work.nativeKey
+            ? ctx.work.runContexts.findByRun(work.nativeKey)
+            : null,
+      });
+    }
+
+    if (method === "POST" && action === "recheck") {
+      try {
+        return success({
+          result: await ctx.sourceSync.recheckWorkItem(workItemId),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return failure("validation_error", message, 400);
+      }
+    }
+
+    if (method === "POST" && action === "resolve") {
+      const body = await readJsonBody<{
+        resolvedBy?: string | null;
+        note?: string | null;
+      }>(request);
+      const auth = (request as Request & { auth?: AuthContext }).auth;
+      try {
+        return success({
+          work: ctx.sourceSync.resolveWorkItem(workItemId, {
+            resolvedBy: body?.resolvedBy ?? auth?.username ?? null,
+            note: body?.note ?? null,
+          }),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return failure("validation_error", message, 400);
+      }
+    }
   }
 
   const sourceEventsMatch = pathname.match(/^\/api\/v1\/sources\/([^/]+)\/events$/);
@@ -842,6 +901,13 @@ export async function handleApiRequest(
       ...(body.concurrencyJson !== undefined ? { concurrencyJson: body.concurrencyJson } : {}),
       ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
     });
+    ctx.platformEvents.append({
+      projectId: task.projectId,
+      type: "task.created",
+      entityKind: "task",
+      entityId: task.id,
+      topics: ["dashboard", "overview", "projects", "tasks"],
+    });
 
     return success({ task }, 201);
   }
@@ -884,6 +950,14 @@ export async function handleApiRequest(
     }
 
     const updated = ctx.repos.tasks.update(taskId, { enabled: action === "enable" });
+    ctx.platformEvents.append({
+      projectId: task.projectId,
+      type: "task.updated",
+      entityKind: "task",
+      entityId: task.id,
+      topics: ["dashboard", "overview", "projects", "tasks"],
+      data: { enabled: action === "enable" },
+    });
     return success({ task: updated });
   }
 
@@ -929,14 +1003,31 @@ export async function handleApiRequest(
     if (!schedule) {
       return failure("not_found", "Schedule not found", 404);
     }
+    const scheduleProjectId = ctx.repos.tasks.findById(schedule.taskId)?.projectId ?? null;
 
     if (action === "enable") {
       const nextRunAt = computeScheduleNextRun(schedule.cronExpr, schedule.timezone);
       const updated = ctx.repos.schedules.update(scheduleId, { enabled: true, nextRunAt });
+      ctx.platformEvents.append({
+        projectId: scheduleProjectId,
+        type: "schedule.updated",
+        entityKind: "schedule",
+        entityId: schedule.id,
+        topics: ["dashboard", "overview", "projects", "schedules"],
+        data: { enabled: true },
+      });
       return success({ schedule: updated });
     }
 
     const updated = ctx.repos.schedules.update(scheduleId, { enabled: false });
+    ctx.platformEvents.append({
+      projectId: scheduleProjectId,
+      type: "schedule.updated",
+      entityKind: "schedule",
+      entityId: schedule.id,
+      topics: ["dashboard", "overview", "projects", "schedules"],
+      data: { enabled: false },
+    });
     return success({ schedule: updated });
   }
 
@@ -1270,6 +1361,13 @@ export async function handleApiRequest(
     }
     const policy = setSchedulingPolicy(ctx.db, parsed.data);
     ctx.dispatcher.kick();
+    ctx.platformEvents.append({
+      type: "scheduling.updated",
+      entityKind: "instance",
+      entityId: "scheduling",
+      topics: ["dashboard", "overview", "queue"],
+      data: policy,
+    });
     return success({ policy });
   }
 
@@ -1326,6 +1424,13 @@ export async function handleApiRequest(
       return failure("validation_error", "telemetryEnabled boolean is required", 400);
     }
     ctx.setTelemetryEnabled(body.telemetryEnabled);
+    ctx.platformEvents.append({
+      type: "instance.updated",
+      entityKind: "instance",
+      entityId: "instance",
+      topics: ["dashboard"],
+      data: { telemetryEnabled: body.telemetryEnabled },
+    });
     return success({
       bindHost: ctx.instance.bindHost,
       bindPort: ctx.instance.bindPort,
@@ -1340,11 +1445,25 @@ export async function handleApiRequest(
 
   if (method === "POST" && pathname === "/api/v1/instance/pause") {
     ctx.setPaused(true);
+    ctx.platformEvents.append({
+      type: "instance.paused",
+      entityKind: "instance",
+      entityId: "instance",
+      topics: ["dashboard", "overview", "queue"],
+      data: { paused: true },
+    });
     return success({ paused: true });
   }
 
   if (method === "POST" && pathname === "/api/v1/instance/resume") {
     ctx.setPaused(false);
+    ctx.platformEvents.append({
+      type: "instance.resumed",
+      entityKind: "instance",
+      entityId: "instance",
+      topics: ["dashboard", "overview", "queue"],
+      data: { paused: false },
+    });
     return success({ paused: false });
   }
 

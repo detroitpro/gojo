@@ -42,6 +42,12 @@ export const WorkAttentionSchema = z.enum([
 ]);
 export type WorkAttention = z.infer<typeof WorkAttentionSchema>;
 
+export const WorkResolutionSchema = z.enum(["operator"]);
+export type WorkResolution = z.infer<typeof WorkResolutionSchema>;
+
+export const WorkRecheckStatusSchema = z.enum(["active", "terminal", "unresolved"]);
+export type WorkRecheckStatus = z.infer<typeof WorkRecheckStatusSchema>;
+
 export const WorkProvenanceSchema = z.enum([
   "gojo-agent",
   "human",
@@ -95,12 +101,27 @@ export const WorkItemSchema = z.object({
   nextSyncAt: z.string().nullable(),
   syncState: SourceSyncStateSchema,
   lastError: z.string().nullable(),
+  resolution: WorkResolutionSchema.nullable(),
+  resolvedAt: z.string().nullable(),
+  resolvedBy: z.string().nullable(),
+  resolutionNote: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
 });
 export type WorkItem = z.infer<typeof WorkItemSchema>;
+
+export interface WorkRecheckResult {
+  status: WorkRecheckStatus;
+  work: WorkItem;
+  detail: string | null;
+}
+
+export interface WorkResolveInput {
+  resolvedBy?: string | null;
+  note?: string | null;
+}
 
 export interface WorkStatus {
   working: number;

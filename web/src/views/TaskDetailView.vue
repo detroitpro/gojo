@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -10,6 +10,7 @@ import {
   runTask,
 } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { Schedule, Task } from "@/types";
 
@@ -93,8 +94,9 @@ watch(taskId, () => {
   void load();
 });
 
-onMounted(() => {
-  void load();
+useLiveRefresh({
+  topics: ["tasks", "runs", "schedules"],
+  refresh: load,
 });
 </script>
 

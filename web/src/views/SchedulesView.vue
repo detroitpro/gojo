@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import {
@@ -12,6 +12,7 @@ import {
 import SchedulesTimelineChart from "@/components/SchedulesTimelineChart.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import {
@@ -207,10 +208,15 @@ watch([projectFilter, taskFilter, enabledFilter, query, sort, order], () => {
   }
 });
 
-onMounted(() => {
-  void loadProjects();
-  void load();
-  void loadUpcoming();
+useLiveRefresh({
+  topics: ["schedules"],
+  refresh: async () => {
+    await Promise.all([load(), loadUpcoming()]);
+  },
+});
+useLiveRefresh({
+  topics: ["projects"],
+  refresh: loadProjects,
 });
 </script>
 

@@ -14,6 +14,11 @@ export type {
   TaskRepository,
 } from "./repositories";
 export { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
+export { createPlatformChangeEventRepository } from "./platform-events";
+export type {
+  ListPlatformChangeEventsInput,
+  PlatformChangeEventRepository,
+} from "./platform-events";
 export { createWorkRepositories } from "./work-repositories";
 export type {
   CreateProjectSourceInput,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -10,6 +10,7 @@ import {
   resumeInstance,
 } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { formatMergeRate, impactCountLabel } from "@/lib/impact-format";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { DashboardImpact, DashboardOverviewProject } from "@/types";
@@ -126,9 +127,13 @@ watch(projectFilter, (value) => {
   void router.replace({ query: nextQuery });
 });
 
-onMounted(() => {
-  void load();
-  void loadImpact();
+useLiveRefresh({
+  topics: ["dashboard", "overview"],
+  refresh: load,
+});
+useLiveRefresh({
+  topics: ["impact"],
+  refresh: loadImpact,
 });
 </script>
 

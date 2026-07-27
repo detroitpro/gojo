@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 
+import { PlatformChangeFeed } from "@/events/platform-change-feed";
 import {
   GenericWebhookIngestor,
   GitLabSourceAdapter,
@@ -120,6 +121,50 @@ describe("sources/GitLab adapter", () => {
       kind: "issue",
       nativeKey: "issue:7",
     });
+    expect(result.backfillComplete).toBe(true);
+  });
+
+  test("verifies individual merge requests and issues by native key", async () => {
+    const adapter = new GitLabSourceAdapter();
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/merge_requests/7")) {
+        return Response.json({
+          iid: 7,
+          title: "Ship work ledger",
+          state: "merged",
+          merged_at: "2026-07-27T17:00:00.000Z",
+          web_url: "https://gitlab.example.com/acme/app/-/merge_requests/7",
+          updated_at: "2026-07-27T17:00:00.000Z",
+          author: { name: "A. Agent", bot: true },
+        });
+      }
+      return new Response("missing", { status: 404 });
+    }) as typeof fetch;
+
+    await expect(
+      adapter.getItem!({
+        baseUrl: "https://gitlab.example.com",
+        externalKey: "acme/app",
+        kind: "pull-request",
+        nativeKey: "pull-request:7",
+        fetchImpl,
+      }),
+    ).resolves.toMatchObject({
+      status: "found",
+      item: { delivery: "merged", nativeKey: "pull-request:7" },
+    });
+    await expect(
+      adapter.getItem!({
+        baseUrl: "https://gitlab.example.com",
+        externalKey: "acme/app",
+        kind: "issue",
+        nativeKey: "issue:12",
+        fetchImpl,
+      }),
+    ).resolves.toMatchObject({
+      status: "unresolved",
+    });
   });
 });
 
@@ -156,6 +201,7 @@ describe("sources/runtime", () => {
     const service = new SourceSyncService({
       db,
       registry: new SourceAdapterRegistry([failingAdapter]),
+      platformEvents: new PlatformChangeFeed(db),
     });
 
     expect(await service.syncSource(source.id)).toMatchObject({ errors: 1 });
@@ -173,6 +219,11 @@ describe("sources/runtime", () => {
       syncState: "error",
       lastError: "provider unavailable",
     });
+    expect(
+      new PlatformChangeFeed(db)
+        .list({ afterSequence: 0, projectId: project.id })
+        .map((event) => event.type),
+    ).toContain("source.sync_failed");
     db.close();
   });
 
@@ -302,7 +353,32 @@ describe("sources/runtime", () => {
             },
           ],
           cursor: "next:1",
-          backfillComplete: false,
+          backfillComplete: true,
+        };
+      },
+      async getItem(input) {
+        if (input.nativeKey === "8") {
+          return {
+            status: "found",
+            item: {
+              kind: "pull-request",
+              nativeKey: "8",
+              title: "Already merged remotely",
+              summary: "",
+              delivery: "merged",
+              outcome: "pending",
+              provenance: "external",
+              labels: [],
+              nativeState: "merged",
+              nativeJson: "{}",
+              webUrl: "https://gitlab.example.com/acme/app/-/merge_requests/8",
+              observedAt: "2026-07-27T16:11:00.000Z",
+            },
+          };
+        }
+        return {
+          status: "unresolved",
+          detail: `Missing ${input.nativeKey}`,
         };
       },
     };
@@ -335,8 +411,9 @@ describe("sources/runtime", () => {
         .listByProject(project.id, { limit: 20, offset: 0 })
         .items.find((item) => item.nativeKey === "8"),
     ).toMatchObject({
-      attention: "stale",
-      syncState: "stale",
+      attention: "none",
+      syncState: "current",
+      delivery: "merged",
     });
     const observed = work.items
       .listByProject(project.id, { limit: 20, offset: 0 })
@@ -355,8 +432,158 @@ describe("sources/runtime", () => {
     });
     expect(work.items.status(project.id)).toMatchObject({
       verifiedOpen: 1,
-      staleOpen: 2,
+      staleOpen: 1,
     });
+    db.close();
+  });
+
+  test("does not mark absent work stale when the active snapshot is incomplete", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { project, source, work } = seedSource(db);
+    work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "pull-request",
+      nativeKey: "pull-request:8",
+      title: "Still open somewhere",
+      delivery: "open",
+      provenance: "external",
+      nativeState: "opened",
+      syncState: "current",
+    });
+    const incompleteAdapter: SourceAdapter = {
+      type: "gitlab",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["pull-request"],
+      },
+      async listActive() {
+        return { items: [], cursor: "page:2", backfillComplete: false };
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([incompleteAdapter]),
+    });
+
+    await service.syncSource(source.id);
+    expect(
+      work.items
+        .listByProject(project.id, { limit: 20, offset: 0 })
+        .items.find((item) => item.nativeKey === "pull-request:8"),
+    ).toMatchObject({
+      attention: "none",
+      syncState: "current",
+    });
+    db.close();
+  });
+
+  test("rechecks and resolves source-backed work items for operators", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { project, source, work } = seedSource(db);
+    const stale = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "issue",
+      nativeKey: "issue:3",
+      title: "Ghost issue",
+      delivery: "open",
+      attention: "stale",
+      provenance: "external",
+      nativeState: "opened",
+      syncState: "stale",
+      lastError: "No longer present in the source active-work snapshot",
+    });
+    const adapter: SourceAdapter = {
+      type: "gitlab",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["issue"],
+      },
+      async listActive() {
+        return { items: [], cursor: null, backfillComplete: true };
+      },
+      async getItem() {
+        return {
+          status: "found",
+          item: {
+            kind: "issue",
+            nativeKey: "issue:3",
+            title: "Ghost issue",
+            summary: "",
+            delivery: "closed",
+            outcome: "pending",
+            provenance: "external",
+            labels: [],
+            nativeState: "closed",
+            nativeJson: "{}",
+            webUrl: "https://gitlab.example.com/acme/app/-/issues/3",
+            observedAt: "2026-07-27T18:00:00.000Z",
+          },
+        };
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([adapter]),
+      platformEvents: new PlatformChangeFeed(db),
+    });
+
+    const recheck = await service.recheckWorkItem(stale.id);
+    expect(recheck).toMatchObject({
+      status: "terminal",
+      work: { delivery: "closed", attention: "none", syncState: "current" },
+    });
+    expect(work.items.status(project.id)).toMatchObject({
+      needsAttention: 0,
+      staleOpen: 0,
+    });
+
+    const ghost = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "issue",
+      nativeKey: "issue:4",
+      title: "Unresolved ghost",
+      delivery: "open",
+      attention: "stale",
+      provenance: "external",
+      nativeState: "opened",
+      syncState: "stale",
+    });
+    const unresolvedAdapter: SourceAdapter = {
+      ...adapter,
+      async getItem() {
+        return { status: "unresolved", detail: "not found" };
+      },
+    };
+    const unresolvedService = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([unresolvedAdapter]),
+      platformEvents: new PlatformChangeFeed(db),
+    });
+    expect(await unresolvedService.recheckWorkItem(ghost.id)).toMatchObject({
+      status: "unresolved",
+      work: { attention: "stale" },
+    });
+    const resolved = unresolvedService.resolveWorkItem(ghost.id, {
+      resolvedBy: "ops",
+      note: "Closed outside gojo",
+    });
+    expect(resolved).toMatchObject({
+      resolution: "operator",
+      attention: "none",
+      delivery: "open",
+    });
+    expect(work.items.status(project.id)).toMatchObject({ needsAttention: 0, staleOpen: 0 });
     db.close();
   });
 

@@ -26,6 +26,7 @@ if [[ -f "$ROOT/web/package.json" ]]; then
     bun install --cwd web
   fi
   bun run --cwd web typecheck
+  bun run --cwd web test
   bun run build:web
 fi
 

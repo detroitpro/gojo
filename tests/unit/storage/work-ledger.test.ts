@@ -15,12 +15,13 @@ function seedProject(db: Database) {
 }
 
 describe("storage/work-ledger", () => {
-  test("schema v6 creates the source-agnostic ledger tables", () => {
+  test("latest schema includes the v6 source-agnostic ledger tables", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(6);
+    expect(SCHEMA_VERSION).toBe(8);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
+    expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
     expect(db.tableNames()).toEqual(
       expect.arrayContaining([
         "source_connections",
@@ -161,6 +162,89 @@ describe("storage/work-ledger", () => {
       verifiedOpen: 1,
       staleOpen: 1,
       needsAttention: 1,
+    });
+    db.close();
+  });
+
+  test("operator resolution clears attention counts without inventing terminal delivery", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { project } = seedProject(db);
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "Company GitLab",
+      adapter: "gitlab",
+      baseUrl: "https://gitlab.example.com",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["issue"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/work-ledger",
+      displayName: "acme/work-ledger",
+    });
+    const stale = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "issue",
+      nativeKey: "ENG-99",
+      title: "Ghost issue",
+      delivery: "open",
+      attention: "stale",
+      provenance: "external",
+      nativeState: "opened",
+      syncState: "stale",
+      lastError: "No longer present in the source active-work snapshot",
+    });
+
+    const resolved = work.items.resolve(stale.id, {
+      resolvedBy: "operator",
+      note: "Confirmed closed upstream",
+    });
+    expect(resolved).toMatchObject({
+      attention: "none",
+      delivery: "open",
+      resolution: "operator",
+      resolvedBy: "operator",
+      resolutionNote: "Confirmed closed upstream",
+      lastError: null,
+    });
+    expect(work.items.status(project.id)).toMatchObject({
+      needsAttention: 0,
+      staleOpen: 0,
+      verifiedOpen: 0,
+    });
+
+    const reopened = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "issue",
+      nativeKey: "ENG-99",
+      title: "Ghost issue returned",
+      delivery: "open",
+      provenance: "external",
+      nativeState: "opened",
+      syncState: "current",
+      lastError: null,
+    });
+    expect(reopened).toMatchObject({
+      resolution: null,
+      resolvedAt: null,
+      resolvedBy: null,
+      resolutionNote: null,
+      syncState: "current",
+      attention: "none",
+    });
+    expect(work.items.status(project.id)).toMatchObject({
+      verifiedOpen: 1,
+      needsAttention: 0,
     });
     db.close();
   });

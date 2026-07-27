@@ -38,10 +38,24 @@ export interface SourceListResult {
   backfillComplete: boolean;
 }
 
+export interface SourceGetItemInput {
+  baseUrl: string;
+  externalKey: string;
+  kind: string;
+  nativeKey: string;
+  token?: string | null;
+  fetchImpl?: typeof fetch;
+}
+
+export type SourceGetItemResult =
+  | { status: "found"; item: NormalizedSourceItem }
+  | { status: "unresolved"; detail: string };
+
 export interface SourceAdapter {
   readonly type: string;
   readonly capabilities: SourceCapabilities;
   listActive(input: SourceListInput): Promise<SourceListResult>;
+  getItem?(input: SourceGetItemInput): Promise<SourceGetItemResult>;
 }
 
 export class SourceAdapterRegistry {

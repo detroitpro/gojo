@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { disableTask, enableTask, listProjects, listTasks, runTask } from "@/api";
@@ -7,6 +7,7 @@ import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
@@ -220,22 +221,13 @@ watch([projectFilter, enabledFilter, query, sort, order], () => {
   }
 });
 
-/** Keep recent-run strip live while this page is open. */
-let refreshTimer: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  void loadProjects();
-  void load();
-  refreshTimer = setInterval(() => {
-    void load();
-  }, 4_000);
+useLiveRefresh({
+  topics: ["tasks", "runs", "overview"],
+  refresh: load,
 });
-
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
+useLiveRefresh({
+  topics: ["projects"],
+  refresh: loadProjects,
 });
 </script>
 

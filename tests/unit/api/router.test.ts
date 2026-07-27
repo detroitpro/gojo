@@ -106,6 +106,33 @@ describe("api/router", () => {
     expect(response.status).toBe(201);
     const body = (await response.json()) as { data: { project: { name: string } } };
     expect(body.data.project.name).toBe("demo");
+    expect(
+      ctx!.platformEvents
+        .list({ afterSequence: 0, topics: ["projects"] })
+        .some((event) => event.type === "project.created"),
+    ).toBe(true);
+  });
+
+  test("authenticates and replays the durable platform event stream", async () => {
+    const { baseUrl, token } = await boot();
+    const unauthorized = await fetch(`${baseUrl}/api/v1/events`);
+    expect(unauthorized.status).toBe(401);
+
+    const event = ctx!.platformEvents.append({
+      type: "instance.paused",
+      entityKind: "instance",
+      entityId: "instance",
+      topics: ["dashboard", "queue"],
+    });
+    const abort = new AbortController();
+    const response = await fetch(`${baseUrl}/api/v1/events?topic=dashboard`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: abort.signal,
+    });
+    expect(response.status).toBe(200);
+    const chunk = await response.body!.getReader().read();
+    expect(new TextDecoder().decode(chunk.value)).toContain(`id: ${event.sequence}`);
+    abort.abort();
   });
 
   test("serves unified work, status, sources, detail, and run progress", async () => {
@@ -194,6 +221,36 @@ describe("api/router", () => {
     expect(sources.status).toBe(200);
     expect(await sources.json()).toMatchObject({
       data: { sources: [expect.objectContaining({ id: source.id })] },
+    });
+
+    ctx!.work.items.update(ticket.id, {
+      attention: "stale",
+      syncState: "stale",
+      lastError: "No longer present in the source active-work snapshot",
+    });
+    const resolve = await fetch(`${baseUrl}/api/v1/work/${ticket.id}/resolve`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ note: "Closed upstream" }),
+    });
+    expect(resolve.status).toBe(200);
+    expect(await resolve.json()).toMatchObject({
+      data: {
+        work: {
+          attention: "none",
+          resolution: "operator",
+          resolutionNote: "Closed upstream",
+          delivery: "open",
+        },
+      },
+    });
+    const recheck = await fetch(`${baseUrl}/api/v1/work/${ticket.id}/recheck`, {
+      method: "POST",
+      headers: auth,
+    });
+    expect(recheck.status).toBe(200);
+    expect(await recheck.json()).toMatchObject({
+      data: { result: { status: "unresolved" } },
     });
 
     const progress = await fetch(`${baseUrl}/api/v1/runs/${run.id}/progress`, {

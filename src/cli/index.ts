@@ -162,6 +162,13 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
           ...(remote !== undefined ? { remoteUrl: remote } : {}),
         });
         ensureProjectRepositorySource(ctx.db, project.id);
+        ctx.platformEvents.append({
+          projectId: project.id,
+          type: "project.created",
+          entityKind: "project",
+          entityId: project.id,
+          topics: ["dashboard", "overview", "projects", "sources"],
+        });
         printOutput(format, { project });
         break;
       }
@@ -192,6 +199,22 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         }
         const sync = syncProjectFromManifest(ctx.repos, project);
         ensureProjectRepositorySource(ctx.db, project.id);
+        ctx.platformEvents.append({
+          projectId: project.id,
+          type: "project.synced",
+          entityKind: "project",
+          entityId: project.id,
+          topics: [
+            "dashboard",
+            "overview",
+            "projects",
+            "tasks",
+            "schedules",
+            "work",
+            "sources",
+          ],
+          data: sync,
+        });
         printOutput(format, { sync });
         break;
       }
@@ -264,6 +287,33 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         const source = ctx.work.sources.findById(sourceId);
         if (!source || source.projectId !== id) die("project source not found", format);
         printOutput(format, { sync: await ctx.sourceSync.syncSource(sourceId) });
+        break;
+      }
+      case "recheck-work": {
+        const id = parsed.positional[0];
+        const workItemId = parsed.positional[1];
+        if (!id || !workItemId) {
+          die("usage: gojo project recheck-work <id> <workItemId>", format);
+        }
+        const work = ctx.work.items.findById(workItemId);
+        if (!work || work.projectId !== id) die("work item not found", format);
+        printOutput(format, { result: await ctx.sourceSync.recheckWorkItem(workItemId) });
+        break;
+      }
+      case "resolve-work": {
+        const id = parsed.positional[0];
+        const workItemId = parsed.positional[1];
+        if (!id || !workItemId) {
+          die("usage: gojo project resolve-work <id> <workItemId>", format);
+        }
+        const work = ctx.work.items.findById(workItemId);
+        if (!work || work.projectId !== id) die("work item not found", format);
+        printOutput(format, {
+          work: ctx.sourceSync.resolveWorkItem(workItemId, {
+            resolvedBy: getFlagString(parsed, "by") ?? "cli",
+            note: getFlagString(parsed, "note") ?? null,
+          }),
+        });
         break;
       }
       case "remove": {

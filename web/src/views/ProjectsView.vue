@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -15,6 +15,7 @@ import DirectoryPicker from "@/components/DirectoryPicker.vue";
 import ModalDialog from "@/components/ModalDialog.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
+import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { type SortOrder } from "@/lib/pagination";
 import {
@@ -299,8 +300,9 @@ watch(
   { deep: true },
 );
 
-onMounted(() => {
-  void load();
+useLiveRefresh({
+  topics: ["projects", "impact", "work", "sources"],
+  refresh: load,
 });
 </script>
 

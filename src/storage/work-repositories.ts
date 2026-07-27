@@ -10,6 +10,8 @@ import type {
   WorkLinkType,
   WorkOutcome,
   WorkProvenance,
+  WorkResolveInput,
+  WorkResolution,
   WorkStatus,
 } from "@shared/work";
 
@@ -204,6 +206,10 @@ interface WorkItemRow {
   next_sync_at: string | null;
   sync_state: SourceSyncState;
   last_error: string | null;
+  resolution: WorkResolution | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
   created_at: string;
   updated_at: string;
   started_at: string | null;
@@ -234,6 +240,10 @@ function mapWorkItem(row: WorkItemRow): WorkItem {
     nextSyncAt: row.next_sync_at,
     syncState: row.sync_state,
     lastError: row.last_error,
+    resolution: row.resolution ?? null,
+    resolvedAt: row.resolved_at ?? null,
+    resolvedBy: row.resolved_by ?? null,
+    resolutionNote: row.resolution_note ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     startedAt: row.started_at,
@@ -711,6 +721,12 @@ export function createWorkRepositories(db: Database) {
         const syncState = input.syncState ?? "current";
         const attention = attentionForSync(input.attention, syncState);
         const now = nowIso();
+        const reopen =
+          syncState === "current" &&
+          existing?.resolution != null &&
+          ["draft", "open", "review", "blocked"].includes(
+            input.delivery ?? existing.delivery,
+          );
         const workItem = existing
           ? (() => {
               sqlite
@@ -720,8 +736,9 @@ export function createWorkRepositories(db: Database) {
                     outcome = ?, attention = ?, provenance = ?, actor_name = ?,
                     agent_profile_id = ?, labels_json = ?, native_state = ?,
                     native_json = ?, web_url = ?, observed_at = ?, next_sync_at = ?,
-                    sync_state = ?, last_error = ?, updated_at = ?, started_at = ?,
-                    completed_at = ?
+                    sync_state = ?, last_error = ?,
+                    resolution = ?, resolved_at = ?, resolved_by = ?, resolution_note = ?,
+                    updated_at = ?, started_at = ?, completed_at = ?
                   WHERE id = ?`,
                 )
                 .run(
@@ -745,6 +762,10 @@ export function createWorkRepositories(db: Database) {
                   input.nextSyncAt === undefined ? existing.next_sync_at : input.nextSyncAt,
                   syncState,
                   input.lastError === undefined ? existing.last_error : input.lastError,
+                  reopen ? null : existing.resolution,
+                  reopen ? null : existing.resolved_at,
+                  reopen ? null : existing.resolved_by,
+                  reopen ? null : existing.resolution_note,
                   now,
                   input.startedAt === undefined ? existing.started_at : input.startedAt,
                   input.completedAt === undefined ? existing.completed_at : input.completedAt,
@@ -817,6 +838,7 @@ export function createWorkRepositories(db: Database) {
           | "attention"
           | "nativeState"
           | "nativeJson"
+          | "webUrl"
           | "observedAt"
           | "nextSyncAt"
           | "syncState"
@@ -832,9 +854,9 @@ export function createWorkRepositories(db: Database) {
         .query(
           `UPDATE work_items SET
             title = ?, summary = ?, execution = ?, delivery = ?, outcome = ?,
-            attention = ?, native_state = ?, native_json = ?, observed_at = ?,
-            next_sync_at = ?, sync_state = ?, last_error = ?, started_at = ?,
-            completed_at = ?, updated_at = ?
+            attention = ?, native_state = ?, native_json = ?, web_url = ?,
+            observed_at = ?, next_sync_at = ?, sync_state = ?, last_error = ?,
+            started_at = ?, completed_at = ?, updated_at = ?
           WHERE id = ?`,
         )
         .run(
@@ -846,6 +868,7 @@ export function createWorkRepositories(db: Database) {
           input.attention ?? existing.attention,
           input.nativeState === undefined ? existing.nativeState : input.nativeState,
           input.nativeJson ?? existing.nativeJson,
+          input.webUrl === undefined ? existing.webUrl : input.webUrl,
           input.observedAt === undefined ? existing.observedAt : input.observedAt,
           input.nextSyncAt === undefined ? existing.nextSyncAt : input.nextSyncAt,
           input.syncState ?? existing.syncState,
@@ -918,6 +941,43 @@ export function createWorkRepositories(db: Database) {
       return this.findById(canonical.id);
     },
 
+    resolve(id: string, input: WorkResolveInput = {}): WorkItem | null {
+      const existing = this.findById(id);
+      if (!existing) return null;
+      if (existing.resolution === "operator") {
+        return existing;
+      }
+      const now = nowIso();
+      sqlite
+        .query(
+          `UPDATE work_items SET
+            attention = 'none',
+            resolution = 'operator',
+            resolved_at = ?,
+            resolved_by = ?,
+            resolution_note = ?,
+            last_error = NULL,
+            updated_at = ?
+          WHERE id = ?`,
+        )
+        .run(now, input.resolvedBy ?? null, input.note ?? null, now, id);
+      return this.findById(id);
+    },
+
+    clearResolution(id: string): WorkItem | null {
+      const existing = this.findById(id);
+      if (!existing || existing.resolution == null) return existing;
+      sqlite
+        .query(
+          `UPDATE work_items SET
+            resolution = NULL, resolved_at = NULL, resolved_by = NULL,
+            resolution_note = NULL, updated_at = ?
+          WHERE id = ?`,
+        )
+        .run(nowIso(), id);
+      return this.findById(id);
+    },
+
     markSourceFailure(sourceId: string, message: string, nextSyncAt: string): void {
       const now = nowIso();
       sqlite
@@ -926,6 +986,7 @@ export function createWorkRepositories(db: Database) {
            SET attention = 'sync-error', sync_state = 'error', next_sync_at = ?,
              last_error = ?, updated_at = ?
            WHERE source_id = ? AND archived_at IS NULL
+             AND resolution IS NULL
              AND delivery IN ('draft', 'open', 'review', 'blocked')`,
         )
         .run(nextSyncAt, message, now, sourceId);
@@ -1038,11 +1099,14 @@ export function createWorkRepositories(db: Database) {
               'integrating', 'reporting'
             ) THEN 1 ELSE 0 END) AS working,
             SUM(CASE WHEN execution = 'queued' THEN 1 ELSE 0 END) AS queued,
-            SUM(CASE WHEN attention <> 'none' THEN 1 ELSE 0 END) AS needs_attention,
+            SUM(CASE WHEN attention <> 'none' AND resolution IS NULL
+              THEN 1 ELSE 0 END) AS needs_attention,
             SUM(CASE WHEN delivery IN ('draft', 'open', 'review')
-              AND sync_state = 'current' THEN 1 ELSE 0 END) AS verified_open,
+              AND sync_state = 'current' AND resolution IS NULL
+              THEN 1 ELSE 0 END) AS verified_open,
             SUM(CASE WHEN delivery IN ('draft', 'open', 'review')
-              AND sync_state IN ('stale', 'error') THEN 1 ELSE 0 END) AS stale_open,
+              AND sync_state IN ('stale', 'error') AND resolution IS NULL
+              THEN 1 ELSE 0 END) AS stale_open,
             MAX(observed_at) AS as_of
           FROM work_items
           WHERE project_id = ? AND archived_at IS NULL`,

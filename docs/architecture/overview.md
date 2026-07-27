@@ -17,6 +17,7 @@ CLI / HTTP API / scheduler tick (one process)
         ├─ integration (commit / PR / merge queue)
         ├─ sources (GitHub / GitLab / Forgejo / generic work sync)
         ├─ work (durable cross-source ledger, links, events, freshness)
+        ├─ events (durable platform invalidation feed and SSE replay)
         └─ notifications, secrets, backup, telemetry
 ```
 
@@ -39,6 +40,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
 | `validation/` | Validation profile execution (inherits daemon PATH) |
 | `integration/` | Integration modes, merge queue, external PR status reconciler |
+| `events/` | Durable platform change feed, retention, and SSE delivery |
 | `sources/` | Source adapter registry, repository discovery, polling/webhook ingestion |
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |
@@ -49,7 +51,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `diagnostics/` | Doctor checks (instance tools + project baseCheckout / validationTools) |
 | `process/` | Subprocess supervision |
 | `filesystem/` | Host browse helpers for UI |
-| `shared/` | Manifest, handoff, IDs, run states, source-agnostic Work contract |
+| `shared/` | Manifest, handoff, IDs, run states, Work and platform-event contracts |
 | `config/` | Paths, instance config |
 | `telemetry/` | Optional OTEL hooks |
 | `artifacts/`, `audit/`, `updates/` | Supporting domains |

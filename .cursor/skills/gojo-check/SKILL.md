@@ -21,7 +21,7 @@ Delegates to `scripts/ci-check.sh`:
 
 - Daemon `typecheck`
 - Daemon `bun test` (no coverage % fail gate)
-- Web typecheck + build
+- Web typecheck + component tests + build
 - Site Astro build
 - Compile `bin/gojo`
 

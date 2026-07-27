@@ -22,6 +22,8 @@ import {
 import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
 import { extractPrNumber, initialNextCheckAt } from '@/integration/status-reconciler';
+import { PlatformChangeFeed } from '@/events/platform-change-feed';
+import type { PlatformEventTopic } from '@shared/events';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
 import { priorityForTrigger } from '@shared/scheduling';
 import {
@@ -104,10 +106,33 @@ export interface CreateRunInput {
   enqueue?: boolean;
 }
 
+export function platformTopicsForRunEvent(type: string): PlatformEventTopic[] {
+  const topics = new Set<PlatformEventTopic>(['runs', 'work']);
+  if (
+    type === 'run.created' ||
+    type === 'run.state_changed' ||
+    type === 'run.awaiting_approval' ||
+    type === 'run.finished' ||
+    type === 'run.failed'
+  ) {
+    topics.add('dashboard');
+    topics.add('overview');
+    topics.add('queue');
+    topics.add('tasks');
+    topics.add('projects');
+    if (type === 'run.created') topics.add('schedules');
+  }
+  if (type === 'run.finished' || type === 'run.failed' || type === 'run.accounting_error') {
+    topics.add('impact');
+  }
+  return [...topics];
+}
+
 export class RunCoordinator {
   private readonly paths: GojoPaths;
   private readonly workspace: WorkspaceManager;
   private readonly eventBus: RunEventBus;
+  private readonly platformEvents: PlatformChangeFeed | null;
   private readonly mergeQueue = new MergeQueue();
   private readonly repos;
   private readonly db: Database;
@@ -124,6 +149,7 @@ export class RunCoordinator {
     paths: GojoPaths;
     workspace: WorkspaceManager;
     eventBus?: RunEventBus;
+    platformEvents?: PlatformChangeFeed;
     apiBaseUrl?: string;
     issueAgentToken?: (runId: string) => { token: string; id: string } | null;
     revokeAgentToken?: (tokenId: string) => void;
@@ -132,6 +158,7 @@ export class RunCoordinator {
     this.db = deps.db;
     this.workspace = deps.workspace;
     this.eventBus = deps.eventBus ?? new RunEventBus();
+    this.platformEvents = deps.platformEvents ?? null;
     this.repos = createRepositories(deps.db);
     this.work = createWorkRepositories(deps.db);
     this.apiBaseUrl = deps.apiBaseUrl ?? null;
@@ -1389,6 +1416,17 @@ export class RunCoordinator {
       at,
       ...(data !== undefined ? { data } : {}),
     };
+    if (run && type !== 'run.agent.output') {
+      this.platformEvents?.append({
+        projectId: run.projectId,
+        type,
+        entityKind: 'run',
+        entityId: runId,
+        topics: platformTopicsForRunEvent(type),
+        data: data ?? {},
+        occurredAt: at,
+      });
+    }
     this.eventBus.emit(event);
   }
 
