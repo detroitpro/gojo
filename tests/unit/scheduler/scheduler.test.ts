@@ -133,6 +133,71 @@ describe("scheduler/scheduler", () => {
     expect(called).toBe(false);
   });
 
+  test("tick enqueues with queue overlap policy while a run is active", async () => {
+    const dueAt = "2026-01-01T01:00:00.000Z";
+    const { repos, schedule } = setupSchedule(dueAt);
+    repos.schedules.update(schedule.id, { overlapPolicy: "queue" });
+
+    const project = repos.projects.list()[0]!;
+    const task = repos.tasks.listByProject(project.id)[0]!;
+    repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      scheduleId: schedule.id,
+      idempotencyKey: "active-run",
+      trigger: "schedule",
+      state: RunState.Running,
+    });
+
+    const triggers: string[] = [];
+    const scheduler = new Scheduler({
+      db: db!,
+      leaseHolderId: "node-a",
+      onTrigger: async (scheduleId) => {
+        triggers.push(scheduleId);
+      },
+    });
+
+    expect(await scheduler.acquireLease(60_000)).toBe(true);
+    await scheduler.tick(new Date("2026-01-01T01:05:00.000Z"));
+    expect(triggers).toEqual([schedule.id]);
+  });
+
+  test("tick cancel_replace cancels active run then triggers", async () => {
+    const dueAt = "2026-01-01T01:00:00.000Z";
+    const { repos, schedule } = setupSchedule(dueAt);
+    repos.schedules.update(schedule.id, { overlapPolicy: "cancel_replace" });
+
+    const project = repos.projects.list()[0]!;
+    const task = repos.tasks.listByProject(project.id)[0]!;
+    repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      scheduleId: schedule.id,
+      idempotencyKey: "active-run",
+      trigger: "schedule",
+      state: RunState.Running,
+    });
+
+    const cancelled: string[] = [];
+    const triggers: string[] = [];
+    const scheduler = new Scheduler({
+      db: db!,
+      leaseHolderId: "node-a",
+      onCancelActive: async (scheduleId) => {
+        cancelled.push(scheduleId);
+      },
+      onTrigger: async (scheduleId) => {
+        triggers.push(scheduleId);
+      },
+    });
+
+    expect(await scheduler.acquireLease(60_000)).toBe(true);
+    await scheduler.tick(new Date("2026-01-01T01:05:00.000Z"));
+    expect(cancelled).toEqual([schedule.id]);
+    expect(triggers).toEqual([schedule.id]);
+  });
+
   test("start and stop manage lease lifecycle", async () => {
     setupSchedule("2026-01-01T01:00:00.000Z");
     const scheduler = new Scheduler({

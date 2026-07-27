@@ -10,11 +10,7 @@ import {
   resumeInstance,
 } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
-import {
-  formatMergeRate,
-  impactCountLabel,
-  verificationBadgeClass,
-} from "@/lib/impact-format";
+import { formatMergeRate, impactCountLabel } from "@/lib/impact-format";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { DashboardImpact, DashboardOverviewProject } from "@/types";
 
@@ -214,52 +210,21 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="impact.categories.length > 0" class="impact-categories">
-            <span
+          <div v-if="impact.categories.length > 0" class="stats-row impact-stats impact-category-stats">
+            <div
               v-for="entry in impact.categories"
               :key="`${entry.category}-${entry.verification}`"
-              class="badge"
-              :class="verificationBadgeClass(entry.verification)"
+              class="stat"
               :title="`${entry.verification} (trust level)`"
             >
-              {{ impactCountLabel(entry.category, entry.verification) }}: {{ entry.count }}
-            </span>
+              <div class="label">
+                {{ impactCountLabel(entry.category, entry.verification) }}
+              </div>
+              <div class="value">{{ entry.count }}</div>
+            </div>
           </div>
-          <div v-else class="muted text-sm impact-categories">
+          <div v-else class="muted text-sm impact-empty">
             No impact items recorded in this range
-          </div>
-
-          <div v-if="impact.recentItems.length > 0" class="table-wrap impact-recent">
-            <table class="data">
-              <thead>
-                <tr>
-                  <th>Task</th>
-                  <th>Subject</th>
-                  <th>Summary</th>
-                  <th>Trust</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in impact.recentItems.slice(0, 8)" :key="item.id">
-                  <td>
-                    <RouterLink
-                      :to="{ name: 'run-detail', params: { id: item.runId } }"
-                      class="entity-name"
-                    >
-                      {{ item.taskName }}
-                    </RouterLink>
-                    <span class="muted text-sm"> · {{ item.projectName }}</span>
-                  </td>
-                  <td class="mono">{{ item.subject }}</td>
-                  <td>{{ item.summary }}</td>
-                  <td>
-                    <span class="badge" :class="verificationBadgeClass(item.verification)">
-                      {{ item.verification }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </section>
@@ -371,14 +336,11 @@ onMounted(() => {
   margin-bottom: 0;
 }
 
-.impact-categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.impact-category-stats {
   margin-top: 1rem;
 }
 
-.impact-recent {
+.impact-empty {
   margin-top: 1rem;
 }
 </style>

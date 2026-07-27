@@ -16,9 +16,11 @@ export type {
 export { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
 export {
   getInstanceSetting,
+  getSchedulingPolicy,
   isInstancePaused,
   setInstancePaused,
   setInstanceSetting,
+  setSchedulingPolicy,
 } from "./instance-settings";
 export {
   acquireSchedulerLease,

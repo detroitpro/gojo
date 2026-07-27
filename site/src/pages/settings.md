@@ -62,7 +62,7 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 | --- | --- |
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/task-prompts) |
 | `validationProfile` | Ordered checks after the agent exits |
-| `concurrency` | Stored on the task row at sync (`projectLimit`, `overlapPolicy: skip \| queue \| cancel`) — **not enforced by the coordinator yet**; overlap today is per **schedule** row (see below) |
+| `concurrency` | Synced onto the task row (`projectLimit`, `overlapPolicy`) for manifest intent; **starts** are gated by the instance **run admission** policy (Settings → Run admission / `GET /api/v1/instance/scheduling`). Per-schedule `overlapPolicy` still controls whether a cron tick enqueues while that schedule already has work |
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
 | `selfHeal` | Optional `{ task, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |
@@ -71,9 +71,9 @@ A **task** is the unit of work: prompt, agent, validation profile, concurrency, 
 
 | Setting | Role |
 | --- | --- |
-| **Cron + timezone** | When the task should fire (DST-aware) |
+| **Cron + timezone** | Suggested start time (DST-aware). The dispatcher admits when a slot is free; queued scheduled runs expire at the next cron occurrence if they never start |
 | **Enabled** | Pause without deleting history |
-| **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` — per schedule row in SQLite (defaults to `skip`); enforced by the scheduler; **not** in `gojo.yaml` today |
+| **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` — per schedule row in SQLite (defaults to `skip`); controls enqueue-on-overlap; **not** in `gojo.yaml` today |
 | **Missed-run policy** | `skip` / `run_once` / `run_all` / `run_latest` after downtime — same storage as overlap (defaults to `skip` at create; scheduler falls back to `run_latest` only when the stored value is invalid) |
 | **Retries / backoff** | Distinguish infra blips from real task failure |
 | **Disable after N failures** | Auto-stop noisy schedules and notify |

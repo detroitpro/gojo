@@ -27,11 +27,11 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and trust-labeled impact claims), and per-project tables of enabled tasks with a last-five-runs strip.
+**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project tables of enabled tasks with a last-five-runs strip. Per-item impact audit lives on project detail and run detail.
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos, open a project for health and structured config, sync manifests.
+**Projects** — register Git repos, open a project for health, Impact detail (category stats, per-task show/hide, auditable item list), structured config, and sync manifests.
 
 ![gojo runs list](/images/ui-runs.png)
 

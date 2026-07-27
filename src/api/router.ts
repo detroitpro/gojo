@@ -35,6 +35,10 @@ import {
 import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "@/app/project-sync";
+import {
+  getSchedulingPolicy,
+  setSchedulingPolicy,
+} from "@/app/instance-settings";
 import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import { getDashboardOverview } from "@/storage/dashboard-overview";
@@ -47,6 +51,7 @@ import {
   listTasksPage,
 } from "@/storage/paged-lists";
 import { paginateArray, parsePageParamsFromUrl } from "@shared/pagination";
+import { safeParseSchedulingPolicy } from "@shared/scheduling";
 
 type RunListItem = {
   id: string;
@@ -505,16 +510,12 @@ export async function handleApiRequest(
       return failure("not_found", "Task not found", 404);
     }
 
-    const run = await ctx.coordinator.createRun({
+    const run = await ctx.coordinator.enqueueRun({
       projectId: task.projectId,
       taskId: task.id,
       trigger: "api",
     });
-
-    void ctx.coordinator.executeRun(run.id).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(JSON.stringify({ level: "error", component: "api", runId: run.id, error: message }));
-    });
+    ctx.dispatcher.kick();
 
     return success({ run }, 202);
   }
@@ -756,13 +757,84 @@ export async function handleApiRequest(
       return success({ run: ctx.repos.runs.findById(runId) });
     }
 
-    const retried = await ctx.coordinator.createRun({
+    const retried = await ctx.coordinator.enqueueRun({
       projectId: run.projectId,
       taskId: run.taskId,
       trigger: "manual",
     });
-    void ctx.coordinator.executeRun(retried.id).catch(() => undefined);
+    ctx.dispatcher.kick();
     return success({ run: retried }, 202);
+  }
+
+  if (method === "GET" && pathname === "/api/v1/queue") {
+    const page = parsePageParamsFromUrl(url);
+    const policy = getSchedulingPolicy(ctx.db);
+    const queued = ctx.repos.runs.listQueued();
+    const runningByProject = ctx.repos.runs.countRunningByProject();
+    const runningCount = Object.values(runningByProject).reduce((a, b) => a + b, 0);
+    const waitingRows = queued.map((run, index) => {
+      const project = ctx.repos.projects.findById(run.projectId);
+      const task = ctx.repos.tasks.findById(run.taskId);
+      return {
+        runId: run.id,
+        projectId: run.projectId,
+        projectName: project?.name ?? null,
+        taskId: run.taskId,
+        taskName: task?.name ?? null,
+        trigger: run.trigger,
+        priority: run.priority,
+        notBeforeAt: run.notBeforeAt,
+        expiresAt: run.expiresAt,
+        createdAt: run.createdAt,
+        position: index + 1,
+      };
+    });
+    const paged = paginateArray(waitingRows, page);
+    const running = ctx.repos.runs
+      .listNonTerminal()
+      .filter((run) =>
+        ["Preparing", "Running", "Validating", "AwaitingApproval", "Integrating", "Reporting"].includes(
+          run.state,
+        ),
+      )
+      .map((run) => {
+        const project = ctx.repos.projects.findById(run.projectId);
+        const task = ctx.repos.tasks.findById(run.taskId);
+        return {
+          runId: run.id,
+          projectId: run.projectId,
+          projectName: project?.name ?? null,
+          taskId: run.taskId,
+          taskName: task?.name ?? null,
+          state: run.state,
+          admittedAt: run.admittedAt,
+        };
+      });
+
+    return success({
+      policy,
+      counts: { running: runningCount, waiting: waitingRows.length },
+      waiting: paged.items,
+      total: paged.total,
+      limit: paged.limit,
+      offset: paged.offset,
+      running,
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/v1/instance/scheduling") {
+    return success({ policy: getSchedulingPolicy(ctx.db) });
+  }
+
+  if (method === "PATCH" && pathname === "/api/v1/instance/scheduling") {
+    const body = await readJsonBody<unknown>(request);
+    const parsed = safeParseSchedulingPolicy(body);
+    if (!parsed.success) {
+      return failure("validation_error", parsed.error.message, 400);
+    }
+    const policy = setSchedulingPolicy(ctx.db, parsed.data);
+    ctx.dispatcher.kick();
+    return success({ policy });
   }
 
   if (method === "GET" && pathname === "/api/v1/dashboard") {
@@ -781,6 +853,10 @@ export async function handleApiRequest(
       .query<{ count: number }, []>("SELECT COUNT(*) as count FROM runs")
       .get()?.count ?? 0;
     const activeRuns = ctx.repos.runs.listNonTerminal().length;
+    const waitingRuns = ctx.repos.runs.listQueued().length;
+    const runningByProject = ctx.repos.runs.countRunningByProject();
+    const runningRuns = Object.values(runningByProject).reduce((a, b) => a + b, 0);
+    const policy = getSchedulingPolicy(ctx.db);
 
     return success({
       projects,
@@ -788,6 +864,9 @@ export async function handleApiRequest(
       schedules,
       runs,
       activeRuns,
+      runningRuns,
+      waitingRuns,
+      schedulingPolicy: policy,
       paused: ctx.isPaused(),
     });
   }

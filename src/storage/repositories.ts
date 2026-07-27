@@ -99,6 +99,10 @@ interface RunRow {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  not_before_at: string | null;
+  expires_at: string | null;
+  admitted_at: string | null;
+  priority: number;
 }
 
 interface AttemptRow {
@@ -221,6 +225,10 @@ export function mapRun(row: RunRow): Run {
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     errorMessage: row.error_message,
+    notBeforeAt: row.not_before_at ?? null,
+    expiresAt: row.expires_at ?? null,
+    admittedAt: row.admitted_at ?? null,
+    priority: row.priority ?? 30,
   };
 }
 
@@ -411,6 +419,12 @@ export interface RunRepository {
   findByIdempotencyKey(key: string): Run | null;
   listByProject(projectId: string): Run[];
   listNonTerminal(): Run[];
+  /** Queued/Scheduled runs waiting for admission, ordered for the dispatcher. */
+  listQueued(): Run[];
+  /** Runs currently occupying an execution slot, keyed by projectId. */
+  countRunningByProject(): Record<string, number>;
+  /** Most recent admission timestamp across all runs. */
+  latestAdmittedAt(): string | null;
   /** Count trailing failed/timed-out/infra-failure runs for a task (stops at first success). */
   countConsecutiveFailuresForTask(taskId: string, lookback: number): number;
   countByProjectTriggerSince(
@@ -867,13 +881,17 @@ export function createRepositories(db: Database): Repositories {
       const id = ulid();
       const createdAt = nowIso();
       const state = input.state ?? RunState.Scheduled;
+      const notBeforeAt = input.notBeforeAt ?? createdAt;
+      const expiresAt = input.expiresAt ?? null;
+      const priority = input.priority ?? 30;
 
       sqlite
         .query(
           `INSERT INTO runs (
             id, project_id, task_id, schedule_id, state, idempotency_key,
-            trigger, created_at, started_at, finished_at, error_message
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
+            trigger, created_at, started_at, finished_at, error_message,
+            not_before_at, expires_at, admitted_at, priority
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, NULL, ?)`,
         )
         .run(
           id,
@@ -884,6 +902,9 @@ export function createRepositories(db: Database): Repositories {
           input.idempotencyKey,
           input.trigger,
           createdAt,
+          notBeforeAt,
+          expiresAt,
+          priority,
         );
 
       return mapRun({
@@ -898,6 +919,10 @@ export function createRepositories(db: Database): Repositories {
         started_at: null,
         finished_at: null,
         error_message: null,
+        not_before_at: notBeforeAt,
+        expires_at: expiresAt,
+        admitted_at: null,
+        priority,
       });
     },
 
@@ -932,6 +957,49 @@ export function createRepositories(db: Database): Repositories {
         )
         .all();
       return rows.map(mapRun);
+    },
+
+    listQueued() {
+      const rows = sqlite
+        .query<RunRow, []>(
+          `SELECT * FROM runs
+           WHERE state IN ('Queued', 'Scheduled')
+           ORDER BY priority ASC,
+             COALESCE(not_before_at, created_at) ASC,
+             created_at ASC`,
+        )
+        .all();
+      return rows.map(mapRun);
+    },
+
+    countRunningByProject() {
+      const rows = sqlite
+        .query<{ project_id: string; count: number }, []>(
+          `SELECT project_id, COUNT(*) as count FROM runs
+           WHERE state IN (
+             'Preparing', 'Running', 'Validating', 'AwaitingApproval',
+             'Integrating', 'Reporting'
+           )
+           GROUP BY project_id`,
+        )
+        .all();
+      const out: Record<string, number> = {};
+      for (const row of rows) {
+        out[row.project_id] = row.count;
+      }
+      return out;
+    },
+
+    latestAdmittedAt() {
+      const row = sqlite
+        .query<{ admitted_at: string }, []>(
+          `SELECT admitted_at FROM runs
+           WHERE admitted_at IS NOT NULL
+           ORDER BY admitted_at DESC
+           LIMIT 1`,
+        )
+        .get();
+      return row?.admitted_at ?? null;
     },
 
     countConsecutiveFailuresForTask(taskId, lookback) {
@@ -1004,13 +1072,28 @@ export function createRepositories(db: Database): Repositories {
         finishedAt: input.finishedAt !== undefined ? input.finishedAt : existing.finishedAt,
         errorMessage:
           input.errorMessage !== undefined ? input.errorMessage : existing.errorMessage,
+        admittedAt: input.admittedAt !== undefined ? input.admittedAt : existing.admittedAt,
+        notBeforeAt: input.notBeforeAt !== undefined ? input.notBeforeAt : existing.notBeforeAt,
+        expiresAt: input.expiresAt !== undefined ? input.expiresAt : existing.expiresAt,
+        priority: input.priority !== undefined ? input.priority : existing.priority,
       };
 
       sqlite
         .query(
-          `UPDATE runs SET state = ?, started_at = ?, finished_at = ?, error_message = ? WHERE id = ?`,
+          `UPDATE runs SET state = ?, started_at = ?, finished_at = ?, error_message = ?,
+           admitted_at = ?, not_before_at = ?, expires_at = ?, priority = ? WHERE id = ?`,
         )
-        .run(next.state, next.startedAt, next.finishedAt, next.errorMessage, id);
+        .run(
+          next.state,
+          next.startedAt,
+          next.finishedAt,
+          next.errorMessage,
+          next.admittedAt,
+          next.notBeforeAt,
+          next.expiresAt,
+          next.priority,
+          id,
+        );
 
       return next;
     },

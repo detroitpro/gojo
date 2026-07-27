@@ -5,6 +5,7 @@ import type { RunState } from "@shared/run-states";
 
 import { describeCron } from "@/scheduler/describe-cron";
 import type { Database } from "@/storage";
+import type { DashboardOverviewRun } from "@/storage/dashboard-overview";
 import type { Project, Run, RunTrigger, Schedule, Task } from "@/storage/types";
 import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
 
@@ -43,6 +44,8 @@ export type TaskListRow = Task & {
   lastRunId: string | null;
   lastRunState: string | null;
   lastRunCreatedAt: string | null;
+  /** Up to 5 recent runs, oldest → newest (same shape as dashboard overview). */
+  recentRuns: DashboardOverviewRun[];
 };
 
 export type ScheduleListRow = Schedule & {
@@ -81,6 +84,10 @@ type SqlRunRow = {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  not_before_at: string | null;
+  expires_at: string | null;
+  admitted_at: string | null;
+  priority: number;
   project_name: string | null;
   task_name: string | null;
 };
@@ -330,6 +337,11 @@ export function listTasksPage(
     )
     .all(...params, input.limit, input.offset);
 
+  const recentByTask = loadRecentRunsForTasks(
+    db,
+    rows.map((row) => row.id),
+  );
+
   return {
     items: rows.map((row) => ({
       ...mapTask({ ...row, description: row.description ?? "" }),
@@ -338,11 +350,65 @@ export function listTasksPage(
       lastRunId: row.last_run_id,
       lastRunState: row.last_run_state,
       lastRunCreatedAt: row.last_run_created_at,
+      recentRuns: recentByTask.get(row.id) ?? [],
     })),
     total,
     limit: input.limit,
     offset: input.offset,
   };
+}
+
+type RecentRunRow = {
+  id: string;
+  task_id: string;
+  state: string;
+  trigger: string;
+  created_at: string;
+  finished_at: string | null;
+  rn: number;
+};
+
+/** Last 5 runs per task (oldest → newest), scoped to the given task ids. */
+function loadRecentRunsForTasks(
+  db: Database,
+  taskIds: string[],
+): Map<string, DashboardOverviewRun[]> {
+  const byTask = new Map<string, DashboardOverviewRun[]>();
+  if (taskIds.length === 0) {
+    return byTask;
+  }
+
+  const placeholders = taskIds.map(() => "?").join(", ");
+  const rows = db
+    .connection()
+    .query<RecentRunRow, SQLQueryBindings[]>(
+      `SELECT id, task_id, state, trigger, created_at, finished_at, rn
+       FROM (
+         SELECT id, task_id, state, trigger, created_at, finished_at,
+                ROW_NUMBER() OVER (
+                  PARTITION BY task_id ORDER BY created_at DESC
+                ) AS rn
+         FROM runs
+         WHERE task_id IN (${placeholders})
+       )
+       WHERE rn <= 5
+       ORDER BY task_id, rn DESC`,
+    )
+    .all(...taskIds);
+
+  for (const row of rows) {
+    const list = byTask.get(row.task_id) ?? [];
+    list.push({
+      id: row.id,
+      state: row.state as RunState,
+      trigger: row.trigger,
+      createdAt: row.created_at,
+      finishedAt: row.finished_at,
+    });
+    byTask.set(row.task_id, list);
+  }
+
+  return byTask;
 }
 
 export function listRunsPage(

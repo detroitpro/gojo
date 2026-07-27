@@ -23,6 +23,8 @@ const DEFAULT_LEASE_TTL_MS = 60_000;
 export interface SchedulerDeps {
   db: Database;
   onTrigger: (scheduleId: string, fireAt: Date) => Promise<void>;
+  /** Cancel non-terminal runs for a schedule (cancel_replace overlap policy). */
+  onCancelActive?: (scheduleId: string) => Promise<void>;
   leaseHolderId: string;
   isPaused?: () => boolean;
   tickIntervalMs?: number;
@@ -42,6 +44,7 @@ function parsePolicy<T extends string>(value: string, allowed: readonly T[], fal
 export class Scheduler {
   private readonly db: Database;
   private readonly onTrigger: (scheduleId: string, fireAt: Date) => Promise<void>;
+  private readonly onCancelActive: ((scheduleId: string) => Promise<void>) | null;
   private readonly leaseHolderId: string;
   private readonly isPausedFn: () => boolean;
   private readonly tickIntervalMs: number;
@@ -55,6 +58,7 @@ export class Scheduler {
     this.db = deps.db;
     this.repos = createRepositories(deps.db);
     this.onTrigger = deps.onTrigger;
+    this.onCancelActive = deps.onCancelActive ?? null;
     this.leaseHolderId = deps.leaseHolderId;
     this.isPausedFn = deps.isPaused ?? (() => isInstancePaused(deps.db));
     this.tickIntervalMs = deps.tickIntervalMs ?? DEFAULT_TICK_MS;
@@ -174,10 +178,17 @@ export class Scheduler {
       const queuedCount = this.repos.runs.countQueuedBySchedule(schedule.id);
       const decision = shouldStartGivenOverlap(overlapPolicy, hasActiveRun, queuedCount);
 
-      if (decision === "skip" || decision === "queue") {
+      if (decision === "skip") {
         continue;
       }
 
+      if (decision === "cancel_replace") {
+        if (this.onCancelActive) {
+          await this.onCancelActive(schedule.id);
+        }
+      }
+
+      // "start", "queue", and post-cancel "cancel_replace" all enqueue a run.
       await this.onTrigger(schedule.id, fireAt);
       lastFiredAt = fireAt;
     }

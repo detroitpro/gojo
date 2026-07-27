@@ -18,6 +18,7 @@ import type {
   Project,
   ProjectDoctorResult,
   ProjectSyncResponse,
+  QueueSnapshot,
   Run,
   RunArtifactsResult,
   RunDiffResult,
@@ -26,6 +27,7 @@ import type {
   RunIntegration,
   Schedule,
   SchedulesUpcomingResult,
+  SchedulingPolicy,
   Task,
   User,
 } from "./types";
@@ -156,6 +158,26 @@ export async function updateInstance(input: {
     body: JSON.stringify(input),
   });
   return data;
+}
+
+export async function getQueue(query: ListQuery = {}): Promise<QueueSnapshot> {
+  const { data } = await request<QueueSnapshot>(`/queue${buildListQuery(query)}`);
+  return data;
+}
+
+export async function getSchedulingPolicy(): Promise<SchedulingPolicy> {
+  const { data } = await request<{ policy: SchedulingPolicy }>("/instance/scheduling");
+  return data.policy;
+}
+
+export async function updateSchedulingPolicy(
+  policy: SchedulingPolicy,
+): Promise<SchedulingPolicy> {
+  const { data } = await request<{ policy: SchedulingPolicy }>("/instance/scheduling", {
+    method: "PATCH",
+    body: JSON.stringify(policy),
+  });
+  return data.policy;
 }
 
 export async function getInstanceDoctor(): Promise<InstanceDoctorResult> {

@@ -286,12 +286,16 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         if (!task) {
           die("task not found", format);
         }
-        const run = await ctx.coordinator.createRun({
+        const run = await ctx.coordinator.enqueueRun({
           projectId: task.projectId,
           taskId: task.id,
           trigger: "manual",
         });
-        const finished = await ctx.coordinator.executeRun(run.id);
+        if (format === "text") {
+          process.stderr.write(`queued ${run.id}; waiting for admission slot…\n`);
+        }
+        await ctx.dispatcher.waitForTerminal(run.id);
+        const finished = ctx.repos.runs.findById(run.id);
         printOutput(format, { run: finished });
         break;
       }
@@ -313,12 +317,16 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         if (!existing) {
           die("run not found", format);
         }
-        const run = await ctx.coordinator.createRun({
+        const run = await ctx.coordinator.enqueueRun({
           projectId: existing.projectId,
           taskId: existing.taskId,
           trigger: "manual",
         });
-        const finished = await ctx.coordinator.executeRun(run.id);
+        if (format === "text") {
+          process.stderr.write(`queued ${run.id}; waiting for admission slot…\n`);
+        }
+        await ctx.dispatcher.waitForTerminal(run.id);
+        const finished = ctx.repos.runs.findById(run.id);
         printOutput(format, { run: finished });
         break;
       }

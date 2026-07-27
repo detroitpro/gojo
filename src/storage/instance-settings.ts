@@ -1,4 +1,12 @@
+import {
+  DEFAULT_SCHEDULING_POLICY,
+  parseSchedulingPolicy,
+  type SchedulingPolicy,
+} from "@shared/scheduling";
+
 import type { Database } from "./db";
+
+const SCHEDULING_POLICY_KEY = "scheduling_policy";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -47,4 +55,22 @@ export function isInstancePaused(db: Database): boolean {
 
 export function setInstancePaused(db: Database, paused: boolean): void {
   setInstanceSetting(db, "paused", paused);
+}
+
+export function getSchedulingPolicy(db: Database): SchedulingPolicy {
+  const value = getInstanceSetting(db, SCHEDULING_POLICY_KEY);
+  if (value === undefined) {
+    return { ...DEFAULT_SCHEDULING_POLICY };
+  }
+  try {
+    return parseSchedulingPolicy(value);
+  } catch {
+    return { ...DEFAULT_SCHEDULING_POLICY };
+  }
+}
+
+export function setSchedulingPolicy(db: Database, policy: SchedulingPolicy): SchedulingPolicy {
+  const parsed = parseSchedulingPolicy(policy);
+  setInstanceSetting(db, SCHEDULING_POLICY_KEY, parsed);
+  return parsed;
 }

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -87,7 +87,11 @@ CREATE TABLE IF NOT EXISTS runs (
   created_at TEXT NOT NULL,
   started_at TEXT,
   finished_at TEXT,
-  error_message TEXT
+  error_message TEXT,
+  not_before_at TEXT,
+  expires_at TEXT,
+  admitted_at TEXT,
+  priority INTEGER NOT NULL DEFAULT 30
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
@@ -289,7 +293,22 @@ CREATE TABLE IF NOT EXISTS run_integrations (
 );
 `,
   },
+  {
+    version: 5,
+    sql: `
+ALTER TABLE runs ADD COLUMN not_before_at TEXT;
+ALTER TABLE runs ADD COLUMN expires_at TEXT;
+ALTER TABLE runs ADD COLUMN admitted_at TEXT;
+ALTER TABLE runs ADD COLUMN priority INTEGER NOT NULL DEFAULT 30;
+CREATE INDEX IF NOT EXISTS idx_runs_queue ON runs(state, priority, not_before_at);
+`,
+  },
 ];
+
+/** Applied after incremental migrations so upgraded DBs have columns first. */
+export const SCHEMA_INDEXES = `
+CREATE INDEX IF NOT EXISTS idx_runs_queue ON runs(state, priority, not_before_at);
+`;
 
 export const EXPECTED_TABLES = [
   "schema_migrations",

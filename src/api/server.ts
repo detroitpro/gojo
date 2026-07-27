@@ -26,6 +26,7 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   const handler = createRouter(ctx);
 
   await ctx.scheduler.start();
+  ctx.dispatcher.start();
 
   const server = Bun.serve({
     hostname,

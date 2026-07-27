@@ -70,9 +70,54 @@ export interface Run {
   startedAt: string | null;
   finishedAt: string | null;
   errorMessage: string | null;
+  notBeforeAt?: string | null;
+  expiresAt?: string | null;
+  admittedAt?: string | null;
+  priority?: number;
   /** Present on list/detail API responses */
   projectName?: string | null;
   taskName?: string | null;
+}
+
+export interface SchedulingPolicy {
+  maxConcurrentRuns: number;
+  maxConcurrentRunsPerProject: number;
+  minStartIntervalMs: number;
+  maxLoadPerCpu: number;
+}
+
+export interface QueueWaitingItem {
+  runId: string;
+  projectId: string;
+  projectName: string | null;
+  taskId: string;
+  taskName: string | null;
+  trigger: RunTrigger;
+  priority: number;
+  notBeforeAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  position: number;
+}
+
+export interface QueueRunningItem {
+  runId: string;
+  projectId: string;
+  projectName: string | null;
+  taskId: string;
+  taskName: string | null;
+  state: RunState;
+  admittedAt: string | null;
+}
+
+export interface QueueSnapshot {
+  policy: SchedulingPolicy;
+  counts: { running: number; waiting: number };
+  waiting: QueueWaitingItem[];
+  running: QueueRunningItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface Attempt {
@@ -154,6 +199,9 @@ export interface DashboardStats {
   schedules: number;
   runs: number;
   activeRuns: number;
+  runningRuns?: number;
+  waitingRuns?: number;
+  schedulingPolicy?: SchedulingPolicy;
   paused: boolean;
 }
 
@@ -290,6 +338,8 @@ export interface Task {
   lastRunId?: string | null;
   lastRunState?: string | null;
   lastRunCreatedAt?: string | null;
+  /** Present on list API: up to 5 recent runs, oldest → newest. */
+  recentRuns?: DashboardOverviewRun[];
 }
 
 export interface ApiTokenInfo {

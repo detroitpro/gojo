@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { listProjects, listRuns, listTasks, runTask } from "@/api";
+import { getQueue, listProjects, listRuns, listTasks, runTask } from "@/api";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
@@ -48,6 +48,7 @@ const stateFilter = ref("");
 const triggerFilter = ref("");
 const query = ref("");
 const enqueueBusy = ref(false);
+const queuePositions = ref<Record<string, number>>({});
 
 const {
   page,
@@ -173,10 +174,24 @@ watch(projectFilter, () => {
   void loadTaskOptions();
 });
 
+async function loadQueuePositions() {
+  try {
+    const snap = await getQueue({ limit: MAX_PAGE_LIMIT, offset: 0 });
+    const next: Record<string, number> = {};
+    for (const item of snap.waiting) {
+      next[item.runId] = item.position;
+    }
+    queuePositions.value = next;
+  } catch {
+    queuePositions.value = {};
+  }
+}
+
 onMounted(() => {
   void loadProjects();
   void loadTaskOptions();
   void load();
+  void loadQueuePositions();
 });
 </script>
 
@@ -297,7 +312,15 @@ onMounted(() => {
                 <div>{{ run.projectName || "Unknown project" }}</div>
                 <div class="mono muted text-sm">{{ run.projectId.slice(0, 10) }}…</div>
               </td>
-              <td><StateBadge :state="run.state" /></td>
+              <td>
+                <StateBadge :state="run.state" />
+                <div
+                  v-if="(run.state === 'Queued' || run.state === 'Scheduled') && queuePositions[run.id]"
+                  class="mono muted text-sm"
+                >
+                  queue #{{ queuePositions[run.id] }}
+                </div>
+              </td>
               <td class="mono">{{ run.trigger }}</td>
               <td>
                 <RouterLink :to="{ name: 'run-detail', params: { id: run.id } }" class="mono">

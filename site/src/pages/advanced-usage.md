@@ -57,9 +57,12 @@ Manifests should contain **references**, not raw API keys.
 
 ## Overlap and concurrency
 
-Long AI runs often exceed the schedule interval. **Overlap is enforced per schedule row** (`overlapPolicy` on the SQLite schedule — defaults to `skip`; not in `gojo.yaml` yet). Prefer `skip` or `queue`; avoid `allow_parallel` on the same repo.
+Long AI runs often exceed the schedule interval. Two layers apply:
 
-Manifest `concurrency` (`projectLimit`, `overlapPolicy: skip | queue | cancel`) is synced onto the task row for future use but **is not enforced by the coordinator today** — do not rely on it to serialize runs.
+1. **Schedule overlap** (`overlapPolicy` on the SQLite schedule — defaults to `skip`; not in `gojo.yaml` yet) — whether a cron tick enqueues while that schedule already has an active/queued run. Prefer `skip` or `queue`; avoid `allow_parallel` on the same repo.
+2. **Instance admission** (Settings → Run admission, or `GET|PATCH /api/v1/instance/scheduling`) — global/per-project caps, start stagger, and optional load guard. Cron is a **suggested** start; the queue admits under those caps (defaults: 2 concurrent, 1 per project). See the **Queue** view for waiting positions.
+
+Manifest `concurrency` is synced onto the task row for intent, but **instance admission** is what serializes starts across projects.
 
 One maintenance task rewriting the lockfile while another runs is how you get invalid “green” results.
 

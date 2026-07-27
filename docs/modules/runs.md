@@ -10,11 +10,21 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 
 | File | Role |
 |------|------|
+| `admission.ts` | Pure `selectAdmissions` — caps, priority, fairness, stagger, load guard, expiry |
+| `dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; calls `executeRun` for admits |
 | `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + task prompt + validation gate |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
 | `events.ts` | In-memory run event bus |
 | `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
 | `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
+
+## Admission / dispatcher
+
+All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`src/shared/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
+
+- Defaults: `maxConcurrentRuns: 2`, `maxConcurrentRunsPerProject: 1`, `minStartIntervalMs: 30000`, `maxLoadPerCpu: 1.0`
+- Priority: manual/api/web `10`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
+- API: `GET /api/v1/queue`, `GET|PATCH /api/v1/instance/scheduling`
 
 ## Prompt assembly
 
