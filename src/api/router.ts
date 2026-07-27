@@ -36,7 +36,9 @@ import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "@/app/project-sync";
 import {
+  getInstanceSetting,
   getSchedulingPolicy,
+  setInstanceSetting,
   setSchedulingPolicy,
 } from "@/app/instance-settings";
 import { openApiDocument } from "./openapi";
@@ -918,19 +920,9 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/dashboard") {
     const projects = ctx.repos.projects.list().length;
-    const tasks = ctx.db
-      .connection()
-      .query<{ count: number }, []>("SELECT COUNT(*) as count FROM tasks")
-      .get()?.count ?? 0;
-    const schedules =
-      ctx.db
-        .connection()
-        .query<{ count: number }, []>("SELECT COUNT(*) as count FROM schedules")
-        .get()?.count ?? 0;
-    const runs = ctx.db
-      .connection()
-      .query<{ count: number }, []>("SELECT COUNT(*) as count FROM runs")
-      .get()?.count ?? 0;
+    const tasks = ctx.repos.tasks.count();
+    const schedules = ctx.repos.schedules.count();
+    const runs = ctx.repos.runs.count();
     const activeRuns = ctx.repos.runs.listNonTerminal().length;
     const waitingRuns = ctx.repos.runs.listQueued().length;
     const runningByProject = ctx.repos.runs.countRunningByProject();
@@ -1051,13 +1043,11 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/notification-channels") {
     // Full map always — PUT replaces the whole map; UI pages entries client-side.
-    const row = ctx.db
-      .connection()
-      .query<{ value_json: string }, [string]>(
-        "SELECT value_json FROM instance_settings WHERE key = ?",
-      )
-      .get("notification_channels");
-    const channels = row ? (JSON.parse(row.value_json) as Record<string, unknown>) : {};
+    const value = getInstanceSetting(ctx.db, "notification_channels");
+    const channels =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
     return success({ channels });
   }
 
@@ -1071,15 +1061,7 @@ export async function handleApiRequest(
       const message = parsed.error.issues.map((issue) => issue.message).join("; ");
       return failure("validation_error", message || "Invalid notification channel map", 400);
     }
-    const now = new Date().toISOString();
-    ctx.db
-      .connection()
-      .query(
-        `INSERT INTO instance_settings (key, value_json, updated_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      )
-      .run("notification_channels", JSON.stringify(parsed.data), now);
+    setInstanceSetting(ctx.db, "notification_channels", parsed.data);
     return success({ channels: parsed.data });
   }
 

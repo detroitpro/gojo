@@ -439,7 +439,7 @@ async function runRunCommand(parsed: ParsedArgv, format: ReturnType<typeof getOu
         const runs =
           projectId && projectId.length > 0
             ? ctx.repos.runs.listByProject(projectId)
-            : ctx.db.connection().query("SELECT * FROM runs ORDER BY created_at DESC").all();
+            : ctx.repos.runs.listAll();
         printOutput(format, { runs });
         break;
       }
