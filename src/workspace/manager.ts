@@ -1,14 +1,15 @@
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import {
   addWorktree,
+  branchExists,
   createBranch,
+  deleteBranch,
   execGit,
   fetchAndFastForwardBranch,
   hasRemote,
   removeWorktree,
-  deleteBranch,
   resolveRemoteTrackingRef,
 } from '@/git/git';
 
@@ -16,6 +17,8 @@ export interface PrepareAttemptInput {
   repoPath: string;
   baseBranch: string;
   runId: string;
+  /** Project display name — sanitized into the branch/worktree path. */
+  projectName: string;
   taskName: string;
   /** Distinguishes multi-attempt branches under the same run. */
   attemptNumber?: number;
@@ -38,21 +41,19 @@ export interface CleanupOptions {
   keepBranch?: boolean;
 }
 
-function sanitizeTaskName(taskName: string): string {
-  return taskName
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 64) || 'task';
+function sanitizeSegment(value: string, fallback: string): string {
+  return (
+    value
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 64) || fallback
+  );
 }
 
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function shortRunId(runId: string): string {
-  return runId.slice(0, 8);
 }
 
 interface WorktreeRecord {
@@ -65,20 +66,24 @@ export class WorkspaceManager {
   private readonly worktrees = new Map<string, WorktreeRecord>();
 
   constructor(rootDir: string) {
-    this.rootDir = rootDir;
-    mkdirSync(rootDir, { recursive: true });
+    this.rootDir = resolve(rootDir);
+    mkdirSync(this.rootDir, { recursive: true });
   }
 
   buildBranchName(
     taskName: string,
     runId: string,
+    projectName: string,
     date = new Date(),
     attemptNumber = 1,
   ): string {
-    const safeTask = sanitizeTaskName(taskName);
+    const safeProject = sanitizeSegment(projectName, 'project');
+    const safeTask = sanitizeSegment(taskName, 'task');
     // Flat attempt suffix — nested refs like run-xxx/a2 fail when run-xxx already exists.
     const attemptSuffix = attemptNumber > 1 ? `-a${attemptNumber}` : '';
-    return `gojo/${safeTask}/${formatDate(date)}/run-${shortRunId(runId)}${attemptSuffix}`;
+    // Task segment stays immediately under `gojo/` so allowlists like
+    // `gojo/maintain-quality` still match; project disambiguates the global worktree root.
+    return `gojo/${safeTask}/${safeProject}/${formatDate(date)}/run-${runId}${attemptSuffix}`;
   }
 
   buildWorktreePath(branchName: string): string {
@@ -86,11 +91,39 @@ export class WorkspaceManager {
     return join(this.rootDir, safePath);
   }
 
+  /** True when path resolves inside the worktrees root (blocks path escape). */
+  isPathInsideRoot(candidate: string): boolean {
+    const resolved = resolve(candidate);
+    const root = this.rootDir.endsWith('/') ? this.rootDir : `${this.rootDir}/`;
+    return resolved === this.rootDir || resolved.startsWith(root);
+  }
+
   async syncBaseBranch(repoPath: string, baseBranch: string): Promise<void> {
     if (!(await hasRemote(repoPath))) {
       return;
     }
     await fetchAndFastForwardBranch(repoPath, baseBranch);
+  }
+
+  /**
+   * Remove a leftover directory/worktree under rootDir so addWorktree can proceed.
+   * Prefer git worktree remove; fall back to rm -rf for orphans.
+   */
+  async reclaimWorktreePath(repoPath: string, worktreePath: string): Promise<void> {
+    if (!existsSync(worktreePath)) {
+      return;
+    }
+    if (!this.isPathInsideRoot(worktreePath)) {
+      throw new Error(`Refusing to reclaim path outside worktrees root: ${worktreePath}`);
+    }
+
+    try {
+      await removeWorktree(repoPath, worktreePath);
+    } catch {
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+
+    this.worktrees.delete(worktreePath);
   }
 
   async prepareAttempt(input: PrepareAttemptInput): Promise<PrepareAttemptResult> {
@@ -117,6 +150,7 @@ export class WorkspaceManager {
     const branchName = this.buildBranchName(
       input.taskName,
       input.runId,
+      input.projectName,
       new Date(),
       attemptNumber,
     );
@@ -130,8 +164,21 @@ export class WorkspaceManager {
       startingCommit = baseRef.stdout;
     }
 
+    await this.reclaimWorktreePath(input.repoPath, worktreePath);
+    if (await branchExists(input.repoPath, branchName)) {
+      await deleteBranch(input.repoPath, branchName);
+    }
+
     await createBranch(input.repoPath, branchName, startPoint);
-    await addWorktree(input.repoPath, worktreePath, branchName);
+
+    try {
+      await addWorktree(input.repoPath, worktreePath, branchName);
+    } catch {
+      // One retry after reclaim — covers races / half-registered worktrees.
+      await this.reclaimWorktreePath(input.repoPath, worktreePath);
+      await addWorktree(input.repoPath, worktreePath, branchName);
+    }
+
     this.worktrees.set(worktreePath, {
       repoPath: input.repoPath,
       branchName,

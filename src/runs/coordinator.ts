@@ -252,6 +252,7 @@ export class RunCoordinator {
           repoPath: project.repoPath,
           baseBranch: integration.targetBranch ?? project.defaultBranch,
           runId: run.id,
+          projectName: project.name,
           taskName: task.name,
           attemptNumber,
           // Coordinator already synced above when configured; still prefer origin/

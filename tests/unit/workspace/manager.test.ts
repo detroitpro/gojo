@@ -81,6 +81,24 @@ describe('workspace/manager', () => {
     return { repoPath, worktreesRoot, remoteMainSha };
   }
 
+  test('buildBranchName uses full run id, project slug, and flat attempt suffix', () => {
+    const manager = new WorkspaceManager(join(tmpdir(), 'gojo-naming-unused'));
+    const date = new Date('2026-07-27T12:00:00.000Z');
+    const a = '01KYHG9471XYH8YAGNJFCBGP5A';
+    const b = '01KYHG9480NEY33WWDERBJV1BW';
+    expect(a.slice(0, 8)).toBe(b.slice(0, 8));
+
+    const branchA = manager.buildBranchName('maintain-merge', a, 'gojo', date);
+    const branchB = manager.buildBranchName('maintain-merge', b, 'rhystic-gaming', date);
+    expect(branchA).toBe(`gojo/maintain-merge/gojo/2026-07-27/run-${a}`);
+    expect(branchB).toBe(`gojo/maintain-merge/rhystic-gaming/2026-07-27/run-${b}`);
+    expect(branchA.includes('gojo/maintain-merge')).toBe(true);
+    expect(manager.buildWorktreePath(branchA)).not.toBe(manager.buildWorktreePath(branchB));
+
+    const retry = manager.buildBranchName('maintain-merge', a, 'gojo', date, 2);
+    expect(retry).toBe(`gojo/maintain-merge/gojo/2026-07-27/run-${a}-a2`);
+  });
+
   test('prepareAttempt creates branch and worktree', async () => {
     const { repoPath, worktreesRoot } = await createRepo();
     const manager = new WorkspaceManager(worktreesRoot);
@@ -90,13 +108,40 @@ describe('workspace/manager', () => {
       repoPath,
       baseBranch: 'main',
       runId,
+      projectName: 'demo',
       taskName: 'lint-fix',
     });
 
     const today = new Date().toISOString().slice(0, 10);
-    expect(attempt.branchName).toBe(`gojo/lint-fix/${today}/run-01JXYZAB`);
-    expect(attempt.worktreePath).toContain(`gojo__lint-fix__${today}__run-01JXYZAB`);
+    expect(attempt.branchName).toBe(`gojo/lint-fix/demo/${today}/run-${runId}`);
+    expect(attempt.worktreePath).toContain(
+      `gojo__lint-fix__demo__${today}__run-${runId}`,
+    );
     expect(attempt.startingCommit).toBe(await getHead(repoPath));
+  });
+
+  test('prepareAttempt reclaims orphan worktree path under rootDir', async () => {
+    const { repoPath, worktreesRoot } = await createRepo();
+    const manager = new WorkspaceManager(worktreesRoot);
+    const runId = '01JXYZABCDEFGHJKMNPQRSTVWX';
+    const today = new Date().toISOString().slice(0, 10);
+    const orphanPath = join(
+      worktreesRoot,
+      `gojo__lint-fix__demo__${today}__run-${runId}`,
+    );
+    mkdirSync(orphanPath, { recursive: true });
+    writeFileSync(join(orphanPath, 'stale.txt'), 'orphan');
+
+    const attempt = await manager.prepareAttempt({
+      repoPath,
+      baseBranch: 'main',
+      runId,
+      projectName: 'demo',
+      taskName: 'lint-fix',
+    });
+
+    expect(attempt.worktreePath).toBe(orphanPath);
+    expect(await getHead(attempt.worktreePath)).toBe(await getHead(repoPath));
   });
 
   test('prepareAttempt, write file, cleanup removes worktree and branch', async () => {
@@ -107,6 +152,7 @@ describe('workspace/manager', () => {
       repoPath,
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
       taskName: 'task one',
     });
 
@@ -128,6 +174,7 @@ describe('workspace/manager', () => {
       repoPath,
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
       taskName: 'keep-branch',
     });
 
@@ -148,6 +195,7 @@ describe('workspace/manager', () => {
       repoPath,
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
       taskName: 'deps-python',
       syncBeforeRun: true,
     });
