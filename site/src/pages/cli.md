@@ -17,7 +17,8 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | Command | Purpose |
 | --- | --- |
 | `gojo setup --username … --password …` | Create the first admin |
-| `gojo server start` | API + scheduler + web UI |
+| `gojo server start` | API + scheduler + web UI (foreground; blocks until Ctrl+C) |
+| `gojo server start --daemon` | Same, but return immediately (process keeps running) |
 | `gojo server status` | PID / health |
 | `gojo server stop` | Stop via PID file |
 | `gojo server doctor` | Git, disk, DB, agent detection, daemon PATH tools |
@@ -54,7 +55,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo run list\|inspect\|logs\|diff` | Observe |
+| `gojo run list [--project <id>]\|inspect\|logs\|diff` | Observe (`list` defaults to all projects) |
 | `gojo run approve\|reject [--reason]\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
@@ -63,7 +64,7 @@ Failed runs may enqueue a project **self-heal** task when the manifest declares 
 
 | Command | Purpose |
 | --- | --- |
-| `gojo backup create\|verify\|restore` | Instance disaster recovery |
+| `gojo backup create [dest]\|verify <archive>\|restore <archive>` | Instance disaster recovery (`create` picks a default dest when omitted) |
 
 ## Related
 

@@ -20,7 +20,7 @@ Also use **backup** commands to snapshot database, config, and secret key materi
 
 ```bash
 bun run gojo backup create
-bun run gojo backup verify
+bun run gojo backup verify <archive>
 bun run gojo backup restore <archive>
 ```
 
