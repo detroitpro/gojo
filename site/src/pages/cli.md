@@ -48,7 +48,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 
 | Command | Purpose |
 | --- | --- |
-| `gojo task list --project <id>\|inspect\|run\|enable\|disable\|cancel\|retry` | Inspect, run, and enable/disable (`list` requires `--project`) |
+| `gojo task list --project <id>\|inspect\|run\|enable\|disable\|cancel\|retry` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs
