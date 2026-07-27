@@ -164,6 +164,20 @@ Categories: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `
 
 See [Advanced usage](/advanced-usage) for concurrency, approvals, and [Self-healing](/self-healing) for healers (healers need the same one-root-cause limit).
 
+## Report-only agents (forge side effects)
+
+Not every agent should change the Git tree. For work that only talks to the forge (issue labels, triage notes, status checks via `gh` / `tea`), **omit `integration`** in `gojo.yaml` so the run ends in reporting mode with no commit or PR. Pair with a light validation profile (`noop` or “handoff exists”).
+
+This repository dogfoods that pattern as **`maintain-issue-tags`**:
+
+| Piece | Role |
+| --- | --- |
+| [`.gojo/labels.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/labels.md) | Owned label taxonomy (`area:*`, `domain:*`, reserved `gojo:*`) |
+| [`.gojo/tasks/maintain-issue-tags.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/tasks/maintain-issue-tags.md) | Prompt: reconcile labels, triage open issues, write handoff |
+| `gojo.yaml` task `maintain-issue-tags` | Cursor agent, `validationProfile: noop`, **no** `integration` block |
+
+Copy the shape for your repo: keep a labels doc as the single authority, cap issues per run, and forbid inventing labels in the prompt. Reserved labels such as `gojo:ready` + matching `area:*` are the **future** contract for workers to claim issues — no maintenance task in this repo filters on tags yet.
+
 ## Dogfood reference
 
 This repository’s scheduled maintenance prompts under [`.gojo/tasks/`](https://github.com/detroitpro/gojo/tree/main/.gojo/tasks) and shared [`.gojo/instructions.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/instructions.md) use the patterns above. Copy them; tighten further for riskier repos.

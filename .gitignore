@@ -11,6 +11,7 @@ dist/
 !.gojo/tasks/
 !.gojo/tasks/**
 !.gojo/instructions.md
+!.gojo/labels.md
 .gojo-test/
 
 .herenow/

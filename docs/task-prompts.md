@@ -15,6 +15,8 @@ Platform timeouts and `concurrency` do not replace prompt caps — they stop the
 
 When changing a maintenance prompt, keep the limit line explicit and require leftovers in `recommendedNextActions`.
 
+Report-only forge agents (no `integration` block): dogfood task `maintain-issue-tags` with taxonomy in [`.gojo/labels.md`](../.gojo/labels.md). User-facing write-up: [`site/src/pages/task-prompts.md`](../site/src/pages/task-prompts.md) (section *Report-only agents*).
+
 ## Runtime assembly
 
 Coordinator builds AI adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section. Shell adapters skip instructions. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).

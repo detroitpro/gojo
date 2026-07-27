@@ -96,7 +96,7 @@ Empty profile = pass (useful for pure analysis). Failed required steps fail the 
 
 | Mode | In `gojo.yaml`? | Behavior |
 | --- | --- | --- |
-| *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime) |
+| *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime). Use for forge side-effect agents (e.g. issue label triage via `gh`) that must not open PRs — see [Task prompts](/task-prompts#report-only-agents-forge-side-effects). |
 | **commit-only** | yes | Commit on the run branch; do not merge |
 | **pull-request** | yes | Push branch and open a PR via `integration.prTool` (`gh` or `tea`; default `gh`). Missing CLI / create failure → run **fails** with `local://pr/<branch>` recorded on the attempt. With `prTool: tea` + `prAutoMerge: true` (+ `prApiUrl` / `prRepo`), enable Forgejo merge-when-checks-succeed using `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN` in the daemon environment (warning only if the token/API call fails). |
 | **auto-merge** | yes | Merge into the target under the project merge lock after checks |

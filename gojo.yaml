@@ -194,6 +194,19 @@ tasks:
       disableAfterConsecutiveFailedRuns: 5
       backoff: exponential
 
+  maintain-issue-tags:
+    description: Ensure GitHub label taxonomy and triage issue tags (no code changes)
+    agent: cursor
+    promptFile: .gojo/tasks/maintain-issue-tags.md
+    validationProfile: noop
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: exponential
+
 schedules:
   self-heal:
     task: self-heal
@@ -218,6 +231,10 @@ schedules:
   maintain-merge:
     task: maintain-merge
     cron: "0 6 * * *"
+    timezone: America/Detroit
+  maintain-issue-tags:
+    task: maintain-issue-tags
+    cron: "30 5 * * *"
     timezone: America/Detroit
 
 notifications: {}
