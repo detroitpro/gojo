@@ -308,12 +308,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading && runs.length === 0" class="empty">Loading…</div>
+    <div v-if="loading && runs.length === 0" class="empty">Loading runs…</div>
     <div v-else-if="total === 0" class="empty">
       {{
         query || projectFilter || taskFilter || stateFilter || triggerFilter
           ? "No runs match these filters"
-          : "No runs recorded"
+          : "No runs yet — trigger a task or wait for the next schedule"
       }}
     </div>
     <template v-else>

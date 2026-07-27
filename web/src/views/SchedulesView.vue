@@ -319,12 +319,12 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="loading && schedules.length === 0" class="empty">Loading…</div>
+    <div v-if="loading && schedules.length === 0" class="empty">Loading schedules…</div>
     <div v-else-if="total === 0" class="empty">
       {{
-        query || projectFilter || enabledFilter !== "all"
+        query || projectFilter || taskFilter || enabledFilter !== "all"
           ? "No schedules match these filters"
-          : "No schedules configured"
+          : "No schedules yet — define them in gojo.yaml and Sync the project"
       }}
     </div>
     <template v-else>

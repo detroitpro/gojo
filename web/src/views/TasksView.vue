@@ -284,13 +284,15 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-if="loading && tasks.length === 0" class="empty">Loading…</div>
-    <div v-else-if="projects.length === 0" class="empty">Add a project first</div>
+    <div v-if="loading && tasks.length === 0" class="empty">Loading tasks…</div>
+    <div v-else-if="projects.length === 0" class="empty">
+      Add a project first, then Sync its gojo.yaml
+    </div>
     <div v-else-if="total === 0" class="empty">
       {{
         query || projectFilter || enabledFilter !== "all"
           ? "No tasks match these filters"
-          : "No tasks yet — sync a project manifest"
+          : "No tasks yet — Sync a project manifest to pull tasks from gojo.yaml"
       }}
     </div>
     <template v-else>

@@ -20,6 +20,8 @@ CLI / HTTP API / scheduler (one process)
 Admin UI: Vue app in `web/`, served as static assets (see `src/api/web-dist.ts`).  
 User docs site: Astro in `site/` (not served by the daemon).
 
+Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared CSS variables in `theme/tokens.css` (Six Eyes cyan / midnight navy, Fraunces + DM Sans + JetBrains Mono). The admin “ops console” look is CSS composition on those tokens, not a separate component library.
+
 ## `src/` modules (current)
 
 | Directory | Role |

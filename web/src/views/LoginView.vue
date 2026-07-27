@@ -63,11 +63,15 @@ async function submit() {
   <div class="auth-page">
     <div class="auth-box">
       <h1>gojo</h1>
-      <p v-if="mode === 'setup'">Initial setup — create the admin account.</p>
-      <p v-else-if="mode === 'login'">Sign in to the ops console.</p>
-      <p v-else>Connecting…</p>
+      <p v-if="mode === 'setup'" class="auth-purpose">
+        Create the admin account to finish setting up this instance.
+      </p>
+      <p v-else-if="mode === 'login'" class="auth-purpose">
+        Scheduled agent orchestration — sign in to the ops console.
+      </p>
+      <p v-else class="auth-purpose">Connecting…</p>
 
-      <div v-if="version" class="muted mb-6">v{{ version }}</div>
+      <div v-if="version" class="mono muted text-sm mb-6">v{{ version }}</div>
 
       <div v-if="error" class="alert alert-error">{{ error }}</div>
 

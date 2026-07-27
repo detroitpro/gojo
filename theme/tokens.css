@@ -20,7 +20,7 @@
   --overlay: rgba(6, 11, 20, 0.72);
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   --shadow-sm: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --row-hover: rgba(255, 255, 255, 0.02);
+  --row-hover: rgba(78, 196, 255, 0.04);
   --inset-highlight: rgba(255, 255, 255, 0.03);
   --band-fill: rgba(0, 0, 0, 0.18);
 
@@ -38,12 +38,27 @@
   --accent-wash: rgba(78, 196, 255, 0.06);
   --accent-selected: rgba(78, 196, 255, 0.12);
 
-  /* Atmosphere (docs site body / hero) */
+  /* Atmosphere (docs site body / hero + admin shell) */
   --glow-primary: rgba(78, 196, 255, 0.14);
   --glow-secondary: rgba(78, 120, 220, 0.1);
   --hero-sheen: rgba(78, 196, 255, 0.05);
   --hero-hatch: rgba(255, 255, 255, 0.015);
   --header-bg: rgba(11, 18, 32, 0.82);
+  /* Soft cyan wash for admin main canvas — all-day ops friendly */
+  --shell-atmosphere: radial-gradient(
+      1200px 600px at 12% -10%,
+      var(--glow-primary),
+      transparent 55%
+    ),
+    radial-gradient(900px 480px at 88% 0%, var(--glow-secondary), transparent 50%),
+    linear-gradient(180deg, var(--hero-sheen), transparent 42%);
+  --shell-hatch: repeating-linear-gradient(
+    -12deg,
+    transparent,
+    transparent 11px,
+    var(--hero-hatch) 11px,
+    var(--hero-hatch) 12px
+  );
 
   /* Status */
   --green: #4caf8a;
@@ -70,10 +85,13 @@
   --mono: "JetBrains Mono", ui-monospace, monospace;
 
   /* Layout */
-  --radius: 4px;
+  --radius: 6px;
+  --radius-sm: 4px;
   --gap: 12px;
   --max: 1080px;
   --doc: 720px;
+  /* Shared height so sidebar brand strip and page-header borders align */
+  --chrome-band-height: 6rem;
 
   /* Spacing scale (used by utilities) */
   --space-1: 4px;

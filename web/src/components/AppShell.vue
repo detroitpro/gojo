@@ -126,7 +126,7 @@ async function signOut() {
           />
         </svg>
       </button>
-      <RouterLink to="/" class="brand brand-mobile">gojo</RouterLink>
+      <RouterLink to="/" class="brand brand-mobile" title="Dashboard">gojo</RouterLink>
     </header>
 
     <div
@@ -138,7 +138,10 @@ async function signOut() {
 
     <aside class="sidebar" :aria-label="collapsed ? 'Collapsed navigation' : 'Navigation'">
       <div class="sidebar-top">
-        <RouterLink to="/" class="brand" title="Dashboard">gojo</RouterLink>
+        <RouterLink to="/" class="brand-mark" title="Dashboard">
+          <span class="brand-word">gojo</span>
+          <span class="brand-tag">ops console</span>
+        </RouterLink>
         <button
           class="icon-btn collapse-btn"
           type="button"

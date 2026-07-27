@@ -126,7 +126,7 @@ onMounted(() => {
 
     <div v-if="loading && !task" class="empty">Loading…</div>
     <template v-else-if="task">
-      <section class="panel mb-7">
+      <section class="panel panel-callout mb-7">
         <div class="panel-header">How to edit</div>
         <div class="panel-body">
           <p class="mb-3">

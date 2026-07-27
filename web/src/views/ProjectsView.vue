@@ -12,6 +12,7 @@ import {
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
+import ModalDialog from "@/components/ModalDialog.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useServerTable } from "@/composables/useServerTable";
@@ -44,9 +45,12 @@ function initialOrder(): SortOrder {
 
 const query = ref("");
 const busyId = ref<string | null>(null);
+const addOpen = ref(false);
+const creating = ref(false);
 const pickerOpen = ref(false);
 const name = ref("");
 const repoPath = ref("");
+const formError = ref("");
 const notice = ref("");
 const removeTarget = ref<Project | null>(null);
 const healthById = ref<Record<string, ProjectHealthSummary>>({});
@@ -182,19 +186,37 @@ async function refreshHealth(list: Project[]) {
   healthLoading.value = false;
 }
 
-async function addProject() {
-  if (!name.value.trim() || !repoPath.value.trim()) {
+function openAdd() {
+  formError.value = "";
+  addOpen.value = true;
+}
+
+function closeAdd() {
+  if (creating.value || pickerOpen.value) {
     return;
   }
-  error.value = "";
+  addOpen.value = false;
+  formError.value = "";
+}
+
+async function addProject() {
+  if (!name.value.trim() || !repoPath.value.trim()) {
+    formError.value = "Name and repository path are required";
+    return;
+  }
+  creating.value = true;
+  formError.value = "";
   notice.value = "";
   try {
     await createProject({ name: name.value.trim(), repoPath: repoPath.value.trim() });
     name.value = "";
     repoPath.value = "";
+    addOpen.value = false;
     await load();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "Failed to create project";
+    formError.value = err instanceof Error ? err.message : "Failed to create project";
+  } finally {
+    creating.value = false;
   }
 }
 
@@ -271,43 +293,13 @@ onMounted(() => {
         <h1>Projects</h1>
         <div class="subtitle">Registered repositories — sync manifests, check health, open details</div>
       </div>
+      <div class="toolbar">
+        <button class="btn btn-sm btn-primary" type="button" @click="openAdd">Add project</button>
+      </div>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="notice" class="alert alert-success">{{ notice }}</div>
-
-    <form class="inline-form" @submit.prevent="addProject">
-      <div class="field">
-        <label for="project-name">Name</label>
-        <input id="project-name" v-model="name" class="input" required placeholder="my-app" />
-      </div>
-      <div class="field flex-2">
-        <label for="project-path">Repository path</label>
-        <div class="path-input-row">
-          <input
-            id="project-path"
-            v-model="repoPath"
-            class="input"
-            required
-            readonly
-            placeholder="Browse to a git checkout…"
-            @click="pickerOpen = true"
-          />
-          <button class="btn" type="button" @click="pickerOpen = true">Browse</button>
-        </div>
-      </div>
-      <div class="field">
-        <label>&nbsp;</label>
-        <button class="btn btn-primary" type="submit">Add project</button>
-      </div>
-    </form>
-
-    <DirectoryPicker
-      :open="pickerOpen"
-      :initial-path="repoPath || undefined"
-      @close="pickerOpen = false"
-      @select="onPicked"
-    />
 
     <div class="inline-form mb-7 task-filters">
       <div class="field flex-2">
@@ -326,9 +318,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading && projects.length === 0" class="empty">Loading…</div>
+    <div v-if="loading && projects.length === 0" class="empty">Loading projects…</div>
     <div v-else-if="total === 0" class="empty">
-      {{ query ? "No projects match these filters" : "No projects registered" }}
+      {{
+        query
+          ? "No projects match these filters"
+          : "No projects yet — use Add project to register a repository"
+      }}
     </div>
     <template v-else>
       <div class="table-wrap">
@@ -400,6 +396,66 @@ onMounted(() => {
         :total="total"
       />
     </template>
+
+    <ModalDialog
+      :open="addOpen"
+      title="Add project"
+      wide
+      :close-on-escape="!pickerOpen && !creating"
+      :close-on-backdrop="!pickerOpen && !creating"
+      @close="closeAdd"
+    >
+      <form id="add-project-form" @submit.prevent="addProject">
+        <div v-if="formError" class="alert alert-error">{{ formError }}</div>
+        <div class="field">
+          <label for="project-name">Name</label>
+          <input
+            id="project-name"
+            v-model="name"
+            class="input"
+            required
+            placeholder="my-app"
+            :disabled="creating"
+          />
+        </div>
+        <div class="field">
+          <label for="project-path">Repository path</label>
+          <div class="path-input-row">
+            <input
+              id="project-path"
+              v-model="repoPath"
+              class="input"
+              required
+              readonly
+              placeholder="Browse to a git checkout…"
+              :disabled="creating"
+              @click="pickerOpen = true"
+            />
+            <button class="btn" type="button" :disabled="creating" @click="pickerOpen = true">
+              Browse
+            </button>
+          </div>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn" type="button" :disabled="creating" @click="closeAdd">Cancel</button>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          form="add-project-form"
+          :disabled="creating"
+        >
+          {{ creating ? "Adding…" : "Add project" }}
+        </button>
+      </template>
+    </ModalDialog>
+
+    <DirectoryPicker
+      :open="pickerOpen"
+      :initial-path="repoPath || undefined"
+      @close="pickerOpen = false"
+      @select="onPicked"
+    />
 
     <ConfirmDialog
       :open="Boolean(removeTarget)"

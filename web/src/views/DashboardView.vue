@@ -26,6 +26,7 @@ const loading = ref(true);
 const error = ref("");
 const paused = ref(false);
 const activeRuns = ref(0);
+const waitingRuns = ref(0);
 const projectCount = ref(0);
 const taskCount = ref(0);
 const scheduleCount = ref(0);
@@ -79,6 +80,7 @@ async function load() {
     ]);
     paused.value = dashboard.paused;
     activeRuns.value = dashboard.activeRuns;
+    waitingRuns.value = dashboard.waitingRuns ?? 0;
     projectCount.value = dashboard.projects;
     taskCount.value = dashboard.tasks;
     scheduleCount.value = dashboard.schedules;
@@ -135,7 +137,7 @@ onMounted(() => {
     <header class="page-header">
       <div>
         <h1>Dashboard</h1>
-        <div class="subtitle">Scheduler ops overview</div>
+        <div class="subtitle">Live scheduler pulse — what is running, waiting, and shipping</div>
       </div>
       <div class="toolbar">
         <span v-if="paused" class="badge badge-warn">Paused</span>
@@ -146,29 +148,40 @@ onMounted(() => {
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
-    <div v-if="loading" class="empty">Loading…</div>
+    <div v-if="loading" class="empty">Loading ops overview…</div>
 
     <template v-else>
-      <div class="stats-row">
-        <div class="stat">
-          <div class="label">Projects</div>
-          <div class="value">{{ projectCount }}</div>
+      <div class="status-band" :class="{ 'is-paused': paused }">
+        <div class="status-band-primary">
+          <div class="label">{{ paused ? "Scheduler" : "Active now" }}</div>
+          <div class="value" :class="{ 'is-paused': paused }">
+            {{ paused ? "Paused" : activeRuns }}
+          </div>
+          <div class="hint">
+            <template v-if="paused">Cron stays quiet until you resume</template>
+            <template v-else>
+              {{ waitingRuns }} waiting in queue ·
+              <RouterLink :to="{ name: 'queue' }">open queue</RouterLink>
+            </template>
+          </div>
         </div>
-        <div class="stat">
-          <div class="label">Tasks</div>
-          <div class="value">{{ taskCount }}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Schedules</div>
-          <div class="value">{{ scheduleCount }}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Runs</div>
-          <div class="value">{{ runsTotal }}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Active</div>
-          <div class="value ok">{{ activeRuns }}</div>
+        <div class="status-band-secondary">
+          <div class="metric">
+            <div class="label">Projects</div>
+            <div class="value">{{ projectCount }}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Tasks</div>
+            <div class="value">{{ taskCount }}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Schedules</div>
+            <div class="value">{{ scheduleCount }}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Runs</div>
+            <div class="value">{{ runsTotal }}</div>
+          </div>
         </div>
       </div>
 
@@ -229,7 +242,9 @@ onMounted(() => {
         </div>
       </section>
 
-      <div v-if="projects.length === 0" class="empty">No projects registered</div>
+      <div v-if="projects.length === 0" class="empty">
+        No projects yet — add one from Projects, then Sync its gojo.yaml
+      </div>
 
       <template v-else>
         <div class="filter-bar mb-7">
@@ -276,10 +291,7 @@ onMounted(() => {
                 <tr v-for="task in project.tasks" :key="task.id">
                   <td class="dashboard-col-task">
                     <RouterLink
-                      :to="{
-                        name: 'runs',
-                        query: { taskId: task.id, projectId: project.id },
-                      }"
+                      :to="{ name: 'task-detail', params: { id: task.id } }"
                       class="entity-name"
                     >
                       {{ task.name }}
@@ -315,7 +327,8 @@ onMounted(() => {
 }
 
 .dashboard-task-table :deep(.dashboard-col-runs) {
-  width: 9.5rem;
+  width: 12rem;
+  min-width: 12rem;
   text-align: right;
 }
 
