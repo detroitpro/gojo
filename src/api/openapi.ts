@@ -49,12 +49,18 @@ export const openApiDocument = {
       },
       post: { summary: "Create project" },
     },
-    "/api/v1/integrations/open": {
+    "/api/v1/integrations": {
       get: {
-        summary: "List currently-open gojo-tracked pull requests",
+        summary: "List gojo-tracked pull requests by status",
         description:
-          "Rows from run_integrations with status=open (not Impact’s date window). Query: projectId, limit, offset, sort, order.",
+          "Rows from run_integrations with status=open|merged (not Impact’s date window). status is required.",
         parameters: [
+          {
+            name: "status",
+            in: "query",
+            required: true,
+            schema: { type: "string", enum: ["open", "merged"] },
+          },
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "projectId", in: "query", schema: { type: "string" } },

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
 import {
-  listOpenIntegrationsPage,
+  listIntegrationsPage,
   listProjectsPage,
   listRunsPage,
   listTasksPage,
@@ -312,7 +312,7 @@ describe("paged-lists", () => {
     db.close();
   });
 
-  test("open integrations: count, page, filter, and hasOpenPrs", () => {
+  test("integrations: open/merged page, filter, and hasOpenPrs", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
@@ -411,29 +411,38 @@ describe("paged-lists", () => {
     expect(projectSummaryFor(db, withOpen.id)?.openPrCount).toBe(2);
     expect(projectSummaryFor(db, without.id)?.openPrCount).toBe(0);
 
-    const allOpen = listOpenIntegrationsPage(db, { limit: 25, offset: 0 });
+    const allOpen = listIntegrationsPage(db, { limit: 25, offset: 0, status: "open" });
     expect(allOpen.total).toBe(2);
     expect(allOpen.items.map((row) => row.prNumber)).toEqual([2, 1]);
     expect(allOpen.items[0]?.branchName).toBe("gojo/maintain-docs/branch");
     expect(allOpen.items[0]?.projectName).toBe("with-open");
     expect(allOpen.items[0]?.taskName).toBe("maintain-docs");
+    expect(allOpen.items[0]?.mergedAt).toBeNull();
 
-    const filtered = listOpenIntegrationsPage(db, {
+    const filtered = listIntegrationsPage(db, {
       limit: 25,
       offset: 0,
+      status: "open",
       projectId: withOpen.id,
     });
     expect(filtered.total).toBe(2);
 
-    const page = listOpenIntegrationsPage(db, {
+    const page = listIntegrationsPage(db, {
       limit: 1,
       offset: 0,
+      status: "open",
       sort: "openedAt",
       order: "asc",
     });
     expect(page.total).toBe(2);
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.prNumber).toBe(1);
+
+    const merged = listIntegrationsPage(db, { limit: 25, offset: 0, status: "merged" });
+    expect(merged.total).toBe(1);
+    expect(merged.items[0]?.prNumber).toBe(3);
+    expect(merged.items[0]?.mergedAt).toBe("2026-07-06T00:00:00.000Z");
+    expect(merged.items[0]?.status).toBe("merged");
 
     const withPrs = listProjectsPage(db, { limit: 25, offset: 0, hasOpenPrs: true });
     expect(withPrs.total).toBe(1);

@@ -7,7 +7,7 @@ import {
   getDashboardImpact,
   getProject,
   getProjectDoctor,
-  listOpenIntegrations,
+  listIntegrations,
   listTasks,
   runTask,
   syncProject,
@@ -22,7 +22,7 @@ import { MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
 import type {
   DashboardImpact,
-  OpenIntegration,
+  IntegrationListItem,
   Project,
   ProjectDoctorResult,
   ProjectSyncResult,
@@ -36,8 +36,10 @@ const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
 const projectTasks = ref<Task[]>([]);
-const openIntegrations = ref<OpenIntegration[]>([]);
+const openIntegrations = ref<IntegrationListItem[]>([]);
 const openPrTotal = ref(0);
+const mergedIntegrations = ref<IntegrationListItem[]>([]);
+const mergedPrTotal = ref(0);
 const mergeBusy = ref(false);
 const loading = ref(true);
 const busy = ref(false);
@@ -134,14 +136,18 @@ const mergeBabysitter = computed(() =>
   projectTasks.value.find((task) => task.name === "maintain-merge" && task.enabled) ?? null,
 );
 
-function prLabel(row: OpenIntegration): string {
+function prLabel(row: IntegrationListItem): string {
   if (row.repo && row.prNumber != null) {
     return `${row.repo}#${row.prNumber}`;
   }
   if (row.prNumber != null) {
     return `#${row.prNumber}`;
   }
-  return row.prUrl ?? "Open PR";
+  return row.prUrl ?? "PR";
+}
+
+function isExternalPrUrl(url: string | null): boolean {
+  return Boolean(url && !url.startsWith("local://"));
 }
 
 function scrollToOpenPrs() {
@@ -150,9 +156,10 @@ function scrollToOpenPrs() {
 
 async function loadOpenPrs() {
   try {
-    const result = await listOpenIntegrations({
+    const result = await listIntegrations({
       limit: MAX_PAGE_LIMIT,
       offset: 0,
+      status: "open",
       projectId: projectId.value,
     });
     openIntegrations.value = result.items;
@@ -160,6 +167,22 @@ async function loadOpenPrs() {
   } catch {
     openIntegrations.value = [];
     openPrTotal.value = 0;
+  }
+}
+
+async function loadMergedPrs() {
+  try {
+    const result = await listIntegrations({
+      limit: MAX_PAGE_LIMIT,
+      offset: 0,
+      status: "merged",
+      projectId: projectId.value,
+    });
+    mergedIntegrations.value = result.items;
+    mergedPrTotal.value = result.total;
+  } catch {
+    mergedIntegrations.value = [];
+    mergedPrTotal.value = 0;
   }
 }
 
@@ -191,7 +214,7 @@ async function load() {
       projectId: projectId.value,
     });
     projectTasks.value = tasks.items;
-    await loadOpenPrs();
+    await Promise.all([loadOpenPrs(), loadMergedPrs()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     project.value = null;
@@ -199,6 +222,8 @@ async function load() {
     projectTasks.value = [];
     openIntegrations.value = [];
     openPrTotal.value = 0;
+    mergedIntegrations.value = [];
+    mergedPrTotal.value = 0;
   } finally {
     loading.value = false;
     if (route.hash === "#open-prs") {
@@ -229,7 +254,7 @@ async function runSync() {
       projectId: project.value.id,
     });
     projectTasks.value = tasks.items;
-    await loadOpenPrs();
+    await Promise.all([loadOpenPrs(), loadMergedPrs()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
   } finally {
@@ -332,6 +357,19 @@ onMounted(() => {
               <dt>Repository</dt>
               <dd class="mono">{{ project.repoPath }}</dd>
             </div>
+            <div v-if="project.remoteUrl">
+              <dt>Remote</dt>
+              <dd>
+                <a
+                  :href="project.remoteUrl"
+                  class="entity-name"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ project.remoteUrl }}
+                </a>
+              </dd>
+            </div>
             <div>
               <dt>Default branch</dt>
               <dd class="mono">{{ project.defaultBranch }}</dd>
@@ -416,8 +454,8 @@ onMounted(() => {
                 <tr v-for="row in openIntegrations" :key="row.runId">
                   <td>
                     <a
-                      v-if="row.prUrl && !row.prUrl.startsWith('local://')"
-                      :href="row.prUrl"
+                      v-if="isExternalPrUrl(row.prUrl)"
+                      :href="row.prUrl!"
                       class="entity-name"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -456,6 +494,71 @@ onMounted(() => {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section id="merged-prs" class="panel mb-7">
+        <div class="panel-header">Recently merged</div>
+        <div class="panel-body">
+          <p class="muted text-sm mb-5">
+            Recently merged gojo-tracked pull requests (live status, not limited to the Impact date
+            range).
+          </p>
+          <div v-if="mergedIntegrations.length === 0" class="muted text-sm">No merged PRs</div>
+          <div v-else class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>PR</th>
+                  <th>Task</th>
+                  <th>Branch</th>
+                  <th>Merged</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in mergedIntegrations" :key="row.runId">
+                  <td>
+                    <a
+                      v-if="isExternalPrUrl(row.prUrl)"
+                      :href="row.prUrl!"
+                      class="entity-name"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ prLabel(row) }}
+                    </a>
+                    <span v-else class="mono">{{ prLabel(row) }}</span>
+                  </td>
+                  <td>
+                    <RouterLink
+                      v-if="row.taskId"
+                      :to="{ name: 'task-detail', params: { id: row.taskId } }"
+                      class="entity-name"
+                    >
+                      {{ row.taskName ?? row.taskId }}
+                    </RouterLink>
+                    <span v-else class="muted">—</span>
+                  </td>
+                  <td class="mono muted">{{ row.branchName ?? "—" }}</td>
+                  <td class="mono muted">
+                    {{ row.mergedAt ? new Date(row.mergedAt).toLocaleString() : "—" }}
+                  </td>
+                  <td>
+                    <RouterLink
+                      :to="{ name: 'run-detail', params: { id: row.runId } }"
+                      class="btn btn-sm"
+                    >
+                      Run
+                    </RouterLink>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="mergedPrTotal > mergedIntegrations.length" class="muted text-sm mt-3">
+            Showing {{ mergedIntegrations.length }} of {{ mergedPrTotal }}
+          </p>
         </div>
       </section>
 

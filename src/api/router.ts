@@ -48,14 +48,16 @@ import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
   BACKUP_SORT_ALLOWED,
   getTaskDetail,
-  listOpenIntegrationsPage,
+  INTEGRATION_LIST_STATUSES,
+  INTEGRATION_SORT_ALLOWED,
+  listIntegrationsPage,
   listProjectsPage,
   toProjectDetailRow,
   listRunsPage,
   listSchedulesPage,
   listTasksPage,
-  OPEN_INTEGRATION_SORT_ALLOWED,
   PROJECT_SORT_ALLOWED,
+  type IntegrationListStatus,
   QUEUE_SORT_ALLOWED,
   RUN_SORT_ALLOWED,
   SCHEDULE_SORT_ALLOWED,
@@ -391,16 +393,29 @@ export async function handleApiRequest(
     });
   }
 
-  if (method === "GET" && pathname === "/api/v1/integrations/open") {
+  if (method === "GET" && pathname === "/api/v1/integrations") {
+    const statusParam = url.searchParams.get("status");
+    if (
+      statusParam !== "open" &&
+      statusParam !== "merged"
+    ) {
+      return failure(
+        "validation_error",
+        `status is required (${INTEGRATION_LIST_STATUSES.join("|")})`,
+        400,
+      );
+    }
+    const status = statusParam as IntegrationListStatus;
     const page = parsePageParamsFromUrl(url);
     const sort = parseSortParamsFromUrl(url, {
-      allowed: OPEN_INTEGRATION_SORT_ALLOWED,
-      defaultSort: "openedAt",
+      allowed: INTEGRATION_SORT_ALLOWED,
+      defaultSort: status === "merged" ? "mergedAt" : "openedAt",
       defaultOrder: "desc",
     });
-    const result = listOpenIntegrationsPage(ctx.db, {
+    const result = listIntegrationsPage(ctx.db, {
       ...page,
       ...sort,
+      status,
       projectId: url.searchParams.get("projectId"),
     });
     return success({

@@ -36,7 +36,9 @@ export interface ProjectSummaryCounts {
   openPrCount: number;
 }
 
-export interface OpenIntegration {
+export type IntegrationListStatus = "open" | "merged";
+
+export interface IntegrationListItem {
   runId: string;
   projectId: string;
   projectName: string | null;
@@ -46,8 +48,9 @@ export interface OpenIntegration {
   prUrl: string | null;
   provider: string | null;
   repo: string | null;
-  status: "open";
+  status: IntegrationListStatus;
   openedAt: string | null;
+  mergedAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
   branchName: string | null;

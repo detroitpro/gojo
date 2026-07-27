@@ -22,6 +22,7 @@ export type ListQuery = {
   projectId?: string;
   taskId?: string;
   state?: string;
+  status?: string;
   trigger?: string;
   enabled?: "all" | "enabled" | "disabled" | "true" | "false" | boolean;
   hasOpenPrs?: boolean;
@@ -61,6 +62,9 @@ export function buildListQuery(params: ListQuery): string {
   }
   if (params.state) {
     sp.set("state", params.state);
+  }
+  if (params.status) {
+    sp.set("status", params.status);
   }
   if (params.trigger) {
     sp.set("trigger", params.trigger);

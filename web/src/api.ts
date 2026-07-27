@@ -15,7 +15,7 @@ import type {
   InstanceInfo,
   NotificationChannelConfig,
   NotificationChannelMap,
-  OpenIntegration,
+  IntegrationListItem,
   Project,
   ProjectDoctorResult,
   ProjectSyncResponse,
@@ -281,15 +281,15 @@ export async function listProjects(query: ListQuery = {}): Promise<PaginatedResu
   };
 }
 
-export async function listOpenIntegrations(
-  query: ListQuery = {},
-): Promise<PaginatedResult<OpenIntegration>> {
+export async function listIntegrations(
+  query: ListQuery & { status: "open" | "merged" },
+): Promise<PaginatedResult<IntegrationListItem>> {
   const { data } = await request<{
-    integrations: OpenIntegration[];
+    integrations: IntegrationListItem[];
     total: number;
     limit: number;
     offset: number;
-  }>(`/integrations/open${buildListQuery(query)}`);
+  }>(`/integrations${buildListQuery(query)}`);
   return {
     items: data.integrations,
     total: data.total,

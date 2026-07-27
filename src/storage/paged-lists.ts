@@ -51,8 +51,12 @@ export const QUEUE_SORT_ALLOWED = [
 ] as const;
 export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
 export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
-export const OPEN_INTEGRATION_SORT_ALLOWED = [
+export const INTEGRATION_LIST_STATUSES = ["open", "merged"] as const;
+export type IntegrationListStatus = (typeof INTEGRATION_LIST_STATUSES)[number];
+
+export const INTEGRATION_SORT_ALLOWED = [
   "openedAt",
+  "mergedAt",
   "projectName",
   "taskName",
   "prNumber",
@@ -65,12 +69,13 @@ export type ListProjectsPageInput = PageParams &
     hasOpenPrs?: boolean | null;
   };
 
-export type ListOpenIntegrationsPageInput = PageParams &
+export type ListIntegrationsPageInput = PageParams &
   Partial<SortParams> & {
+    status: IntegrationListStatus;
     projectId?: string | null;
   };
 
-export type OpenIntegrationListRow = {
+export type IntegrationListRow = {
   runId: string;
   projectId: string;
   projectName: string | null;
@@ -80,8 +85,9 @@ export type OpenIntegrationListRow = {
   prUrl: string | null;
   provider: string | null;
   repo: string | null;
-  status: "open";
+  status: IntegrationListStatus;
   openedAt: string | null;
+  mergedAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
   branchName: string | null;
@@ -422,16 +428,16 @@ export function listProjectsPage(
   };
 }
 
-export function listOpenIntegrationsPage(
+export function listIntegrationsPage(
   db: Database,
-  input: ListOpenIntegrationsPageInput,
-): PaginatedList<OpenIntegrationListRow> {
+  input: ListIntegrationsPageInput,
+): PaginatedList<IntegrationListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [
-    "ri.status = 'open'",
+    "ri.status = ?",
     "(ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)",
   ];
-  const params: SQLQueryBindings[] = [];
+  const params: SQLQueryBindings[] = [input.status];
 
   if (input.projectId) {
     buildWhere(clauses, params, "r.project_id = ?", input.projectId);
@@ -455,11 +461,12 @@ export function listOpenIntegrationsPage(
       )
       .get(...params)?.count ?? 0;
 
+  const defaultSort = input.status === "merged" ? "mergedAt" : "openedAt";
   const { sort, order } = parseSortParams(
     { sort: input.sort, order: input.order },
     {
-      allowed: OPEN_INTEGRATION_SORT_ALLOWED,
-      defaultSort: "openedAt",
+      allowed: INTEGRATION_SORT_ALLOWED,
+      defaultSort,
       defaultOrder: "desc",
     },
   );
@@ -468,6 +475,7 @@ export function listOpenIntegrationsPage(
     order,
     {
       openedAt: "ri.opened_at",
+      mergedAt: "ri.merged_at",
       projectName: "p.name COLLATE NOCASE",
       taskName: "t.name COLLATE NOCASE",
       prNumber: "ri.pr_number",
@@ -475,7 +483,7 @@ export function listOpenIntegrationsPage(
     "ri.id DESC",
   );
 
-  type OpenIntegrationSqlRow = {
+  type IntegrationSqlRow = {
     run_id: string;
     project_id: string;
     project_name: string | null;
@@ -485,7 +493,9 @@ export function listOpenIntegrationsPage(
     pr_url: string | null;
     provider: string | null;
     repo: string | null;
+    status: string;
     opened_at: string | null;
+    merged_at: string | null;
     last_checked_at: string | null;
     last_error: string | null;
     branch_name: string | null;
@@ -503,7 +513,9 @@ export function listOpenIntegrationsPage(
          ri.pr_url AS pr_url,
          ri.provider AS provider,
          ri.repo AS repo,
+         ri.status AS status,
          ri.opened_at AS opened_at,
+         ri.merged_at AS merged_at,
          ri.last_checked_at AS last_checked_at,
          ri.last_error AS last_error,
          a.branch_name AS branch_name
@@ -512,7 +524,7 @@ export function listOpenIntegrationsPage(
        ${orderBy}
        LIMIT ? OFFSET ?`,
     )
-    .all(...params, input.limit, input.offset) as OpenIntegrationSqlRow[];
+    .all(...params, input.limit, input.offset) as IntegrationSqlRow[];
 
   return {
     items: rows.map((row) => ({
@@ -525,8 +537,9 @@ export function listOpenIntegrationsPage(
       prUrl: row.pr_url,
       provider: row.provider,
       repo: row.repo,
-      status: "open" as const,
+      status: row.status as IntegrationListStatus,
       openedAt: row.opened_at,
+      mergedAt: row.merged_at,
       lastCheckedAt: row.last_checked_at,
       lastError: row.last_error,
       branchName: row.branch_name,

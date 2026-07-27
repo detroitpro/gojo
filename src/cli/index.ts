@@ -11,7 +11,7 @@ import { defaultBackupDest } from "@/backup/list";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
-import { getTaskDetail, listOpenIntegrationsPage } from "@/storage/paged-lists";
+import { getTaskDetail, listIntegrationsPage } from "@/storage/paged-lists";
 import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
 import {
   installService,
@@ -596,7 +596,7 @@ Commands:
   task list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next
   run list|inspect|logs|diff|approve|reject|artifacts
-  integration list --open [--project <id>]
+  integration list --open|--merged [--project <id>]
   backup create|verify|restore
 `);
 }
@@ -609,13 +609,16 @@ async function runIntegrationCommand(
   await withContext(getHome(parsed), async (ctx) => {
     switch (sub) {
       case "list": {
-        if (!hasFlag(parsed, "open")) {
-          die("usage: gojo integration list --open [--project <id>]", format);
+        const wantOpen = hasFlag(parsed, "open");
+        const wantMerged = hasFlag(parsed, "merged");
+        if (wantOpen === wantMerged) {
+          die("usage: gojo integration list --open|--merged [--project <id>]", format);
         }
         const projectId = getFlagString(parsed, "project");
-        const result = listOpenIntegrationsPage(ctx.db, {
+        const result = listIntegrationsPage(ctx.db, {
           limit: DEFAULT_PAGE_LIMIT,
           offset: 0,
+          status: wantOpen ? "open" : "merged",
           ...(projectId ? { projectId } : {}),
         });
         printOutput(format, {

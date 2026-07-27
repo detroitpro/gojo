@@ -829,11 +829,19 @@ describe("api/router", () => {
       openedAt: "2026-07-20T00:00:00.000Z",
     });
 
-    const openRes = await fetch(`${baseUrl}/api/v1/integrations/open`, { headers: auth });
+    const missingStatus = await fetch(`${baseUrl}/api/v1/integrations`, { headers: auth });
+    expect(missingStatus.status).toBe(400);
+
+    const openRes = await fetch(`${baseUrl}/api/v1/integrations?status=open`, { headers: auth });
     expect(openRes.status).toBe(200);
     const openBody = (await openRes.json()) as {
       data: {
-        integrations: Array<{ runId: string; prNumber: number | null; projectId: string }>;
+        integrations: Array<{
+          runId: string;
+          prNumber: number | null;
+          projectId: string;
+          mergedAt: string | null;
+        }>;
         total: number;
       };
     };
@@ -841,7 +849,7 @@ describe("api/router", () => {
     expect(openBody.data.integrations.some((row) => row.runId === run.id)).toBe(true);
 
     const filtered = await fetch(
-      `${baseUrl}/api/v1/integrations/open?projectId=${project.id}`,
+      `${baseUrl}/api/v1/integrations?status=open&projectId=${project.id}`,
       { headers: auth },
     );
     const filteredBody = (await filtered.json()) as {
@@ -849,6 +857,40 @@ describe("api/router", () => {
     };
     expect(filteredBody.data.total).toBe(1);
     expect(filteredBody.data.integrations[0]?.prNumber).toBe(42);
+
+    const mergedRun = ctx!.repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "merged-pr-key",
+      trigger: "manual",
+    });
+    ctx!.repos.runIntegrations.upsertForRun({
+      runId: mergedRun.id,
+      mode: "pull-request",
+      provider: "github",
+      repo: "me/app",
+      prNumber: 99,
+      prUrl: "https://github.com/me/app/pull/99",
+      status: "merged",
+      openedAt: "2026-07-18T00:00:00.000Z",
+      mergedAt: "2026-07-21T00:00:00.000Z",
+    });
+
+    const mergedRes = await fetch(
+      `${baseUrl}/api/v1/integrations?status=merged&projectId=${project.id}`,
+      { headers: auth },
+    );
+    expect(mergedRes.status).toBe(200);
+    const mergedBody = (await mergedRes.json()) as {
+      data: {
+        integrations: Array<{ prNumber: number | null; mergedAt: string | null; status: string }>;
+        total: number;
+      };
+    };
+    expect(mergedBody.data.total).toBe(1);
+    expect(mergedBody.data.integrations[0]?.prNumber).toBe(99);
+    expect(mergedBody.data.integrations[0]?.status).toBe("merged");
+    expect(mergedBody.data.integrations[0]?.mergedAt).toBe("2026-07-21T00:00:00.000Z");
 
     const projectsRes = await fetch(`${baseUrl}/api/v1/projects?hasOpenPrs=true`, {
       headers: auth,
