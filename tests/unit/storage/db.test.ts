@@ -48,6 +48,41 @@ describe("storage/db", () => {
     expect(database.hasExpectedTables()).toBe(true);
   });
 
+  test("migration v5 adds admission columns on existing v4 databases", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    // Downgrade to a v4-shaped runs table (no admission columns / queue index).
+    sqlite.exec("DROP INDEX IF EXISTS idx_runs_queue;");
+    sqlite.exec("ALTER TABLE runs DROP COLUMN not_before_at;");
+    sqlite.exec("ALTER TABLE runs DROP COLUMN expires_at;");
+    sqlite.exec("ALTER TABLE runs DROP COLUMN admitted_at;");
+    sqlite.exec("ALTER TABLE runs DROP COLUMN priority;");
+    // Fresh DBs only record SCHEMA_VERSION (5); pin to 4 so incremental v5 runs.
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(4, new Date().toISOString());
+
+    database.migrate();
+
+    const version = sqlite
+      .query<{ version: number }, []>(
+        "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations",
+      )
+      .get()?.version;
+    expect(version).toBe(5);
+
+    const columns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')")
+      .all()
+      .map((row) => row.name);
+    expect(columns).toContain("not_before_at");
+    expect(columns).toContain("expires_at");
+    expect(columns).toContain("admitted_at");
+    expect(columns).toContain("priority");
+  });
+
   test("creates project, task, schedule, run, and attempt", () => {
     const database = openInMemory();
     const repos = createRepositories(database);

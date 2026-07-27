@@ -84,6 +84,10 @@ type SqlRunRow = {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  not_before_at: string | null;
+  expires_at: string | null;
+  admitted_at: string | null;
+  priority: number;
   project_name: string | null;
   task_name: string | null;
 };

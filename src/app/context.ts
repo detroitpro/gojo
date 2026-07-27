@@ -13,7 +13,9 @@ import { NotificationDispatcher } from "@/notifications/dispatcher";
 import { wireNotificationHooks } from "@/notifications/hooks";
 import { IntegrationStatusReconciler } from "@/integration/status-reconciler";
 import { RunCoordinator } from "@/runs/coordinator";
+import { RunDispatcher } from "@/runs/dispatcher";
 import { RunEventBus, RunEventHistory } from "@/runs/events";
+import { isTerminal } from "@shared/run-states";
 import { Scheduler } from "@/scheduler/scheduler";
 import { nextOccurrence } from "@/scheduler/cron";
 import { SecretStore } from "@/secrets/store";
@@ -35,6 +37,7 @@ export interface AppContext {
   instanceConfigPath: string;
   workspace: WorkspaceManager;
   coordinator: RunCoordinator;
+  dispatcher: RunDispatcher;
   scheduler: Scheduler;
   notifications: NotificationDispatcher;
   secrets: SecretStore;
@@ -102,12 +105,34 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   const notifications = new NotificationDispatcher(db);
   const leaseHolderId = ulid();
   const integrationReconciler = new IntegrationStatusReconciler({ db });
+  const dispatcher = new RunDispatcher({ db, coordinator });
+
+  eventBus.subscribe((event) => {
+    if (event.type === "run.created" || event.type === "run.finished") {
+      dispatcher.kick();
+      return;
+    }
+    if (event.type === "run.state_changed") {
+      const to = (event.data as { to?: string } | undefined)?.to;
+      if (to && isTerminal(to as Parameters<typeof isTerminal>[0])) {
+        dispatcher.kick();
+      }
+    }
+  });
 
   const scheduler = new Scheduler({
     db,
     leaseHolderId,
     isPaused: () => isInstancePaused(db),
     reconcileIntegrations: (now) => integrationReconciler.reconcile(now),
+    onCancelActive: async (scheduleId) => {
+      const active = repos.runs
+        .listNonTerminal()
+        .filter((run) => run.scheduleId === scheduleId);
+      for (const run of active) {
+        await coordinator.cancelRun(run.id);
+      }
+    },
     onTrigger: async (scheduleId, fireAt) => {
       const schedule = repos.schedules.findById(scheduleId);
       if (!schedule || !schedule.enabled) {
@@ -124,26 +149,20 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         return;
       }
 
-      const run = await coordinator.createRun({
+      const expiresAt =
+        nextOccurrence(schedule.cronExpr, schedule.timezone, fireAt)?.toISOString() ?? null;
+
+      await coordinator.enqueueRun({
         projectId: project.id,
         taskId: task.id,
         scheduleId: schedule.id,
         trigger: "schedule",
         idempotencyKey: `${schedule.id}:${fireAt.toISOString()}`,
+        notBeforeAt: fireAt.toISOString(),
+        expiresAt,
       });
 
-      void coordinator.executeRun(run.id).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(
-          JSON.stringify({
-            level: "error",
-            component: "scheduler",
-            scheduleId,
-            runId: run.id,
-            error: message,
-          }),
-        );
-      });
+      dispatcher.kick();
     },
   });
 
@@ -163,6 +182,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     instanceConfigPath,
     workspace,
     coordinator,
+    dispatcher,
     scheduler,
     notifications,
     secrets,
@@ -203,6 +223,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         notificationTimer = undefined;
       }
       await notificationHooks?.drain();
+      await dispatcher.stop();
       await scheduler.stop();
       eventHistory.clear();
       db.close();

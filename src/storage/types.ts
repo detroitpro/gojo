@@ -137,6 +137,12 @@ export interface Run {
   startedAt: string | null;
   finishedAt: string | null;
   errorMessage: string | null;
+  /** Suggested earliest start (cron fire time). */
+  notBeforeAt: string | null;
+  /** Drop from queue after this time (next cron occurrence for scheduled runs). */
+  expiresAt: string | null;
+  admittedAt: string | null;
+  priority: number;
 }
 
 export interface CreateRunInput {
@@ -146,6 +152,9 @@ export interface CreateRunInput {
   state?: RunState;
   idempotencyKey: string;
   trigger: RunTrigger;
+  notBeforeAt?: string | null;
+  expiresAt?: string | null;
+  priority?: number;
 }
 
 export interface UpdateRunInput {
@@ -153,6 +162,10 @@ export interface UpdateRunInput {
   startedAt?: string | null;
   finishedAt?: string | null;
   errorMessage?: string | null;
+  admittedAt?: string | null;
+  notBeforeAt?: string | null;
+  expiresAt?: string | null;
+  priority?: number;
 }
 
 export interface Attempt {

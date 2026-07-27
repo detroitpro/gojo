@@ -4,7 +4,9 @@
 
 ## Responsibility
 
-Evaluate cron/schedules, overlap policies, missed-run catch-up, retries, and auto-disable. **Create or trigger runs**—do not execute agents.
+Evaluate cron/schedules, overlap policies, missed-run catch-up, retries, and auto-disable. **Enqueue runs only**—do not execute agents or admit work.
+
+Cron fire times are **suggested starts** (`notBeforeAt`). The run **dispatcher** (`src/runs/dispatcher.ts`) admits queued runs under the instance scheduling policy. Scheduled runs also get `expiresAt` = the next cron occurrence after the fire time; if they never get a slot, the dispatcher marks them `Skipped`.
 
 Includes cron helpers, disable/outcome recording, and policy checks.
 
@@ -17,7 +19,16 @@ Each schedule stores policies the tick loop reads (not synced from `gojo.yaml` t
 | `overlapPolicy` | `skip`, `queue`, `cancel_replace`, `allow_parallel` | `skip` |
 | `missedRunPolicy` | `skip`, `run_once`, `run_all`, `run_latest` | `skip` |
 
-Overlap counts active/queued runs **for that schedule** before calling `onTrigger`. Task `concurrencyJson` from the manifest is separate and is not read here.
+Overlap counts active/queued runs **for that schedule** before calling `onTrigger`:
+
+| Decision | Behavior |
+| --- | --- |
+| `skip` | Do not enqueue while an active (or already queued, for `queue` coalescing) run exists |
+| `queue` | Enqueue anyway; per-project admission serializes execution |
+| `cancel_replace` | Cancel the schedule’s active runs via `onCancelActive`, then enqueue |
+| `allow_parallel` | Always enqueue |
+
+Task `concurrencyJson` from the manifest is synced onto the task row but **instance-level** admission (`maxConcurrentRuns` / `maxConcurrentRunsPerProject` in `instance_settings.scheduling_policy`) is what gates starts.
 
 ## Integration-outcome reconciliation hook
 

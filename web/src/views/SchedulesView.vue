@@ -141,7 +141,9 @@ onMounted(() => {
     <header class="page-header">
       <div>
         <h1>Schedules</h1>
-        <div class="subtitle">Cron triggers and enablement</div>
+        <div class="subtitle">
+          Cron is a suggested start — the run queue admits under the global concurrency cap
+        </div>
       </div>
     </header>
 
@@ -256,6 +258,7 @@ onMounted(() => {
               <th>Task</th>
               <th>Project</th>
               <th>Schedule</th>
+              <th>Overlap</th>
               <th>Status</th>
               <th>Next</th>
               <th>Failures</th>
@@ -279,6 +282,7 @@ onMounted(() => {
                   {{ schedule.cronExpr }} · {{ formatTimezoneLabel(schedule.timezone) }}
                 </div>
               </td>
+              <td class="mono muted text-sm">{{ schedule.overlapPolicy || "skip" }}</td>
               <td>
                 <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
                 <span v-else class="badge badge-neutral">disabled</span>

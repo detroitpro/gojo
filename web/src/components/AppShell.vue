@@ -29,6 +29,12 @@ const nav = [
     icon: "M13 10V3L4 14h7v7l9-11h-7z",
   },
   {
+    to: "/queue",
+    label: "Queue",
+    name: "queue",
+    icon: "M4 6h16M4 12h10M4 18h14",
+  },
+  {
     to: "/schedules",
     label: "Schedules",
     name: "schedules",

@@ -22,6 +22,7 @@ import { buildPrDescription } from '@/integration/pr-description';
 import { MergeQueue } from '@/integration/queue';
 import { extractPrNumber, initialNextCheckAt } from '@/integration/status-reconciler';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
+import { priorityForTrigger } from '@shared/scheduling';
 import {
   extractHandoffImpactItems,
   HANDOFF_SCHEMA_VERSION,
@@ -94,6 +95,11 @@ export interface CreateRunInput {
   scheduleId?: string;
   trigger: RunTrigger;
   idempotencyKey?: string;
+  notBeforeAt?: string | null;
+  expiresAt?: string | null;
+  priority?: number;
+  /** When true, create as Queued for the dispatcher (default for enqueueRun). */
+  enqueue?: boolean;
 }
 
 export class RunCoordinator {
@@ -134,7 +140,9 @@ export class RunCoordinator {
     }
 
     const initialState =
-      input.trigger === 'schedule' ? RunState.Scheduled : RunState.Queued;
+      input.enqueue || input.trigger !== 'schedule'
+        ? RunState.Queued
+        : RunState.Scheduled;
 
     const run = this.repos.runs.create({
       projectId: input.projectId,
@@ -143,10 +151,21 @@ export class RunCoordinator {
       idempotencyKey,
       trigger: input.trigger,
       state: initialState,
+      notBeforeAt: input.notBeforeAt ?? new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
+      priority: input.priority ?? priorityForTrigger(input.trigger),
     });
 
     this.emit('run.created', run.id, { state: run.state });
     return run;
+  }
+
+  /**
+   * Enqueue a run for the admission dispatcher. Does not start execution.
+   * Cron-triggered runs should pass notBeforeAt / expiresAt.
+   */
+  async enqueueRun(input: CreateRunInput): Promise<Run> {
+    return this.createRun({ ...input, enqueue: true });
   }
 
   async executeRun(runId: string, signal?: AbortSignal): Promise<Run> {
@@ -996,24 +1015,22 @@ export class RunCoordinator {
       return;
     }
 
-    void this.createRun({
+    void this.enqueueRun({
       projectId: failedRun.projectId,
       taskId: decision.healerTaskId,
       trigger: 'heal',
       idempotencyKey: `heal:${failedRun.id}:${decision.healerTaskId}`,
-    })
-      .then((healRun) => this.executeRun(healRun.id))
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(
-          JSON.stringify({
-            level: 'error',
-            component: 'heal',
-            failedRunId: failedRun.id,
-            error: message,
-          }),
-        );
-      });
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          component: 'heal',
+          failedRunId: failedRun.id,
+          error: message,
+        }),
+      );
+    });
   }
 
   private async abandonRun(run: Run): Promise<void> {

@@ -20,7 +20,7 @@ function queryParam(key: string): string {
 
 const projects = ref<Project[]>([]);
 const projectFilter = ref(queryParam("projectId"));
-const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
+const enabledFilter = ref<"all" | "enabled" | "disabled">("enabled");
 const query = ref("");
 const busyId = ref<string | null>(null);
 
@@ -117,9 +117,9 @@ onMounted(() => {
       <div class="field">
         <label for="enabled-filter">Enabled</label>
         <select id="enabled-filter" v-model="enabledFilter">
-          <option value="all">All</option>
           <option value="enabled">Enabled</option>
           <option value="disabled">Disabled</option>
+          <option value="all">All</option>
         </select>
       </div>
       <div class="field flex-2">

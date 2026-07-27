@@ -1,6 +1,12 @@
 import { Database as SQLiteDatabase } from "bun:sqlite";
 
-import { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_MIGRATIONS, SCHEMA_VERSION } from "./schema";
+import {
+  EXPECTED_TABLES,
+  SCHEMA_DDL,
+  SCHEMA_INDEXES,
+  SCHEMA_MIGRATIONS,
+  SCHEMA_VERSION,
+} from "./schema";
 
 export class Database {
   private readonly sqlite: SQLiteDatabase;
@@ -17,6 +23,7 @@ export class Database {
   }
 
   migrate(): void {
+    // Tables only — indexes that depend on migrated columns run after upgrades.
     this.sqlite.exec(SCHEMA_DDL);
 
     const current = this.currentSchemaVersion();
@@ -27,18 +34,19 @@ export class Database {
       this.sqlite
         .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
         .run(SCHEMA_VERSION, now);
-      return;
+    } else {
+      for (const migration of SCHEMA_MIGRATIONS) {
+        if (migration.version <= current) {
+          continue;
+        }
+        this.applyMigrationSql(migration.sql);
+        this.sqlite
+          .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+          .run(migration.version, now);
+      }
     }
 
-    for (const migration of SCHEMA_MIGRATIONS) {
-      if (migration.version <= current) {
-        continue;
-      }
-      this.applyMigrationSql(migration.sql);
-      this.sqlite
-        .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
-        .run(migration.version, now);
-    }
+    this.sqlite.exec(SCHEMA_INDEXES);
   }
 
   private currentSchemaVersion(): number {

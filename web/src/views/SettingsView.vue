@@ -7,6 +7,7 @@ import {
   getHealth,
   getInstance,
   getInstanceDoctor,
+  getSchedulingPolicy,
   listApiTokens,
   listBackups,
   listNotificationChannels,
@@ -14,6 +15,7 @@ import {
   resumeInstance,
   revokeApiToken,
   updateInstance,
+  updateSchedulingPolicy,
   verifyBackup,
 } from "@/api";
 import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
@@ -26,6 +28,7 @@ import type {
   InstanceDoctorResult,
   InstanceInfo,
   NotificationChannelMap,
+  SchedulingPolicy,
 } from "@/types";
 
 const instance = ref<InstanceInfo | null>(null);
@@ -43,6 +46,12 @@ const message = ref("");
 const tokenQuery = ref("");
 const backupQuery = ref("");
 const doctorQuery = ref("");
+const scheduling = ref<SchedulingPolicy>({
+  maxConcurrentRuns: 2,
+  maxConcurrentRunsPerProject: 1,
+  minStartIntervalMs: 30_000,
+  maxLoadPerCpu: 1,
+});
 
 const daemonPathSummary = computed(() => {
   const path = doctor.value?.daemonPath?.trim() ?? "";
@@ -126,13 +135,14 @@ async function load() {
   error.value = "";
   message.value = "";
   try {
-    const [inst, h, toks, channelMap, backs, doc] = await Promise.all([
+    const [inst, h, toks, channelMap, backs, doc, policy] = await Promise.all([
       getInstance(),
       getHealth(),
       listApiTokens({ limit: 100, offset: 0 }),
       listNotificationChannels(),
       listBackups({ limit: 100, offset: 0 }),
       getInstanceDoctor(),
+      getSchedulingPolicy(),
     ]);
     instance.value = inst;
     health.value = h;
@@ -140,10 +150,30 @@ async function load() {
     channels.value = channelMap;
     backups.value = backs.items;
     doctor.value = doc;
+    scheduling.value = policy;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load settings";
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveScheduling() {
+  busy.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    scheduling.value = await updateSchedulingPolicy({
+      maxConcurrentRuns: Number(scheduling.value.maxConcurrentRuns),
+      maxConcurrentRunsPerProject: Number(scheduling.value.maxConcurrentRunsPerProject),
+      minStartIntervalMs: Number(scheduling.value.minStartIntervalMs),
+      maxLoadPerCpu: Number(scheduling.value.maxLoadPerCpu),
+    });
+    message.value = "Scheduling policy saved";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to save scheduling policy";
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -335,6 +365,65 @@ onMounted(load);
           </div>
           <div class="mono muted mt-5">
             health status={{ health?.status ?? "unknown" }} paused={{ String(health?.paused) }}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">Run admission</div>
+        <div class="panel-body">
+          <p class="muted mb-5">
+            Cron times are suggestions. The dispatcher admits runs under these caps so projects do
+            not stampede the host.
+          </p>
+          <div class="inline-form">
+            <div class="field">
+              <label for="sched-max">Max concurrent runs</label>
+              <input
+                id="sched-max"
+                v-model.number="scheduling.maxConcurrentRuns"
+                class="input"
+                type="number"
+                min="1"
+              />
+            </div>
+            <div class="field">
+              <label for="sched-per-project">Max per project</label>
+              <input
+                id="sched-per-project"
+                v-model.number="scheduling.maxConcurrentRunsPerProject"
+                class="input"
+                type="number"
+                min="1"
+              />
+            </div>
+            <div class="field">
+              <label for="sched-stagger">Stagger (ms)</label>
+              <input
+                id="sched-stagger"
+                v-model.number="scheduling.minStartIntervalMs"
+                class="input"
+                type="number"
+                min="0"
+                step="1000"
+              />
+            </div>
+            <div class="field">
+              <label for="sched-load">Max load / CPU (0=off)</label>
+              <input
+                id="sched-load"
+                v-model.number="scheduling.maxLoadPerCpu"
+                class="input"
+                type="number"
+                min="0"
+                step="0.1"
+              />
+            </div>
+          </div>
+          <div class="toolbar mt-5">
+            <button class="btn btn-sm btn-primary" type="button" :disabled="busy" @click="saveScheduling">
+              Save admission policy
+            </button>
           </div>
         </div>
       </section>

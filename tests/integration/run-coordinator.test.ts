@@ -3,10 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { setSchedulingPolicy } from '@/app/instance-settings';
 import { resolvePaths } from '@/config/paths';
 import { commitAll, configLocal, execGit, initRepo } from '@/git/git';
 import { RunState } from '@shared/run-states';
 import { RunCoordinator } from '@/runs/coordinator';
+import { RunDispatcher } from '@/runs/dispatcher';
 import { Database, createRepositories } from '@/storage';
 import type { Project, Task } from '@/storage/types';
 import { WorkspaceManager } from '@/workspace/manager';
@@ -222,5 +224,87 @@ describe('integration/run-coordinator', () => {
 
     const updated = repos.runs.findById(run.id);
     expect(updated?.state).toBe(RunState.Abandoned);
+  });
+
+  test('dispatcher never exceeds maxConcurrentRuns of 2 across five projects', async () => {
+    db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    setSchedulingPolicy(db, {
+      maxConcurrentRuns: 2,
+      maxConcurrentRunsPerProject: 1,
+      minStartIntervalMs: 0,
+      maxLoadPerCpu: 0,
+    });
+
+    let peakConcurrent = 0;
+    let inFlight = 0;
+    const admitOrder: string[] = [];
+
+    const coordinator = {
+      executeRun: async (runId: string) => {
+        inFlight += 1;
+        peakConcurrent = Math.max(peakConcurrent, inFlight);
+        admitOrder.push(runId);
+        repos.runs.update(runId, {
+          state: RunState.Running,
+          startedAt: new Date().toISOString(),
+        });
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        repos.runs.update(runId, {
+          state: RunState.Succeeded,
+          finishedAt: new Date().toISOString(),
+        });
+        inFlight -= 1;
+        return repos.runs.findById(runId)!;
+      },
+    } as unknown as RunCoordinator;
+
+    const runIds: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const project = repos.projects.create({
+        name: `proj-${i}`,
+        repoPath: `/tmp/proj-${i}`,
+      });
+      const task = repos.tasks.create({
+        projectId: project.id,
+        name: `task-${i}`,
+        prompt: 'go',
+      });
+      const run = repos.runs.create({
+        projectId: project.id,
+        taskId: task.id,
+        idempotencyKey: `sched-${i}`,
+        trigger: 'schedule',
+        priority: 30 - i, // lower number = higher priority; drain high-priority first
+        notBeforeAt: '2026-07-26T00:00:00.000Z',
+      });
+      runIds.push(run.id);
+    }
+
+    const dispatcher = new RunDispatcher({
+      db,
+      coordinator,
+      loadPerCpu: () => 0,
+      now: () => new Date('2026-07-26T12:00:00.000Z'),
+    });
+
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      await dispatcher.tick();
+      const terminal = runIds.every((id) => repos.runs.findById(id)?.state === RunState.Succeeded);
+      if (terminal) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    expect(peakConcurrent).toBeLessThanOrEqual(2);
+    expect(peakConcurrent).toBe(2);
+    expect(admitOrder).toHaveLength(5);
+    // priority 26..30 → admit 4,3,2,1,0 (ids in that priority order)
+    expect(admitOrder[0]).toBe(runIds[4]);
+    expect(admitOrder[1]).toBe(runIds[3]);
+    expect(runIds.every((id) => repos.runs.findById(id)?.state === RunState.Succeeded)).toBe(true);
   });
 });
