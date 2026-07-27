@@ -6,6 +6,7 @@ import {
   GitLabSourceAdapter,
   SourceAdapterRegistry,
   SourceSyncService,
+  ensureProjectRepositorySource,
   parseRepositoryRemote,
   type SourceAdapter,
 } from "@/sources";
@@ -118,6 +119,109 @@ describe("sources/GitLab adapter", () => {
 });
 
 describe("sources/runtime", () => {
+  test("marks source-backed open work unverified when refresh fails", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { project, source, work } = seedSource(db);
+    work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "pull-request",
+      nativeKey: "8",
+      title: "Last known open pull request",
+      delivery: "open",
+      provenance: "external",
+      nativeState: "opened",
+      observedAt: "2026-07-20T00:00:00.000Z",
+      syncState: "current",
+    });
+    const failingAdapter: SourceAdapter = {
+      type: "gitlab",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: false,
+        write: false,
+        workKinds: ["pull-request"],
+      },
+      async listActive() {
+        throw new Error("provider unavailable");
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([failingAdapter]),
+    });
+
+    expect(await service.syncSource(source.id)).toMatchObject({ errors: 1 });
+    expect(work.items.status(project.id)).toMatchObject({
+      verifiedOpen: 0,
+      staleOpen: 1,
+      needsAttention: 1,
+    });
+    expect(
+      work.items
+        .listByProject(project.id, { limit: 20, offset: 0 })
+        .items.find((item) => item.nativeKey === "8"),
+    ).toMatchObject({
+      attention: "sync-error",
+      syncState: "error",
+      lastError: "provider unavailable",
+    });
+    db.close();
+  });
+
+  test("consolidates a legacy repository source into its configured source", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "source-runtime",
+      repoPath: "/tmp/source-runtime",
+      remoteUrl: "https://github.com/acme/app.git",
+    });
+    db.migrate();
+    const work = createWorkRepositories(db);
+    const legacy = work.sources.listByProject(project.id)[0]!;
+    const connection = work.connections.create({
+      name: "github.com",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    const configured = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/app",
+      displayName: "acme/app",
+    });
+    const item = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: legacy.id,
+      kind: "pull-request",
+      nativeKey: "12",
+      title: "Migrated pull request",
+      delivery: "open",
+      provenance: "gojo-agent",
+      nativeState: "open",
+      syncState: "pending",
+    });
+
+    expect(ensureProjectRepositorySource(db, project.id)?.id).toBe(configured.id);
+    expect(work.sources.listByProject(project.id)).toHaveLength(1);
+    expect(work.items.findById(item.id)?.sourceId).toBe(configured.id);
+    db.migrate();
+    expect(work.sources.listByProject(project.id)).toHaveLength(1);
+    db.close();
+  });
+
   test("syncs an adapter page into the canonical ledger and updates freshness", async () => {
     const db = Database.open(":memory:");
     db.migrate();
@@ -134,6 +238,7 @@ describe("sources/runtime", () => {
       observedAt: "2026-07-20T00:00:00.000Z",
       syncState: "current",
     });
+    let observedToken: string | null | undefined;
     const fakeAdapter: SourceAdapter = {
       type: "gitlab",
       capabilities: {
@@ -143,7 +248,8 @@ describe("sources/runtime", () => {
         write: false,
         workKinds: ["issue"],
       },
-      async listActive() {
+      async listActive(input) {
+        observedToken = input.token;
         return {
           items: [
             {
@@ -167,11 +273,16 @@ describe("sources/runtime", () => {
       },
     };
     const registry = new SourceAdapterRegistry([fakeAdapter]);
-    const service = new SourceSyncService({ db, registry });
+    const service = new SourceSyncService({
+      db,
+      registry,
+      resolveDefaultToken: () => "provider-token",
+    });
 
     const summary = await service.syncSource(source.id);
 
     expect(summary).toMatchObject({ upserted: 1, errors: 0 });
+    expect(observedToken).toBe("provider-token");
     expect(work.sources.findById(source.id)).toMatchObject({
       syncState: "current",
       lastError: null,

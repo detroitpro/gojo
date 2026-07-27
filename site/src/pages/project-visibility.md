@@ -42,7 +42,8 @@ The repository source is discovered from `origin` when a project is registered
 or synced. Provider credentials can use encrypted secret references; the
 standard `GH_TOKEN`/`GITHUB_TOKEN`, `GITLAB_TOKEN`, and
 `FORGEJO_TOKEN`/`GITEA_TOKEN` environment variables remain compatibility
-fallbacks.
+fallbacks. For GitHub, Gojo also uses the active `gh` CLI login when no token is
+configured explicitly.
 
 Attach additional sources with `POST /api/v1/projects/:id/sources`. A generic
 webhook connection stores only `webhookSecretName` in its configuration; put

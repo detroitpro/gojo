@@ -26,7 +26,9 @@ Repository identities are normalized from HTTPS or SSH remotes. Sync runs on a
 one-minute repair loop independently of the scheduler lease. Active resources
 are fetched with provider pagination. Successful observations remain current;
 an active item absent from a complete active snapshot becomes stale immediately
-and drops out of verified-open counts. Errors back off and remain visible.
+and drops out of verified-open counts. A failed refresh marks the source's
+active items as sync errors, so last-known state remains visible without being
+reported as verified. Errors back off and remain visible.
 
 Webhooks provide fast updates; polling repairs missed delivery. Generic webhook
 events require an HMAC-SHA256 signature, durable delivery ID, and event time.
@@ -34,8 +36,9 @@ Duplicate deliveries are ignored and older observations cannot overwrite newer
 state.
 
 Credentials resolve from a connection's secret reference, with conventional
-provider environment variables as a compatibility fallback. Secrets are never
-stored in `project_sources` or native work metadata.
+provider environment variables as a compatibility fallback. GitHub also reuses
+the active `gh` CLI login when no explicit token is configured. Secrets are
+never stored in `project_sources` or native work metadata.
 
 ## APIs and CLI
 

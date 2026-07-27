@@ -542,6 +542,50 @@ export function createWorkRepositories(db: Database) {
         }));
     },
 
+    consolidate(primaryId: string, duplicateId: string): ProjectSource | null {
+      if (primaryId === duplicateId) return this.findById(primaryId);
+      const primary = this.findById(primaryId);
+      const duplicate = this.findById(duplicateId);
+      if (!primary || !duplicate) return primary;
+      if (primary.projectId !== duplicate.projectId || primary.kind !== duplicate.kind) {
+        throw new Error("Cannot consolidate unrelated project sources");
+      }
+      const now = nowIso();
+      const superseded = `Superseded by source ${primary.id}`;
+      db.transaction(() => {
+        // Preserve any colliding historical rows as stale, source-less records.
+        sqlite
+          .query(
+            `UPDATE external_resources
+             SET source_id = NULL, sync_state = 'stale', last_error = ?, updated_at = ?
+             WHERE source_id = ?
+               AND native_key IN (
+                 SELECT native_key FROM external_resources WHERE source_id = ?
+               )`,
+          )
+          .run(superseded, now, duplicate.id, primary.id);
+        sqlite
+          .query(
+            `UPDATE work_items
+             SET source_id = NULL, sync_state = 'stale', attention = 'stale',
+               last_error = ?, updated_at = ?
+             WHERE source_id = ?
+               AND native_key IN (
+                 SELECT native_key FROM work_items WHERE source_id = ?
+               )`,
+          )
+          .run(superseded, now, duplicate.id, primary.id);
+        sqlite
+          .query("UPDATE external_resources SET source_id = ? WHERE source_id = ?")
+          .run(primary.id, duplicate.id);
+        sqlite
+          .query("UPDATE work_items SET source_id = ? WHERE source_id = ?")
+          .run(primary.id, duplicate.id);
+        sqlite.query("DELETE FROM project_sources WHERE id = ?").run(duplicate.id);
+      });
+      return this.findById(primary.id);
+    },
+
     updateSync(
       id: string,
       input: {
@@ -812,6 +856,31 @@ export function createWorkRepositories(db: Database) {
           id,
         );
       return this.findById(id);
+    },
+
+    markSourceFailure(sourceId: string, message: string, nextSyncAt: string): void {
+      const now = nowIso();
+      sqlite
+        .query(
+          `UPDATE work_items
+           SET attention = 'sync-error', sync_state = 'error', next_sync_at = ?,
+             last_error = ?, updated_at = ?
+           WHERE source_id = ? AND archived_at IS NULL
+             AND delivery IN ('draft', 'open', 'review', 'blocked')`,
+        )
+        .run(nextSyncAt, message, now, sourceId);
+      sqlite
+        .query(
+          `UPDATE external_resources
+           SET sync_state = 'error', next_sync_at = ?, last_error = ?, updated_at = ?
+           WHERE source_id = ?
+             AND work_item_id IN (
+               SELECT id FROM work_items
+               WHERE source_id = ?
+                 AND delivery IN ('draft', 'open', 'review', 'blocked')
+             )`,
+        )
+        .run(nextSyncAt, message, now, sourceId, sourceId);
     },
 
     listByProject(projectId: string, input: WorkListInput): WorkPage {

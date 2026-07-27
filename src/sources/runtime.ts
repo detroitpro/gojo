@@ -49,7 +49,19 @@ function parseConfig(connection: SourceConnection): Record<string, unknown> {
 
 function defaultToken(adapter: string): string | null {
   if (adapter === "github") {
-    return process.env["GH_TOKEN"] ?? process.env["GITHUB_TOKEN"] ?? null;
+    const environmentToken = process.env["GH_TOKEN"] ?? process.env["GITHUB_TOKEN"];
+    if (environmentToken) return environmentToken;
+    try {
+      const result = Bun.spawnSync({
+        cmd: ["gh", "auth", "token"],
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const token = result.exitCode === 0 ? result.stdout.toString().trim() : "";
+      return token || null;
+    } catch {
+      return null;
+    }
   }
   if (adapter === "gitlab") return process.env["GITLAB_TOKEN"] ?? null;
   if (adapter === "forgejo") {
@@ -64,6 +76,7 @@ export class SourceSyncService {
   private readonly resolveSecret:
     | ((name: string, projectId: string) => string | null)
     | null;
+  private readonly resolveDefaultToken: (adapter: string) => string | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
   private activeTick: Promise<void> | null = null;
@@ -72,6 +85,7 @@ export class SourceSyncService {
     db: Database;
     registry?: SourceAdapterRegistry;
     resolveSecret?: (name: string, projectId: string) => string | null;
+    resolveDefaultToken?: (adapter: string) => string | null;
   }) {
     this.work = createWorkRepositories(input.db);
     this.registry =
@@ -83,6 +97,7 @@ export class SourceSyncService {
         new GenericWebhookSourceAdapter(),
       ]);
     this.resolveSecret = input.resolveSecret ?? null;
+    this.resolveDefaultToken = input.resolveDefaultToken ?? defaultToken;
   }
 
   start(): void {
@@ -153,7 +168,7 @@ export class SourceSyncService {
       typeof config["tokenSecretName"] === "string" ? config["tokenSecretName"] : null;
     const token = tokenSecretName
       ? this.resolveSecret?.(tokenSecretName, source.projectId) ?? null
-      : defaultToken(adapter.type);
+      : this.resolveDefaultToken(adapter.type);
     const cursor = this.work.sync.cursor(source.id);
 
     try {
@@ -249,11 +264,13 @@ export class SourceSyncService {
   }
 
   private recordFailure(source: ProjectSource, message: string, now: Date): void {
+    const nextSyncAt = new Date(now.getTime() + ERROR_SYNC_INTERVAL_MS).toISOString();
     this.work.sources.updateSync(source.id, {
       syncState: "error",
-      nextSyncAt: new Date(now.getTime() + ERROR_SYNC_INTERVAL_MS).toISOString(),
+      nextSyncAt,
       lastError: message,
     });
+    this.work.items.markSourceFailure(source.id, message, nextSyncAt);
     this.work.sync.updateCursor({
       sourceId: source.id,
       cursor: this.work.sync.cursor(source.id)?.cursor ?? null,
@@ -382,10 +399,6 @@ export function ensureProjectRepositorySource(db: Database, projectId: string): 
   const project = repos.projects.findById(projectId);
   if (!project) return null;
   const work = createWorkRepositories(db);
-  const existing = work.sources
-    .listByProject(project.id)
-    .find((source) => source.kind === "repository");
-  if (existing?.connectionId) return existing;
 
   let remote = project.remoteUrl;
   if (!remote) {
@@ -400,6 +413,9 @@ export function ensureProjectRepositorySource(db: Database, projectId: string): 
   if (!remote) return null;
   const identity = parseRepositoryRemote(remote);
   const baseUrl = providerBaseUrl(identity);
+  const repositorySources = work.sources
+    .listByProject(project.id)
+    .filter((source) => source.kind === "repository");
   let connection =
     work.connections
       .list()
@@ -429,8 +445,21 @@ export function ensureProjectRepositorySource(db: Database, projectId: string): 
     });
   }
   if (!project.remoteUrl) repos.projects.update(project.id, { remoteUrl: remote });
-  if (existing) {
-    return work.sources.configure(existing.id, {
+  const configured = repositorySources.find(
+    (source) =>
+      source.connectionId === connection.id && source.externalKey === identity.externalKey,
+  );
+  if (configured) {
+    for (const legacy of repositorySources.filter(
+      (source) => source.id !== configured.id && !source.connectionId,
+    )) {
+      work.sources.consolidate(configured.id, legacy.id);
+    }
+    return work.sources.findById(configured.id);
+  }
+  const legacy = repositorySources.find((source) => !source.connectionId);
+  if (legacy) {
+    return work.sources.configure(legacy.id, {
       connectionId: connection.id,
       externalKey: identity.externalKey,
       displayName: identity.externalKey,

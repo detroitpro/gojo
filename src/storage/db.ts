@@ -91,7 +91,11 @@ export class Database {
             remote_url, remote_url, default_branch, '{}', 'pending',
             NULL, NULL, NULL, created_at, updated_at
           FROM projects
-          WHERE remote_url IS NOT NULL AND trim(remote_url) <> ''`,
+          WHERE remote_url IS NOT NULL AND trim(remote_url) <> ''
+            AND NOT EXISTS (
+              SELECT 1 FROM project_sources ps
+              WHERE ps.project_id = projects.id AND ps.kind = 'repository'
+            )`,
         )
         .run();
 
