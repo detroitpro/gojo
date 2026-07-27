@@ -5,10 +5,10 @@
  *   bun run scripts/screenshots/mint-session.ts
  *   GOJO_USER=admin bun run scripts/screenshots/mint-session.ts
  */
-import { resolvePaths } from "../../src/config/paths.ts";
-import { UserService } from "../../src/auth/users.ts";
-import { SecretStore } from "../../src/secrets/store.ts";
-import { Database } from "../../src/storage/index.ts";
+import { resolvePaths } from "../../src/config/paths";
+import { UserService } from "../../src/auth/users";
+import { SecretStore } from "../../src/secrets/store";
+import { Database } from "../../src/storage/index";
 
 const SESSION_SECRET_NAME = "__gojo_session_secret__";
 

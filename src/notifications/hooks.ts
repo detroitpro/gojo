@@ -1,6 +1,7 @@
 import type { AppContext } from "@/app/context";
 import type { NotificationChannel } from "@/notifications/dispatcher";
 import { recordRunOutcome } from "@/scheduler/disable";
+import { getInstanceSetting } from "@/storage/instance-settings";
 import { isTerminal, RunState } from "@shared/run-states";
 import { safeParseProjectManifest } from "@shared/manifest";
 
@@ -15,22 +16,12 @@ interface ChannelConfigMap {
 }
 
 function loadChannels(ctx: AppContext): ChannelConfigMap {
-  const row = ctx.db
-    .connection()
-    .query<{ value_json: string }, [string]>(
-      "SELECT value_json FROM instance_settings WHERE key = ?",
-    )
-    .get("notification_channels");
-
-  if (!row) {
+  const value = getInstanceSetting(ctx.db, "notification_channels");
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
 
-  try {
-    return JSON.parse(row.value_json) as ChannelConfigMap;
-  } catch {
-    return {};
-  }
+  return value as ChannelConfigMap;
 }
 
 function resolveChannel(

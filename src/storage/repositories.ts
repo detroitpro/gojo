@@ -392,6 +392,7 @@ export interface TaskRepository {
   findEnabledByProjectAndName(projectId: string, name: string): Task | null;
   listByProject(projectId: string): Task[];
   listAll(): Task[];
+  count(): number;
   update(id: string, input: UpdateTaskInput): Task | null;
   delete(id: string): boolean;
 }
@@ -401,6 +402,7 @@ export interface ScheduleRepository {
   findById(id: string): Schedule | null;
   listByTask(taskId: string): Schedule[];
   listDue(nowIso: string): Schedule[];
+  count(): number;
   update(id: string, input: UpdateScheduleInput): Schedule | null;
   updateNextRun(
     id: string,
@@ -418,6 +420,8 @@ export interface RunRepository {
   findById(id: string): Run | null;
   findByIdempotencyKey(key: string): Run | null;
   listByProject(projectId: string): Run[];
+  listAll(): Run[];
+  count(): number;
   listNonTerminal(): Run[];
   /** Queued/Scheduled runs waiting for admission, ordered for the dispatcher. */
   listQueued(): Run[];
@@ -665,6 +669,11 @@ export function createRepositories(db: Database): Repositories {
       return rows.map(mapTask);
     },
 
+    count() {
+      const row = sqlite.query<{ count: number }, []>("SELECT COUNT(*) as count FROM tasks").get();
+      return row?.count ?? 0;
+    },
+
     update(id, input) {
       const existing = this.findById(id);
       if (!existing) {
@@ -782,6 +791,13 @@ export function createRepositories(db: Database): Repositories {
         )
         .all(nowIso);
       return rows.map(mapSchedule);
+    },
+
+    count() {
+      const row = sqlite
+        .query<{ count: number }, []>("SELECT COUNT(*) as count FROM schedules")
+        .get();
+      return row?.count ?? 0;
     },
 
     update(id, input) {
@@ -943,6 +959,18 @@ export function createRepositories(db: Database): Repositories {
         .query<RunRow, [string]>("SELECT * FROM runs WHERE project_id = ? ORDER BY created_at DESC")
         .all(projectId);
       return rows.map(mapRun);
+    },
+
+    listAll() {
+      const rows = sqlite
+        .query<RunRow, []>("SELECT * FROM runs ORDER BY created_at DESC")
+        .all();
+      return rows.map(mapRun);
+    },
+
+    count() {
+      const row = sqlite.query<{ count: number }, []>("SELECT COUNT(*) as count FROM runs").get();
+      return row?.count ?? 0;
     },
 
     listNonTerminal() {
