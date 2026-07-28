@@ -175,4 +175,31 @@ describe("notifications/dispatcher", () => {
       }),
     ).toBe("gojo: Succeeded\ngojo / maintain-tests\nrun 01X");
   });
+
+  test("formatTelegramText appends the agent summary as the message body", () => {
+    expect(
+      formatTelegramText({
+        project: "gojo",
+        task: "activity-digest",
+        runId: "01X",
+        state: "Succeeded",
+        summary: "gojo — last 24h\n\nMerged (1)\n- #21 fix",
+      }),
+    ).toBe(
+      "gojo: Succeeded\ngojo / activity-digest\nrun 01X\n\ngojo — last 24h\n\nMerged (1)\n- #21 fix",
+    );
+  });
+
+  test("formatTelegramText truncates past the Telegram limit", () => {
+    const text = formatTelegramText({
+      project: "gojo",
+      task: "activity-digest",
+      runId: "01X",
+      state: "Succeeded",
+      summary: "x".repeat(5000),
+    });
+
+    expect(text.length).toBe(4096);
+    expect(text.endsWith("… truncated")).toBe(true);
+  });
 });

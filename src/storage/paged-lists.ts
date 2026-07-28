@@ -241,6 +241,7 @@ type SqlTaskRow = {
   integration_json: string;
   failure_policy_json: string;
   concurrency_json: string;
+  notifications_json: string;
   enabled: number;
   created_at: string;
   project_name: string | null;

@@ -19,7 +19,7 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(8);
+    expect(SCHEMA_VERSION).toBe(9);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
     expect(db.tableNames()).toEqual(
@@ -246,6 +246,58 @@ describe("storage/work-ledger", () => {
       verifiedOpen: 1,
       needsAttention: 0,
     });
+    db.close();
+  });
+
+  test("source upsert does not downgrade gojo-agent provenance", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { project } = seedProject(db);
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "GitHub",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["pull-request"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/agent-prs",
+      displayName: "acme/agent-prs",
+    });
+    work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "pull-request",
+      nativeKey: "7",
+      title: "Agent PR",
+      delivery: "open",
+      provenance: "gojo-agent",
+      actorName: "gojo",
+      syncState: "current",
+    });
+
+    const downgraded = work.items.upsertExternal({
+      projectId: project.id,
+      sourceId: source.id,
+      kind: "pull-request",
+      nativeKey: "7",
+      title: "Agent PR",
+      delivery: "open",
+      provenance: "human",
+      actorName: "detroitpro",
+      syncState: "current",
+    });
+    expect(downgraded.provenance).toBe("gojo-agent");
+    expect(downgraded.actorName).toBe("detroitpro");
     db.close();
   });
 });

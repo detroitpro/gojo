@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   integration_json TEXT NOT NULL DEFAULT '{}',
   failure_policy_json TEXT NOT NULL DEFAULT '{}',
   concurrency_json TEXT NOT NULL DEFAULT '{}',
+  notifications_json TEXT NOT NULL DEFAULT '{}',
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
@@ -644,6 +645,12 @@ ALTER TABLE work_items ADD COLUMN resolution TEXT;
 ALTER TABLE work_items ADD COLUMN resolved_at TEXT;
 ALTER TABLE work_items ADD COLUMN resolved_by TEXT;
 ALTER TABLE work_items ADD COLUMN resolution_note TEXT;
+`,
+  },
+  {
+    version: 9,
+    sql: `
+ALTER TABLE tasks ADD COLUMN notifications_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
 ];

@@ -82,10 +82,21 @@ function extractTelegramCreds(channel: NotificationChannel): {
   return { botToken, chatId: String(chatId) };
 }
 
+/** Telegram rejects messages longer than 4096 characters. */
+const TELEGRAM_MAX_CHARS = 4096;
+const TRUNCATION_MARKER = "\n… truncated";
+
+export function truncateForTelegram(text: string): string {
+  if (text.length <= TELEGRAM_MAX_CHARS) {
+    return text;
+  }
+  return text.slice(0, TELEGRAM_MAX_CHARS - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
+}
+
 /** Short human text for Telegram (not a raw JSON dump). */
 export function formatTelegramText(payload: unknown): string {
   if (typeof payload === "string") {
-    return payload;
+    return truncateForTelegram(payload);
   }
   if (!payload || typeof payload !== "object") {
     return String(payload);
@@ -96,6 +107,7 @@ export function formatTelegramText(payload: unknown): string {
   const task = typeof record["task"] === "string" ? record["task"] : null;
   const runId = typeof record["runId"] === "string" ? record["runId"] : null;
   const error = typeof record["error"] === "string" ? record["error"] : null;
+  const summary = typeof record["summary"] === "string" ? record["summary"].trim() : "";
   const test = record["test"] === true;
 
   const lines: string[] = [];
@@ -113,7 +125,11 @@ export function formatTelegramText(payload: unknown): string {
   if (error) {
     lines.push(`error: ${error}`);
   }
-  return lines.join("\n");
+  // The agent authors this text; the header above is only routing context.
+  if (summary.length > 0) {
+    lines.push("", summary);
+  }
+  return truncateForTelegram(lines.join("\n"));
 }
 
 function channelSecrets(channel: NotificationChannel): string[] {

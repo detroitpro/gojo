@@ -101,6 +101,7 @@ export function syncProjectFromManifest(
         integrationJson: JSON.stringify(taskConfig.integration ?? {}),
         failurePolicyJson,
         concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
+        notificationsJson: JSON.stringify(taskConfig.notifications ?? {}),
       });
       taskIds.set(name, existing.id);
     } else {
@@ -114,6 +115,7 @@ export function syncProjectFromManifest(
         integrationJson: JSON.stringify(taskConfig.integration ?? {}),
         failurePolicyJson,
         concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
+        notificationsJson: JSON.stringify(taskConfig.notifications ?? {}),
       });
       taskIds.set(name, created.id);
     }

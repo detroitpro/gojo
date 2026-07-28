@@ -66,6 +66,7 @@ interface TaskRow {
   integration_json: string;
   failure_policy_json: string;
   concurrency_json: string;
+  notifications_json: string;
   enabled: number;
   created_at: string;
 }
@@ -190,6 +191,7 @@ export function mapTask(row: TaskRow): Task {
     integrationJson: row.integration_json,
     failurePolicyJson: row.failure_policy_json,
     concurrencyJson: row.concurrency_json,
+    notificationsJson: row.notifications_json,
     enabled: boolFromInt(row.enabled),
     createdAt: row.created_at,
   };
@@ -609,8 +611,8 @@ export function createRepositories(db: Database): Repositories {
           `INSERT INTO tasks (
             id, project_id, name, description, agent_profile_id, prompt,
             validation_profile_json, integration_json, failure_policy_json,
-            concurrency_json, enabled, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            concurrency_json, notifications_json, enabled, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -623,6 +625,7 @@ export function createRepositories(db: Database): Repositories {
           input.integrationJson ?? "{}",
           input.failurePolicyJson ?? "{}",
           input.concurrencyJson ?? "{}",
+          input.notificationsJson ?? "{}",
           intFromBool(input.enabled ?? true),
           createdAt,
         );
@@ -638,6 +641,7 @@ export function createRepositories(db: Database): Repositories {
         integration_json: input.integrationJson ?? "{}",
         failure_policy_json: input.failurePolicyJson ?? "{}",
         concurrency_json: input.concurrencyJson ?? "{}",
+        notifications_json: input.notificationsJson ?? "{}",
         enabled: intFromBool(input.enabled ?? true),
         created_at: createdAt,
       });
@@ -695,6 +699,7 @@ export function createRepositories(db: Database): Repositories {
         integrationJson: input.integrationJson ?? existing.integrationJson,
         failurePolicyJson: input.failurePolicyJson ?? existing.failurePolicyJson,
         concurrencyJson: input.concurrencyJson ?? existing.concurrencyJson,
+        notificationsJson: input.notificationsJson ?? existing.notificationsJson,
         enabled: input.enabled ?? existing.enabled,
       };
 
@@ -703,7 +708,7 @@ export function createRepositories(db: Database): Repositories {
           `UPDATE tasks SET
             name = ?, description = ?, agent_profile_id = ?, prompt = ?,
             validation_profile_json = ?, integration_json = ?, failure_policy_json = ?,
-            concurrency_json = ?, enabled = ?
+            concurrency_json = ?, notifications_json = ?, enabled = ?
           WHERE id = ?`,
         )
         .run(
@@ -715,6 +720,7 @@ export function createRepositories(db: Database): Repositories {
           next.integrationJson,
           next.failurePolicyJson,
           next.concurrencyJson,
+          next.notificationsJson,
           intFromBool(next.enabled),
           id,
         );

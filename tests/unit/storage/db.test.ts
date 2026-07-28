@@ -83,6 +83,35 @@ describe("storage/db", () => {
     expect(columns).toContain("priority");
   });
 
+  test("migration v9 adds task notification routing on existing v8 databases", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    sqlite.exec("ALTER TABLE tasks DROP COLUMN notifications_json;");
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(8, new Date().toISOString());
+
+    database.migrate();
+
+    const columns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('tasks')")
+      .all()
+      .map((row) => row.name);
+    expect(columns).toContain("notifications_json");
+
+    const repos = createRepositories(database);
+    const project = repos.projects.create({ name: "routing", repoPath: "/tmp/routing" });
+    const task = repos.tasks.create({
+      projectId: project.id,
+      name: "activity-digest",
+      prompt: "report",
+      notificationsJson: JSON.stringify({ onSuccess: ["ghost"] }),
+    });
+    expect(repos.tasks.findById(task.id)?.notificationsJson).toBe('{"onSuccess":["ghost"]}');
+  });
+
   test("creates project, task, schedule, run, and attempt", () => {
     const database = openInMemory();
     const repos = createRepositories(database);

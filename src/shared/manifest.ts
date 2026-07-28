@@ -117,6 +117,19 @@ export const TaskSelfHealSchema = z.object({
 
 export type TaskSelfHeal = z.infer<typeof TaskSelfHealSchema>;
 
+export const NotificationsConfigSchema = z.object({
+  onSuccess: z.array(z.string()).optional(),
+  onFailure: z.array(z.string()).optional(),
+  onDisabled: z.array(z.string()).optional(),
+});
+
+export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
+
+/** Safe-parse variant for routing stored outside a full manifest (e.g. a task row). */
+export function safeParseNotificationsConfig(input: unknown) {
+  return NotificationsConfigSchema.safeParse(input);
+}
+
 export const TaskConfigSchema = z.object({
   description: z.string().min(1),
   agent: z.string().min(1),
@@ -126,6 +139,8 @@ export const TaskConfigSchema = z.object({
   integration: TaskIntegrationSchema.optional(),
   failurePolicy: TaskFailurePolicySchema.optional(),
   selfHeal: TaskSelfHealSchema.optional(),
+  /** Overrides project-level routing for this task only. */
+  notifications: NotificationsConfigSchema.optional(),
 });
 
 export type TaskConfig = z.infer<typeof TaskConfigSchema>;
@@ -137,14 +152,6 @@ export const ScheduleConfigSchema = z.object({
 });
 
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
-
-export const NotificationsConfigSchema = z.object({
-  onSuccess: z.array(z.string()).optional(),
-  onFailure: z.array(z.string()).optional(),
-  onDisabled: z.array(z.string()).optional(),
-});
-
-export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 
 /** Repository project YAML manifest per PRD §8. */
 export const ProjectManifestSchema = z.object({

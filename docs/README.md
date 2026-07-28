@@ -20,6 +20,7 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
   - [work](./modules/work.md) (cross-source project visibility)
   - [sources](./modules/sources.md) (GitHub/GitLab/Forgejo/non-git connectors)
   - [platform events](./modules/events.md) (durable SSE invalidation and live UI refresh)
+  - [notifications](./modules/notifications.md) (channels, per-task routing, report delivery)
   - [agents](./modules/agents.md)
   - [scheduler](./modules/scheduler.md)
 

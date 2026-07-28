@@ -26,6 +26,60 @@ export async function getRunDiff(ctx: AppContext, runId: string): Promise<RunDif
   return { files };
 }
 
+export interface RunHandoffSummary {
+  summary: string | null;
+  status: string | null;
+}
+
+function readHandoffFields(value: unknown): RunHandoffSummary | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const summary = typeof record["summary"] === "string" ? record["summary"].trim() : "";
+  const status = typeof record["status"] === "string" ? record["status"] : null;
+  if (summary.length === 0 && status === null) {
+    return null;
+  }
+  return { summary: summary.length > 0 ? summary : null, status };
+}
+
+/**
+ * Report text as written by the agent. Prefers the merged artifact; falls back to the
+ * raw attempt handoff so runs that failed before the artifact was written still report.
+ */
+export function resolveRunHandoffSummary(ctx: AppContext, runId: string): RunHandoffSummary {
+  const artifactPath = join(ctx.paths.artifacts, runId, "handoff.json");
+  if (existsSync(artifactPath)) {
+    try {
+      const fields = readHandoffFields(JSON.parse(readFileSync(artifactPath, "utf8")));
+      if (fields) {
+        return fields;
+      }
+    } catch {
+      // Fall through to the attempt record.
+    }
+  }
+
+  const attempts = ctx.repos.attempts.listByRun(runId);
+  for (let index = attempts.length - 1; index >= 0; index -= 1) {
+    const raw = attempts[index]?.handoffJson;
+    if (!raw) {
+      continue;
+    }
+    try {
+      const fields = readHandoffFields(JSON.parse(raw));
+      if (fields) {
+        return fields;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return { summary: null, status: null };
+}
+
 export function getRunArtifacts(ctx: AppContext, runId: string): RunArtifactsResult {
   const dir = join(ctx.paths.artifacts, runId);
   const handoffPath = join(dir, "handoff.json");

@@ -1,9 +1,15 @@
 import type { AppContext } from "@/app/context";
 import type { NotificationChannel } from "@/notifications/dispatcher";
+import { resolveRunHandoffSummary } from "@/runs/inspect";
 import { recordRunOutcome } from "@/scheduler/disable";
 import { getInstanceSetting } from "@/storage/instance-settings";
+import type { Task } from "@/storage/types";
 import { isTerminal, RunState } from "@shared/run-states";
-import { safeParseProjectManifest } from "@shared/manifest";
+import {
+  safeParseNotificationsConfig,
+  safeParseProjectManifest,
+  type NotificationsConfig,
+} from "@shared/manifest";
 
 interface ChannelConfigMap {
   [name: string]: {
@@ -61,6 +67,38 @@ async function enqueueNamedChannels(
   }
 }
 
+function hasRoutes(config: NotificationsConfig | undefined): boolean {
+  if (!config) {
+    return false;
+  }
+  return Boolean(
+    config.onSuccess?.length || config.onFailure?.length || config.onDisabled?.length,
+  );
+}
+
+/** Task-level routing replaces project-level routing so one task can notify alone. */
+function resolveRouting(
+  task: Task | null,
+  projectRouting: NotificationsConfig | undefined,
+): NotificationsConfig | undefined {
+  if (!task?.notificationsJson) {
+    return projectRouting;
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(task.notificationsJson);
+  } catch {
+    return projectRouting;
+  }
+
+  const parsed = safeParseNotificationsConfig(raw);
+  if (!parsed.success || !hasRoutes(parsed.data)) {
+    return projectRouting;
+  }
+  return parsed.data;
+}
+
 export interface NotificationHookHandle {
   unsubscribe: () => void;
   drain: () => Promise<void>;
@@ -95,13 +133,17 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
       }
 
       const parsed = safeParseProjectManifest(manifestRaw);
-      const notifications = parsed.success ? parsed.data.notifications : undefined;
+      const task = ctx.repos.tasks.findById(run.taskId);
+      const notifications = resolveRouting(
+        task,
+        parsed.success ? parsed.data.notifications : undefined,
+      );
       if (!notifications) {
         return;
       }
 
       const channels = loadChannels(ctx);
-      const task = ctx.repos.tasks.findById(run.taskId);
+      const handoff = resolveRunHandoffSummary(ctx, run.id);
       const basePayload = {
         project: project.name,
         task: task?.name ?? run.taskId,
@@ -109,6 +151,8 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
         state: run.state,
         error: run.errorMessage,
         finishedAt: run.finishedAt,
+        summary: handoff.summary,
+        handoffStatus: handoff.status,
       };
 
       const outcomeNames =

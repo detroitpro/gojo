@@ -52,6 +52,7 @@ export interface Task {
   integrationJson: string;
   failurePolicyJson: string;
   concurrencyJson: string;
+  notificationsJson: string;
   enabled: boolean;
   createdAt: string;
 }
@@ -66,6 +67,7 @@ export interface CreateTaskInput {
   integrationJson?: string;
   failurePolicyJson?: string;
   concurrencyJson?: string;
+  notificationsJson?: string;
   enabled?: boolean;
 }
 
@@ -78,6 +80,7 @@ export interface UpdateTaskInput {
   integrationJson?: string;
   failurePolicyJson?: string;
   concurrencyJson?: string;
+  notificationsJson?: string;
   enabled?: boolean;
 }
 

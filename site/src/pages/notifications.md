@@ -42,7 +42,7 @@ You can also **Send test**, **Edit**, or **Delete** from the channel table after
 
 Webhook-like types POST JSON to `webhookUrl`. Slack wraps the payload as `{ "text": "<json string>" }`; other webhook types send the payload object directly.
 
-Telegram uses the Bot API: `sendMessage` with a short human-readable text (project, task, state, run id, error) — not a raw JSON dump.
+Telegram uses the Bot API: `sendMessage` with human-readable text (project, task, state, run id, error) — not a raw JSON dump. If the run wrote a handoff, its `summary` follows as the message body.
 
 ## Route runs (`gojo.yaml`)
 
@@ -67,6 +67,38 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 | `onFailure` | Run ended in any other terminal state (failed, canceled, timed out, …) |
 | `onDisabled` | After a scheduled run, the schedule was auto-disabled for consecutive failures |
 
+## Route a single task
+
+Top-level `notifications` applies to every task in the project. To have **one** task notify while the
+rest stay silent, put a `notifications` block on that task and leave the project block empty:
+
+```yaml
+tasks:
+  activity-digest:
+    description: Daily executive brief on what shipped in the last 24h
+    agent: cursor
+    promptFile: .gojo/tasks/activity-digest.md
+    validationProfile: handoff
+    notifications:
+      onSuccess:
+        - ops-telegram
+      onFailure:
+        - ops-telegram
+
+notifications: {}
+```
+
+A task block **replaces** project routing for that task; it does not merge with it. A task with no
+`notifications` block falls back to the project block as before.
+
+## Report text in the message
+
+Whatever the agent writes as `summary` in `.gojo/handoff.json` is delivered as the message body,
+verbatim. That makes a report-only task a usable digest: the agent researches, writes the finished
+message, and gojo delivers it.
+
+Keep it plain text. Telegram caps messages at 4096 characters and gojo truncates past that.
+
 ## Delivery behavior
 
 - **Queue:** notifications are written to a local queue and processed on a short interval.
@@ -80,7 +112,9 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
   "runId": "01J…",
   "state": "Failed",
   "error": "validation failed",
-  "finishedAt": "2026-07-23T12:00:00.000Z"
+  "finishedAt": "2026-07-23T12:00:00.000Z",
+  "summary": "<handoff summary, or null>",
+  "handoffStatus": "failed"
 }
 ```
 
@@ -104,6 +138,8 @@ Pair `onDisabled` with your ops channel so silent schedule death is visible.
 | **Send test** fails | Bad URL/token, non-HTTPS webhook, wrong chat id, or the provider rejected the request |
 | Real runs never notify | Channel name in `gojo.yaml` does not match Settings, or project not synced |
 | Only failures notify | `onSuccess` empty or missing |
+| Every task notifies | Routing is on the project block; move it to the one task that should notify |
+| Message has no report text | The run wrote no handoff, or its `summary` was empty |
 | Schedule died quietly | Missing `onDisabled`, or `disableAfterConsecutiveFailedRuns` not set |
 | Telegram 401/404 | Invalid bot token, or the bot has not been started / added to the chat |
 
