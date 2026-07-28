@@ -36,20 +36,14 @@ function compareCandidates(a: AdmissionCandidate, b: AdmissionCandidate): number
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/**
- * Pure admission selection. Cron is a suggestion (`notBeforeAt`); this picks
- * who may start now under global/project caps with round-robin fairness.
- */
-export function selectAdmissions(
-  snapshot: AdmissionSnapshot,
-  policy: SchedulingPolicy,
-  now: Date,
-): AdmissionDecision {
-  const nowIso = now.toISOString();
+function partitionQueued(
+  queued: AdmissionCandidate[],
+  nowIso: string,
+): { expire: string[]; eligible: AdmissionCandidate[] } {
   const expire: string[] = [];
   const eligible: AdmissionCandidate[] = [];
 
-  for (const run of snapshot.queued) {
+  for (const run of queued) {
     if (run.expiresAt && run.expiresAt <= nowIso) {
       expire.push(run.id);
       continue;
@@ -60,42 +54,58 @@ export function selectAdmissions(
     eligible.push(run);
   }
 
-  eligible.sort(compareCandidates);
+  return { expire, eligible };
+}
 
-  if (
-    policy.maxLoadPerCpu > 0 &&
-    snapshot.loadPerCpu >= policy.maxLoadPerCpu
-  ) {
-    return { admit: [], expire };
-  }
+function isBlockedByLoad(snapshot: AdmissionSnapshot, policy: SchedulingPolicy): boolean {
+  return policy.maxLoadPerCpu > 0 && snapshot.loadPerCpu >= policy.maxLoadPerCpu;
+}
 
-  if (
+function isBlockedByStagger(
+  snapshot: AdmissionSnapshot,
+  policy: SchedulingPolicy,
+  now: Date,
+): boolean {
+  return (
     policy.minStartIntervalMs > 0 &&
-    snapshot.lastAdmittedAt &&
+    snapshot.lastAdmittedAt !== null &&
     now.getTime() - snapshot.lastAdmittedAt.getTime() < policy.minStartIntervalMs
-  ) {
-    return { admit: [], expire };
-  }
+  );
+}
 
-  let globalRunning = Object.values(snapshot.runningByProject).reduce((a, b) => a + b, 0);
-  const runningByProject = { ...snapshot.runningByProject };
+/** Project ids in first-seen order for round-robin fairness. */
+function projectIdsInOrder(candidates: AdmissionCandidate[]): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const run of candidates) {
+    if (!seen.has(run.projectId)) {
+      seen.add(run.projectId);
+      order.push(run.projectId);
+    }
+  }
+  return order;
+}
+
+function admitRoundRobin(
+  eligible: AdmissionCandidate[],
+  policy: SchedulingPolicy,
+  runningByProject: Record<string, number>,
+  globalRunning: number,
+): { admit: string[]; runningByProject: Record<string, number>; globalRunning: number } {
   const admit: string[] = [];
   const remaining = [...eligible];
+  let running = globalRunning;
+  const byProject = { ...runningByProject };
 
-  while (remaining.length > 0 && globalRunning < policy.maxConcurrentRuns) {
-    const projectOrder: string[] = [];
-    for (const run of remaining) {
-      if (!projectOrder.includes(run.projectId)) {
-        projectOrder.push(run.projectId);
-      }
-    }
-
+  while (remaining.length > 0 && running < policy.maxConcurrentRuns) {
+    const projectOrder = projectIdsInOrder(remaining);
     let admittedThisRound = false;
+
     for (const projectId of projectOrder) {
-      if (globalRunning >= policy.maxConcurrentRuns) {
+      if (running >= policy.maxConcurrentRuns) {
         break;
       }
-      const projectRunning = runningByProject[projectId] ?? 0;
+      const projectRunning = byProject[projectId] ?? 0;
       if (projectRunning >= policy.maxConcurrentRunsPerProject) {
         continue;
       }
@@ -108,12 +118,12 @@ export function selectAdmissions(
         continue;
       }
       admit.push(picked.id);
-      runningByProject[projectId] = projectRunning + 1;
-      globalRunning += 1;
+      byProject[projectId] = projectRunning + 1;
+      running += 1;
       admittedThisRound = true;
       // One admission per tick when stagger interval is set (prevents stampede).
       if (policy.minStartIntervalMs > 0) {
-        return { admit, expire };
+        return { admit, runningByProject: byProject, globalRunning: running };
       }
     }
 
@@ -121,6 +131,35 @@ export function selectAdmissions(
       break;
     }
   }
+
+  return { admit, runningByProject: byProject, globalRunning: running };
+}
+
+/**
+ * Pure admission selection. Cron is a suggestion (`notBeforeAt`); this picks
+ * who may start now under global/project caps with round-robin fairness.
+ */
+export function selectAdmissions(
+  snapshot: AdmissionSnapshot,
+  policy: SchedulingPolicy,
+  now: Date,
+): AdmissionDecision {
+  const nowIso = now.toISOString();
+  const { expire, eligible } = partitionQueued(snapshot.queued, nowIso);
+
+  eligible.sort(compareCandidates);
+
+  if (isBlockedByLoad(snapshot, policy) || isBlockedByStagger(snapshot, policy, now)) {
+    return { admit: [], expire };
+  }
+
+  const globalRunning = Object.values(snapshot.runningByProject).reduce((a, b) => a + b, 0);
+  const { admit } = admitRoundRobin(
+    eligible,
+    policy,
+    snapshot.runningByProject,
+    globalRunning,
+  );
 
   return { admit, expire };
 }
