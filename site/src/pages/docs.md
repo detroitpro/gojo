@@ -30,6 +30,8 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 **Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project tables of enabled tasks with a last-five-runs strip. **PRs open** links to projects with open automation PRs (or that project’s Open PRs panel when filtered). Per-item impact audit lives on project detail and run detail.
 
+**Queue** — waiting runs with admission positions, instance scheduling policy caps, and what is actively running.
+
 ![gojo projects](/images/ui-projects.png)
 
 **Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, remote link, open and recently merged PR lists (with merge babysitter enqueue when `maintain-merge` exists), Impact detail, structured config, and sync manifests.

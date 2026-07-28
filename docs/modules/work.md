@@ -38,6 +38,7 @@ than the lifecycle source of truth.
 - `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/work/:id/resolve`
 - `gojo project work|status <id>`
+- `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale]` (first page only; API adds paging and more filters)
 - `gojo project recheck-work <id> <workItemId>`
 - `gojo project resolve-work <id> <workItemId> [--by <actor>] [--note <text>]`
 
