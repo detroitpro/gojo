@@ -164,4 +164,129 @@ describe("runs/dispatcher", () => {
     expect(executed).toEqual([]);
     expect(repos.runs.findById(waiting.id)?.state).toBe(RunState.Queued);
   });
+
+  test("tick coalesces when already ticking", async () => {
+    const { repos, projectA, taskA } = setup();
+    const run = repos.runs.create({
+      projectId: projectA.id,
+      taskId: taskA.id,
+      idempotencyKey: "coalesce-run",
+      trigger: "manual",
+      state: RunState.Queued,
+      priority: 10,
+      notBeforeAt: "2026-07-26T00:00:00.000Z",
+    });
+
+    let releaseExecute: () => void = () => {};
+    const executeGate = new Promise<void>((resolve) => {
+      releaseExecute = resolve;
+    });
+    const coordinator = {
+      executeRun: mock(async (runId: string) => {
+        await executeGate;
+        repos.runs.update(runId, {
+          state: RunState.Running,
+          startedAt: new Date().toISOString(),
+        });
+        return repos.runs.findById(runId)!;
+      }),
+    } as unknown as RunCoordinator;
+
+    const dispatcher = new RunDispatcher({
+      db: db!,
+      coordinator,
+      loadPerCpu: () => 0,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+
+    const firstTick = dispatcher.tick();
+    const secondResult = await dispatcher.tick();
+    expect(secondResult).toEqual({ admitted: [], expired: [] });
+
+    releaseExecute();
+    const firstResult = await firstTick;
+    expect(firstResult.admitted).toEqual([run.id]);
+  });
+
+  test("start kicks initial admission tick", async () => {
+    const { repos, projectA, taskA } = setup();
+    const run = repos.runs.create({
+      projectId: projectA.id,
+      taskId: taskA.id,
+      idempotencyKey: "start-run",
+      trigger: "manual",
+      state: RunState.Queued,
+      priority: 10,
+      notBeforeAt: "2026-07-26T00:00:00.000Z",
+    });
+
+    const executed: string[] = [];
+    const coordinator = {
+      executeRun: mock(async (runId: string) => {
+        executed.push(runId);
+        repos.runs.update(runId, {
+          state: RunState.Running,
+          startedAt: new Date().toISOString(),
+        });
+        return repos.runs.findById(runId)!;
+      }),
+    } as unknown as RunCoordinator;
+
+    const dispatcher = new RunDispatcher({
+      db: db!,
+      coordinator,
+      tickIntervalMs: 60_000,
+      loadPerCpu: () => 0,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+
+    dispatcher.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(executed).toEqual([run.id]);
+    await dispatcher.stop();
+  });
+
+  test("admitted Scheduled run transitions to Queued", async () => {
+    const { repos, projectA, taskA } = setup();
+    const scheduled = repos.runs.create({
+      projectId: projectA.id,
+      taskId: taskA.id,
+      idempotencyKey: "scheduled-run",
+      trigger: "schedule",
+      state: RunState.Scheduled,
+      priority: 30,
+      notBeforeAt: "2026-07-26T00:00:00.000Z",
+    });
+
+    let releaseExecute: () => void = () => {};
+    const executeGate = new Promise<void>((resolve) => {
+      releaseExecute = resolve;
+    });
+    const coordinator = {
+      executeRun: mock(async (runId: string) => {
+        await executeGate;
+        repos.runs.update(runId, {
+          state: RunState.Running,
+          startedAt: new Date().toISOString(),
+        });
+        return repos.runs.findById(runId)!;
+      }),
+    } as unknown as RunCoordinator;
+
+    const dispatcher = new RunDispatcher({
+      db: db!,
+      coordinator,
+      loadPerCpu: () => 0,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+
+    const result = await dispatcher.tick();
+    expect(result.admitted).toEqual([scheduled.id]);
+    expect(repos.runs.findById(scheduled.id)?.state).toBe(RunState.Queued);
+
+    releaseExecute();
+    await executeGate;
+  });
 });
