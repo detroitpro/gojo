@@ -88,6 +88,27 @@ describe('integration/integrator', () => {
     expect(await getHead(worktreePath)).toBe(result.commitSha!);
   });
 
+  test('pull-request skips push and PR when worktree is clean', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+
+    const result = await integrate({
+      mode: 'pull-request',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: no changes',
+      runId: 'run-clean',
+      prTool: 'gh',
+    });
+
+    expect(result.commitSha).toBeNull();
+    expect(result.prUrl).toBeNull();
+    expect(result.prCreated).toBeNull();
+    expect(result.conflict).toBe(false);
+  });
+
   test('pull-request returns placeholder when PR CLI cannot create a PR', async () => {
     const { repoPath, worktreePath, branchName } = await createRepo();
     writeFileSync(join(worktreePath, 'pr.txt'), 'pr');

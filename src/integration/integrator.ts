@@ -186,6 +186,11 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
     case 'pull-request': {
       const commitSha = await commitIfDirty(opts.worktreePath, opts.commitMessage);
 
+      // PRD §25.11: no Git diff is a valid success — do not push or open a PR.
+      if (!commitSha) {
+        return { commitSha: null, prUrl: null, conflict: false, prCreated: null };
+      }
+
       if (await hasRemote(opts.repoPath)) {
         await push(opts.repoPath, 'origin', `${opts.branchName}:${opts.branchName}`);
       }
