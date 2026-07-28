@@ -727,6 +727,13 @@ export function createWorkRepositories(db: Database) {
           ["draft", "open", "review", "blocked"].includes(
             input.delivery ?? existing.delivery,
           );
+        const incomingProvenance = input.provenance ?? existing?.provenance ?? "external";
+        // Never downgrade coordinator-owned gojo-agent work when a forge user login
+        // would otherwise reclassify the PR as human/bot/external.
+        const nextProvenance: WorkProvenance =
+          existing?.provenance === "gojo-agent" && incomingProvenance !== "gojo-agent"
+            ? "gojo-agent"
+            : incomingProvenance;
         const workItem = existing
           ? (() => {
               sqlite
@@ -749,7 +756,7 @@ export function createWorkRepositories(db: Database) {
                   input.delivery ?? existing.delivery,
                   input.outcome ?? existing.outcome,
                   attention,
-                  input.provenance ?? existing.provenance,
+                  nextProvenance,
                   input.actorName === undefined ? existing.actor_name : input.actorName,
                   input.agentProfileId === undefined
                     ? existing.agent_profile_id

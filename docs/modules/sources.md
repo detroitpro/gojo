@@ -46,6 +46,13 @@ provider environment variables as a compatibility fallback. GitHub also reuses
 the active `gh` CLI login when no explicit token is configured. Secrets are
 never stored in `project_sources` or native work metadata.
 
+## Provenance
+
+Adapters map forge author type to `human` or `bot`. Pull/merge requests whose
+head branch starts with `gojo/` are classified as `gojo-agent` even when opened
+through a human CLI login. Source sync must not downgrade an existing
+`gojo-agent` ledger row to `human`/`bot`/`external`.
+
 ## APIs and CLI
 
 - `GET /api/v1/projects/:id/sources`

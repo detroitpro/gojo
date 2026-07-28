@@ -18,11 +18,13 @@ without pretending that gojo owns those systems' native state.
   terminal delivery
 
 An item also records provenance, source identity, native state/JSON, observation
-time, next sync, and freshness. Verified-open counts include only current
-observations. A last-known-open stale item is shown under attention and never
-counted as verified open. Operator-resolved items leave Needs attention, stay
-visible in History, and are excluded from `needsAttention` / `staleOpen` until a
-later source observation reports them active again.
+time, next sync, and freshness. Source sync may upgrade provenance to
+`gojo-agent` (for example `gojo/` PR branches) but never downgrades an existing
+`gojo-agent` row when a forge author looks human. Verified-open counts include
+only current observations. A last-known-open stale item is shown under attention
+and never counted as verified open. Operator-resolved items leave Needs
+attention, stay visible in History, and are excluded from `needsAttention` /
+`staleOpen` until a later source observation reports them active again.
 
 `work_links` records causality such as run → delivered PR and healer → failed
 run. `work_events` is append-only and supplies durable lifecycle replay after a

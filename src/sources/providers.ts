@@ -23,8 +23,26 @@ const REPOSITORY_CAPABILITIES: SourceCapabilities = {
 const MAX_PAGES = 100;
 const PAGE_SIZE = 100;
 
-function provenance(author: { bot?: boolean; type?: string } | null | undefined): WorkProvenance {
+function authorProvenance(
+  author: { bot?: boolean; type?: string } | null | undefined,
+): WorkProvenance {
   return author?.bot || author?.type?.toLowerCase() === "bot" ? "bot" : "human";
+}
+
+/** Gojo-owned branches are agent work even when opened via a human gh/tea login. */
+function isGojoOwnedBranch(headRef: string | null | undefined): boolean {
+  return Boolean(headRef?.startsWith("gojo/"));
+}
+
+function provenance(input: {
+  kind: "pull-request" | "issue";
+  author: { bot?: boolean; type?: string } | null | undefined;
+  headRef?: string | null;
+}): WorkProvenance {
+  if (input.kind === "pull-request" && isGojoOwnedBranch(input.headRef)) {
+    return "gojo-agent";
+  }
+  return authorProvenance(input.author);
 }
 
 async function getJsonResponse(
@@ -113,6 +131,7 @@ interface GitLabItem {
   labels?: string[];
   merge_status?: string;
   merged_at?: string | null;
+  source_branch?: string;
 }
 
 function mapGitLabItem(
@@ -130,7 +149,11 @@ function mapGitLabItem(
       merged: Boolean(item.merged_at) || item.state === "merged",
     }),
     outcome: "pending",
-    provenance: provenance(item.author),
+    provenance: provenance({
+      kind,
+      author: item.author,
+      headRef: item.source_branch ?? null,
+    }),
     actorName: item.author?.name ?? item.author?.username ?? null,
     labels: item.labels ?? [],
     nativeState: item.state,
@@ -229,6 +252,7 @@ interface GitHubPull {
   mergeable_state?: string;
   merged?: boolean;
   pull_request?: unknown;
+  head?: { ref?: string };
 }
 
 interface GitHubIssue extends GitHubPull {
@@ -250,7 +274,11 @@ function mapGitHubItem(
       merged: Boolean(item.merged),
     }),
     outcome: "pending",
-    provenance: provenance(item.user),
+    provenance: provenance({
+      kind,
+      author: item.user,
+      headRef: item.head?.ref ?? null,
+    }),
     actorName: item.user?.login ?? null,
     labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
     nativeState: item.state,
@@ -353,6 +381,7 @@ interface ForgejoItem {
   labels?: Array<{ name?: string }>;
   mergeable?: boolean;
   merged?: boolean;
+  head?: { ref?: string };
 }
 
 function mapForgejoItem(
@@ -370,7 +399,11 @@ function mapForgejoItem(
       merged: Boolean(item.merged),
     }),
     outcome: "pending",
-    provenance: provenance(item.user),
+    provenance: provenance({
+      kind,
+      author: item.user,
+      headRef: item.head?.ref ?? null,
+    }),
     actorName: item.user?.login ?? null,
     labels: (item.labels ?? []).flatMap((label) => (label.name ? [label.name] : [])),
     nativeState: item.state,
