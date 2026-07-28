@@ -73,6 +73,11 @@ validationProfiles:
       - name: noop
         command: "true"
         timeout: 30s
+  handoff:
+    steps:
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
 
 tasks:
   self-heal:
@@ -207,6 +212,24 @@ tasks:
       disableAfterConsecutiveFailedRuns: 5
       backoff: exponential
 
+  activity-digest:
+    description: Daily executive brief on what shipped in the last 24h and why it matters
+    agent: cursor
+    promptFile: .gojo/tasks/activity-digest.md
+    validationProfile: handoff
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: exponential
+    notifications:
+      onSuccess:
+        - ghost
+      onFailure:
+        - ghost
+
 schedules:
   self-heal:
     task: self-heal
@@ -236,5 +259,11 @@ schedules:
     task: maintain-issue-tags
     cron: "30 5 * * *"
     timezone: America/Detroit
+  activity-digest:
+    task: activity-digest
+    cron: "0 8 * * *"
+    timezone: America/Detroit
 
+# Project-wide routing stays empty on purpose: only activity-digest notifies,
+# via its own task-level notifications block.
 notifications: {}

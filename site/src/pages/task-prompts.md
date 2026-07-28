@@ -178,6 +178,23 @@ This repository dogfoods that pattern as **`maintain-issue-tags`**:
 
 Copy the shape for your repo: keep a labels doc as the single authority, cap issues per run, and forbid inventing labels in the prompt. Reserved labels such as `gojo:ready` + matching `area:*` are the **future** contract for workers to claim issues — no maintenance task in this repo filters on tags yet.
 
+### Digest agents (the message *is* the deliverable)
+
+A digest agent is report-only with one extra property: its `summary` is delivered verbatim as the notification body (see [Notifications](/notifications)). Nothing downstream rewrites it, so the prompt has to ask for the finished message.
+
+The failure mode is a prompt that asks for *activity* and gets a list of pull request titles back. Titles restate the branch name; they do not tell the reader what the system does now. The opposite failure is just as bad — vague outcome prose with no technical content. Ask for an **executive brief** written for a reader who could read the diff but does not have time to:
+
+- **One entry per merge**, led by what changed and what it now does — not the pull request title.
+- **Name the technical surface:** the module, endpoint, table, column, CLI command, or component that moved. Specific enough that the reader could go look at it.
+- **Give the mechanism when it explains the impact:** a migration, a new column, a changed default, an added index, a boundary moved between layers.
+- **Then the effect:** what behavior changed, what failure mode is gone, what it unblocks.
+- **Treat every merge equally.** Refactors, test-only work, dependency bumps, and docs are changes to the system and get the same entry as a feature — no maintenance bucket, no group reduced to a count. Give refactors and tests the boundary that moved or the surface now covered, and the class of bug that prevents.
+- **Require the agent to read each merge** (`gh pr view <n> --json title,body,files`, falling back to `gh pr diff`, or `tea pulls list --fields index,title,body` plus `git show`). A prompt that only lists cannot explain.
+- **Do not repeat merged work as “opened.”** If it merged, opening it is implied.
+- **Cap the length** to the channel limit — Telegram truncates past 4096 characters. On heavy days tighten each entry rather than dropping any.
+
+This repository dogfoods it as **`activity-digest`**: [`.gojo/tasks/activity-digest.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/tasks/activity-digest.md), `validationProfile: handoff`, no `integration` block, and a task-level `notifications` block so it is the only task that pages you.
+
 ## Dogfood reference
 
 This repository’s scheduled maintenance prompts under [`.gojo/tasks/`](https://github.com/detroitpro/gojo/tree/main/.gojo/tasks) and shared [`.gojo/instructions.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/instructions.md) use the patterns above. Copy them; tighten further for riskier repos.

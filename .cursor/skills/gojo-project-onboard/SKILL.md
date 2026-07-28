@@ -65,7 +65,8 @@ Palette to consider (pick only what fits):
 
 - AI `maintain-*` (quality / tests / deps / docs) when a clear check gate exists
 - `self-heal` when AI PR tasks exist
-- Shell ops for digests, smoke, hygiene — **not** auto-deploy / auto-promote
+- `activity-digest` when a notification channel exists — AI, report-only, `validationProfile: handoff`, task-level `notifications`, no `integration`. Copy the executive-brief prompt from [`.gojo/tasks/activity-digest.md`](../../../.gojo/tasks/activity-digest.md); every fleet repo uses the same shape with its own repo slug and forge CLI.
+- Shell ops for smoke and hygiene — **not** auto-deploy / auto-promote
 - Prefer **schedule key = task key**
 
 Ask which rows to keep and any edits (cadence, agent, target branch).
