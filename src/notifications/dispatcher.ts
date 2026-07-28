@@ -93,6 +93,23 @@ export function truncateForTelegram(text: string): string {
   return text.slice(0, TELEGRAM_MAX_CHARS - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
 }
 
+/** Escape characters that would break Telegram HTML parse_mode. */
+export function escapeTelegramHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/**
+ * Render agent-authored text for Telegram HTML.
+ * Escapes raw markup first, then turns `**bold**` into `<b>…</b>` so digests can
+ * use a markdown-like header without risking unescaped angle brackets from code.
+ */
+export function renderTelegramHtml(text: string): string {
+  return escapeTelegramHtml(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+
 /** Short human text for Telegram (not a raw JSON dump). */
 export function formatTelegramText(payload: unknown): string {
   if (typeof payload === "string") {
@@ -281,7 +298,8 @@ export class NotificationDispatcher {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text: formatTelegramText(payload),
+        text: renderTelegramHtml(formatTelegramText(payload)),
+        parse_mode: "HTML",
         disable_web_page_preview: true,
       }),
     });

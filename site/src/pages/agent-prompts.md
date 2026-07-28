@@ -185,6 +185,7 @@ A digest agent is report-only with one extra property: its `summary` is delivere
 The failure mode is a prompt that asks for *activity* and gets a list of pull request titles back. Titles restate the branch name; they do not tell the reader what the system does now. The opposite failure is just as bad — vague outcome prose with no technical content. Ask for an **executive brief** written for a reader who could read the diff but does not have time to:
 
 - **One entry per merge**, led by what changed and what it now does — not the pull request title.
+- **Format as header + details:** `**bold header**` on its own line, blank line, then a detail paragraph, blank line before the next item. The platform turns `**…**` into Telegram bold; packing header and detail onto adjacent lines is what makes digests feel like a wall of text.
 - **Name the technical surface:** the module, endpoint, table, column, CLI command, or component that moved. Specific enough that the reader could go look at it.
 - **Give the mechanism when it explains the impact:** a migration, a new column, a changed default, an added index, a boundary moved between layers.
 - **Then the effect:** what behavior changed, what failure mode is gone, what it unblocks.
