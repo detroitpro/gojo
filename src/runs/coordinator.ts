@@ -800,6 +800,10 @@ export class RunCoordinator {
     } else if (input.mode === 'auto-merge') {
       status = 'merged';
     } else if (input.mode === 'pull-request') {
+      if (result.prCreated === null) {
+        // No commit landed — valid no-change outcome (PRD §25.11).
+        return;
+      }
       status = result.prCreated ? 'open' : 'failed';
     } else if (result.commitSha) {
       status = 'committed';
