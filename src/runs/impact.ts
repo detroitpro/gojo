@@ -33,6 +33,24 @@ function normalizeSubject(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function inferImpactFromPath(
+  file: string,
+): { category: HandoffImpactCategory; summary: string } | null {
+  if (DEPENDENCY_FILE.test(file)) {
+    return {
+      category: 'dependency-update',
+      summary: 'Dependency manifest or lockfile changed',
+    };
+  }
+  if (TEST_FILE.test(file)) {
+    return { category: 'test-coverage', summary: 'Test file changed' };
+  }
+  if (DOC_FILE.test(file)) {
+    return { category: 'documentation', summary: 'Documentation file changed' };
+  }
+  return null;
+}
+
 /**
  * Derive machine-detectable impact from the observed changed files.
  * These are platform facts and recorded as `verified`.
@@ -46,30 +64,19 @@ export function derivePlatformImpactItems(filesChanged: string[]): RunImpactDraf
     if (!trimmed) {
       continue;
     }
-    let category: HandoffImpactCategory | null = null;
-    let summary = '';
-    if (DEPENDENCY_FILE.test(trimmed)) {
-      category = 'dependency-update';
-      summary = 'Dependency manifest or lockfile changed';
-    } else if (TEST_FILE.test(trimmed)) {
-      category = 'test-coverage';
-      summary = 'Test file changed';
-    } else if (DOC_FILE.test(trimmed)) {
-      category = 'documentation';
-      summary = 'Documentation file changed';
-    }
-    if (!category) {
+    const inferred = inferImpactFromPath(trimmed);
+    if (!inferred) {
       continue;
     }
-    const key = `${category}\u0000${normalizeSubject(trimmed)}`;
+    const key = `${inferred.category}\u0000${normalizeSubject(trimmed)}`;
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
     drafts.push({
-      category,
+      category: inferred.category,
       subject: trimmed,
-      summary,
+      summary: inferred.summary,
       source: 'platform',
       verification: 'verified',
       confidence: null,
