@@ -121,6 +121,69 @@ describe('app/project-sync', () => {
     expect(repos.schedules.listByTask(taskId).every((s) => !s.enabled)).toBe(true);
   });
 
+  test('returns empty counts when no manifest exists', () => {
+    repoPath = mkdtempSync(join(tmpdir(), 'gojo-sync-empty-'));
+    const repos = createRepositories(openDb());
+    const project = repos.projects.create({ name: 'empty-repo', repoPath });
+
+    expect(syncProjectFromManifest(repos, project)).toEqual({
+      manifestPath: null,
+      agentProfiles: 0,
+      tasks: 0,
+      schedules: 0,
+    });
+  });
+
+  test('resolves .gojo/project.yaml when gojo.yaml is absent', () => {
+    repoPath = mkdtempSync(join(tmpdir(), 'gojo-sync-alt-'));
+    mkdirSync(join(repoPath, '.gojo', 'tasks'), { recursive: true });
+    writeFileSync(join(repoPath, '.gojo', 'tasks', 'demo.md'), 'alternate manifest prompt\n', 'utf8');
+    writeFileSync(
+      join(repoPath, '.gojo', 'project.yaml'),
+      `version: 1
+project:
+  name: alt-sync
+  defaultBranch: main
+repository:
+  remote: origin
+  syncBeforeRun: true
+  requireCleanBase: true
+  submodules: false
+  gitLfs: false
+agents:
+  cursor:
+    adapter: cursor
+    timeout: 5m
+validationProfiles:
+  handoff:
+    steps:
+      - name: ok
+        command: "true"
+        timeout: 30s
+tasks:
+  demo:
+    description: Alt task
+    agent: cursor
+    promptFile: .gojo/tasks/demo.md
+    validationProfile: handoff
+    integration:
+      mode: commit-only
+      targetBranch: main
+`,
+      'utf8',
+    );
+
+    const repos = createRepositories(openDb());
+    const project = repos.projects.create({ name: 'alt-sync', repoPath });
+    const result = syncProjectFromManifest(repos, project);
+
+    expect(result.manifestPath).toBe(join(repoPath, '.gojo', 'project.yaml'));
+    expect(result.tasks).toBe(1);
+    expect(repos.tasks.listByProject(project.id).find((t) => t.name === 'demo')?.prompt).toBe(
+      'alternate manifest prompt\n',
+    );
+  });
+
   test('does not resurrect disabled schedule names absent from manifest', () => {
     const path = createRepoWithManifest(`schedules:
   demo-daily:
