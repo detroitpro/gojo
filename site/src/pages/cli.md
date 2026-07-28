@@ -37,6 +37,12 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | --- | --- |
 | `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
 | `gojo project list\|inspect\|sync\|doctor\|remove` | Manage projects |
+| `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …]` | Paged work ledger (first page; filters match API enums) |
+| `gojo project status <id>` | Canonical work counts (verified open, stale, attention, …) |
+| `gojo project sources <id>` | Connected sources and sync health |
+| `gojo project refresh-source <id> <sourceId>` | Reconcile one source immediately |
+| `gojo project recheck-work <id> <workItemId>` | Verify one work item against its provider |
+| `gojo project resolve-work <id> <workItemId> [--by …] [--note …]` | Operator-resolve attention without inventing delivery |
 
 ## Agents
 
@@ -58,8 +64,6 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo run list [--project <id>]\|inspect\|logs\|diff` | Observe (`list` defaults to all projects) |
 | `gojo integration list --open\|--merged [--project <id>]` | List open or merged gojo-tracked PRs |
 | `gojo run approve\|reject [--reason]\|artifacts` | Govern (artifacts include `handoff.json`, `validation.json`, `failure.json`) |
-| `gojo project work\|status\|sources <id>` | Inspect the source-agnostic work ledger and connector health |
-| `gojo project refresh-source <id> <sourceId>` | Reconcile one project source immediately |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 

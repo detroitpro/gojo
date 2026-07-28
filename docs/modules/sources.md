@@ -52,7 +52,7 @@ never stored in `project_sources` or native work metadata.
 - `POST /api/v1/projects/:id/sources/:sourceId/refresh`
 - `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/sources/:sourceId/events`
-- `gojo project sources|refresh-source|recheck-work`
+- `gojo project sources|refresh-source|recheck-work|resolve-work`
 
 Connector health, observation time, errors, cursor state, and backfill
 completeness are operator visible.

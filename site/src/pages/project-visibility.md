@@ -90,14 +90,14 @@ reloads canonical API data.
 
 ```bash
 gojo project status <project-id>
-gojo project work <project-id>
+gojo project work <project-id> --delivery open --attention stale
 gojo project sources <project-id>
 gojo project refresh-source <project-id> <source-id>
 gojo project recheck-work <project-id> <work-item-id>
 gojo project resolve-work <project-id> <work-item-id> --note "closed upstream"
 ```
 
-Use `--output json` for automation.
+Filter work with `--kind`, `--provenance`, `--delivery`, and `--attention` (enum values match the API). Use `--output json` for automation. Full command map: [CLI](/cli).
 
 ## Related
 
