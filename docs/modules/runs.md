@@ -15,6 +15,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 | `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + task prompt + validation gate |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
 | `events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
+| `event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
 | `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
 | `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
 

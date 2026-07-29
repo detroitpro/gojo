@@ -20,6 +20,7 @@ import {
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
+import { useSoftLoading } from "@/composables/useSoftLoading";
 import {
   formatMergeRate,
   impactCountLabel,
@@ -57,7 +58,7 @@ const workItems = ref<WorkItem[]>([]);
 const workStatus = ref<WorkStatus | null>(null);
 const projectSources = ref<ProjectSource[]>([]);
 const mergeBusy = ref(false);
-const loading = ref(true);
+const { loading, begin: beginLoad, end: endLoad, reset: resetLoad } = useSoftLoading();
 const busy = ref(false);
 const attentionBusyId = ref("");
 const error = ref("");
@@ -343,7 +344,7 @@ async function runMergeBabysitter() {
 }
 
 async function load() {
-  loading.value = true;
+  const initial = beginLoad();
   error.value = "";
   try {
     project.value = await getProject(projectId.value);
@@ -356,11 +357,13 @@ async function load() {
     projectTasks.value = tasks.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
-    project.value = null;
-    doctor.value = null;
-    projectTasks.value = [];
+    if (initial) {
+      project.value = null;
+      doctor.value = null;
+      projectTasks.value = [];
+    }
   } finally {
-    loading.value = false;
+    endLoad(initial);
     if (route.hash === "#open-prs") {
       requestAnimationFrame(() => scrollToOpenPrs());
     }
@@ -414,6 +417,14 @@ async function confirmRemove() {
 }
 
 watch(projectId, () => {
+  resetLoad();
+  project.value = null;
+  doctor.value = null;
+  projectTasks.value = [];
+  workItems.value = [];
+  workStatus.value = null;
+  projectSources.value = [];
+  impact.value = null;
   lastSync.value = null;
   notice.value = "";
   hiddenTaskIds.value = new Set();

@@ -142,7 +142,7 @@ gojo schedule next <schedule-id>
 gojo backup create
 ```
 
-`run logs` prints the stored event history (snapshot). For live tailing, use the Runs UI or `GET /api/v1/runs/<id>/events` (SSE).
+`run logs` prints the stored event history (snapshot). For live tailing, use the Runs UI (WebSocket run channel on `/api/v1/ws`).
 
 Script against `--output json` for chatops or custom dashboards; the HTTP API mirrors the same operations.
 

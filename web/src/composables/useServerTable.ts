@@ -34,13 +34,16 @@ export function useServerTable<T>(options: {
   const order = ref<SortOrder>(options.defaultOrder ?? "asc");
   let timer: ReturnType<typeof setTimeout> | null = null;
   let seq = 0;
+  /** After first paint, live refreshes patch rows in place (no loading flash). */
+  let painted = false;
 
   const pages = computed(() => pageCount(total.value, limit.value));
   const label = computed(() => rangeLabel(total.value, limit.value, offset.value));
 
   async function load() {
     const my = ++seq;
-    loading.value = true;
+    const initial = !painted;
+    if (initial) loading.value = true;
     error.value = "";
     try {
       const nextOffset = (page.value - 1) * pageSize;
@@ -61,15 +64,19 @@ export function useServerTable<T>(options: {
       if (page.value > maxPage) {
         page.value = maxPage;
       }
+      painted = true;
     } catch (err) {
       if (my !== seq) {
         return;
       }
       error.value = err instanceof Error ? err.message : "Failed to load";
-      items.value = [];
-      total.value = 0;
+      // Keep stale rows on refresh failure so the table does not blank out.
+      if (initial) {
+        items.value = [];
+        total.value = 0;
+      }
     } finally {
-      if (my === seq) {
+      if (my === seq && initial) {
         loading.value = false;
       }
     }

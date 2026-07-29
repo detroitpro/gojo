@@ -11,6 +11,7 @@ import {
 } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
+import { useSoftLoading } from "@/composables/useSoftLoading";
 import { formatMergeRate, impactCountLabel } from "@/lib/impact-format";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { DashboardImpact, DashboardOverviewProject } from "@/types";
@@ -23,7 +24,7 @@ function queryParam(key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-const loading = ref(true);
+const { loading, begin: beginLoad, end: endLoad } = useSoftLoading();
 const error = ref("");
 const paused = ref(false);
 const runningRuns = ref(0);
@@ -72,7 +73,7 @@ watch([projectFilter, impactRange], () => {
 });
 
 async function load() {
-  loading.value = true;
+  const initial = beginLoad();
   error.value = "";
   try {
     const [dashboard, overview] = await Promise.all([
@@ -90,7 +91,7 @@ async function load() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load dashboard";
   } finally {
-    loading.value = false;
+    endLoad(initial);
   }
 }
 

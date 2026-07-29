@@ -14,6 +14,7 @@ import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
+import { useSoftLoading } from "@/composables/useSoftLoading";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import {
   formatAbsoluteInZone,
@@ -63,7 +64,11 @@ const query = ref(queryParam("q"));
 const busyId = ref<string | null>(null);
 const horizonHours = ref(168);
 const upcoming = ref<SchedulesUpcomingResult | null>(null);
-const upcomingLoading = ref(false);
+const {
+  loading: upcomingLoading,
+  begin: beginUpcoming,
+  end: endUpcoming,
+} = useSoftLoading(false);
 
 const {
   page,
@@ -100,7 +105,7 @@ async function loadProjects() {
 }
 
 async function loadUpcoming() {
-  upcomingLoading.value = true;
+  const initial = beginUpcoming();
   try {
     upcoming.value = await listSchedulesUpcoming({
       horizonHours: horizonHours.value,
@@ -109,9 +114,9 @@ async function loadUpcoming() {
       q: query.value || undefined,
     });
   } catch {
-    upcoming.value = null;
+    if (initial) upcoming.value = null;
   } finally {
-    upcomingLoading.value = false;
+    endUpcoming(initial);
   }
 }
 

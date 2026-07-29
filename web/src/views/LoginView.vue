@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { checkSession, getHealth, getInstance, login, probeSetupNeeded, setup } from "@/api";
+import { checkSession, getHealth, login, probeSetupNeeded, setup } from "@/api";
 import { ApiError } from "@/types";
 
 const router = useRouter();
@@ -20,15 +20,13 @@ onMounted(async () => {
     const health = await getHealth();
     version.value = health.version;
 
-    try {
-      await getInstance();
+    // Force a probe on the login page so a stale "logged out" cache cannot
+    // strand an already-authenticated browser after a soft reload.
+    const session = await checkSession({ force: true });
+    if (session) {
       const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/";
       await router.replace(redirect);
       return;
-    } catch (err) {
-      if (!(err instanceof ApiError) || err.status !== 401) {
-        throw err;
-      }
     }
 
     const needsSetup = await probeSetupNeeded();
@@ -48,7 +46,6 @@ async function submit() {
     } else {
       await login(username.value.trim(), password.value);
     }
-    await checkSession();
     const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/";
     await router.replace(redirect);
   } catch (err) {

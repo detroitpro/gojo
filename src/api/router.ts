@@ -7,7 +7,6 @@ import { listAdapters } from "@/agents";
 import { UserService } from "@/auth/users";
 import type { AppContext } from "@/app/context";
 import { computeScheduleNextRun } from "@/app/context";
-import { createPlatformEventStream } from "@/events/platform-event-stream";
 import {
   createBackup,
   defaultBackupDest,
@@ -22,17 +21,17 @@ import {
   safeParseNotificationChannelConfig,
   safeParseNotificationChannelMap,
 } from "@shared/notifications";
+import { WS_PATH } from "@shared/ws";
 import {
-  bearerToken,
   clearSessionCookie,
   failure,
-  parseCookies,
   readJsonBody,
   sessionCookie,
-  SESSION_COOKIE,
   success,
   type AuthContext,
 } from "./http";
+import { isScopedAgentToken, resolveAuth, scopedTokenAllows } from "./auth";
+import type { WsConnectionData } from "./ws/types";
 import { browseRoots, listDirectory } from "@/filesystem/browse";
 
 import { syncProjectFromManifest } from "@/app/project-sync";
@@ -73,7 +72,6 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
-import { PlatformEventTopicSchema, type PlatformEventTopic } from "@shared/events";
 import type {
   WorkAttention,
   WorkDelivery,
@@ -81,6 +79,14 @@ import type {
   WorkOutcome,
   WorkProvenance,
 } from "@shared/work";
+
+/** Minimal Bun.Server surface needed for WebSocket upgrades. */
+export type UpgradeServer = {
+  upgrade(
+    request: Request,
+    options: { data: WsConnectionData; headers?: HeadersInit },
+  ): boolean;
+};
 
 type RunListItem = {
   id: string;
@@ -190,61 +196,8 @@ function parseWorkOutcome(value: string | null): WorkOutcome | null {
   return allowed.includes(value as WorkOutcome) ? (value as WorkOutcome) : null;
 }
 
-function parseJsonValue(value: string): unknown {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return {};
-  }
-}
-
-function parseEventTopics(url: URL): PlatformEventTopic[] {
-  const raw = url.searchParams
-    .getAll("topic")
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return raw.flatMap((value) => {
-    const parsed = PlatformEventTopicSchema.safeParse(value);
-    return parsed.success ? [parsed.data] : [];
-  });
-}
-
 function publicUser(user: { id: string; username: string; role: string }) {
   return { id: user.id, username: user.username, role: user.role };
-}
-
-function resolveAuth(ctx: AppContext, request: Request): AuthContext | null {
-  const users = new UserService(ctx.db);
-  const secret = ctx.getSessionSecret();
-
-  const token = bearerToken(request);
-  if (token) {
-    const verified = users.verifyApiTokenDetails(token);
-    if (verified) {
-      return {
-        userId: verified.user.id,
-        username: verified.user.username,
-        authMethod: "token",
-        tokenId: verified.token.id,
-        scopes: verified.scopes,
-      };
-    }
-  }
-
-  const cookies = parseCookies(request.headers.get("Cookie"));
-  const session = cookies[SESSION_COOKIE];
-  if (session) {
-    const payload = users.verifySessionToken(session, secret);
-    if (payload) {
-      const user = users.findById(payload.userId);
-      if (user) {
-        return { userId: user.id, username: user.username, authMethod: "session" };
-      }
-    }
-  }
-
-  return null;
 }
 
 function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boolean {
@@ -308,12 +261,43 @@ async function serveStatic(pathname: string): Promise<Response | null> {
 export async function handleApiRequest(
   ctx: AppContext,
   request: Request,
-): Promise<Response> {
+  server?: UpgradeServer,
+): Promise<Response | undefined> {
   const url = new URL(request.url);
   const { pathname } = url;
   const method = request.method.toUpperCase();
   const users = new UserService(ctx.db);
   const hasUsers = users.countUsers() > 0;
+
+  if (pathname === WS_PATH && method === "GET") {
+    if (!server) {
+      return failure("bad_request", "WebSocket upgrade requires server", 400);
+    }
+    const auth = resolveAuth(ctx, request);
+    if (!auth) {
+      return failure("unauthorized", "Authentication required", 401);
+    }
+    if (isScopedAgentToken(auth)) {
+      return failure("forbidden", "Scoped agent tokens cannot open WebSocket", 403);
+    }
+    const headers = new Headers();
+    const cookie = request.headers.get("Cookie");
+    const authorization = request.headers.get("Authorization");
+    if (cookie) headers.set("Cookie", cookie);
+    if (authorization) headers.set("Authorization", authorization);
+    const upgraded = server.upgrade(request, {
+      data: {
+        auth,
+        headers,
+        origin: `${url.protocol}//${url.host}`,
+      },
+    });
+    if (!upgraded) {
+      return failure("bad_request", "WebSocket upgrade failed", 400);
+    }
+    // Bun completes the handshake; do not return a Response.
+    return undefined;
+  }
 
   if (pathname.startsWith("/api/v1")) {
     if (pathname === "/api/v1/setup" && method === "POST" && hasUsers) {
@@ -325,19 +309,7 @@ export async function handleApiRequest(
       if (!auth) {
         return failure("unauthorized", "Authentication required", 401);
       }
-      if (
-        auth.authMethod === "token" &&
-        auth.scopes &&
-        auth.scopes.length > 0 &&
-        !auth.scopes.some((scope) => {
-          const match = scope.match(/^run:progress:(.+)$/);
-          return (
-            method === "POST" &&
-            match?.[1] != null &&
-            pathname === `/api/v1/runs/${match[1]}/progress`
-          );
-        })
-      ) {
+      if (!scopedTokenAllows(auth, method, pathname)) {
         return failure("forbidden", "Token scope does not allow this operation", 403);
       }
       (request as Request & { auth?: AuthContext }).auth = auth;
@@ -360,15 +332,6 @@ export async function handleApiRequest(
 
   if (method === "GET" && pathname === "/api/v1/openapi.json") {
     return success(openApiDocument);
-  }
-
-  if (method === "GET" && pathname === "/api/v1/events") {
-    const projectId = url.searchParams.get("projectId");
-    const topics = parseEventTopics(url);
-    return createPlatformEventStream(ctx.platformEvents, request, {
-      ...(projectId ? { projectId } : {}),
-      ...(topics.length ? { topics } : {}),
-    });
   }
 
   if (method === "POST" && pathname === "/api/v1/setup") {
@@ -634,14 +597,6 @@ export async function handleApiRequest(
 
     if (method === "GET" && action === "work/status") {
       return success(ctx.work.items.status(projectId));
-    }
-
-    if (method === "GET" && action === "events") {
-      const topics = parseEventTopics(url);
-      return createPlatformEventStream(ctx.platformEvents, request, {
-        projectId,
-        ...(topics.length ? { topics } : {}),
-      });
     }
 
     if (method === "GET" && action === "sources") {
@@ -1052,135 +1007,6 @@ export async function handleApiRequest(
       total: result.total,
       limit: result.limit,
       offset: result.offset,
-    });
-  }
-
-  const runEventsMatch = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/events$/);
-  if (method === "GET" && runEventsMatch) {
-    const runId = runEventsMatch[1] ?? "";
-    const run = ctx.repos.runs.findById(runId);
-    if (!run) {
-      return failure("not_found", "Run not found", 404);
-    }
-
-    const lastEventHeader = request.headers.get("Last-Event-ID");
-    const afterId = lastEventHeader != null ? Number(lastEventHeader) : undefined;
-    const afterIdOk =
-      afterId != null && Number.isFinite(afterId) ? afterId : undefined;
-
-    const stream = new ReadableStream({
-      start(controller) {
-        const encoder = new TextEncoder();
-        let closed = false;
-        const seen = new Set<number>();
-        let unsubscribe = () => {};
-        let keepalive: ReturnType<typeof setInterval> | undefined;
-
-        const shutdown = () => {
-          if (closed) {
-            return;
-          }
-          closed = true;
-          if (keepalive !== undefined) {
-            clearInterval(keepalive);
-          }
-          unsubscribe();
-          try {
-            controller.close();
-          } catch {
-            // already closed
-          }
-        };
-
-        const send = (event: { id?: number; type: string; runId: string }) => {
-          if (closed || event.runId !== runId) {
-            return;
-          }
-          if (event.id != null) {
-            if (seen.has(event.id)) {
-              return;
-            }
-            seen.add(event.id);
-          }
-          const idLine = event.id != null ? `id: ${event.id}\n` : "";
-          controller.enqueue(
-            encoder.encode(`${idLine}data: ${JSON.stringify(event)}\n\n`),
-          );
-          if (event.type === "run.finished") {
-            shutdown();
-          }
-        };
-
-        // Subscribe first so events during replay are buffered, then replay.
-        const liveBuffer: Array<{ id?: number; type: string; runId: string }> = [];
-        let replaying = true;
-        unsubscribe = ctx.eventBus.subscribe((event) => {
-          if (event.runId !== runId) {
-            return;
-          }
-          if (replaying) {
-            liveBuffer.push(event);
-            return;
-          }
-          send(event);
-        });
-
-        const durableEvents = run.workItemId
-          ? ctx.work.events
-              .listByWorkItem(run.workItemId, afterIdOk ?? 0)
-              .map((event) => ({
-                id: event.sequence,
-                type: event.type,
-                runId,
-                at: event.occurredAt,
-                data: parseJsonValue(event.dataJson),
-              }))
-          : [];
-        for (const event of durableEvents) {
-          send(event);
-          if (closed) {
-            return;
-          }
-        }
-        for (const event of ctx.eventHistory
-          .list(runId, afterIdOk)
-          .filter((candidate) => candidate.type === "run.agent.output")) {
-          send(event);
-          if (closed) {
-            return;
-          }
-        }
-        replaying = false;
-        for (const event of liveBuffer) {
-          send(event);
-          if (closed) {
-            return;
-          }
-        }
-
-        // Comment pings keep proxies from treating a quiet agent as dead.
-        keepalive = setInterval(() => {
-          if (closed) {
-            return;
-          }
-          try {
-            controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-          } catch {
-            shutdown();
-          }
-        }, 15_000);
-
-        request.signal.addEventListener("abort", shutdown, { once: true });
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
     });
   }
 
@@ -1604,5 +1430,5 @@ export async function handleApiRequest(
 }
 
 export function createRouter(ctx: AppContext) {
-  return (request: Request) => handleApiRequest(ctx, request);
+  return (request: Request, server?: UpgradeServer) => handleApiRequest(ctx, request, server);
 }

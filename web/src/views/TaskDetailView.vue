@@ -11,6 +11,7 @@ import {
 } from "@/api";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
+import { useSoftLoading } from "@/composables/useSoftLoading";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
 import type { Schedule, Task } from "@/types";
 
@@ -19,7 +20,7 @@ const router = useRouter();
 
 const task = ref<Task | null>(null);
 const schedules = ref<Schedule[]>([]);
-const loading = ref(true);
+const { loading, begin: beginLoad, end: endLoad, reset: resetLoad } = useSoftLoading();
 const error = ref("");
 const busy = ref(false);
 
@@ -34,7 +35,7 @@ function prettyJson(raw: string): string {
 }
 
 async function load() {
-  loading.value = true;
+  const initial = beginLoad();
   error.value = "";
   try {
     task.value = await getTask(taskId.value);
@@ -46,11 +47,13 @@ async function load() {
     });
     schedules.value = sched.items;
   } catch (err) {
-    task.value = null;
-    schedules.value = [];
+    if (initial) {
+      task.value = null;
+      schedules.value = [];
+    }
     error.value = err instanceof Error ? err.message : "Failed to load task";
   } finally {
-    loading.value = false;
+    endLoad(initial);
   }
 }
 
@@ -91,6 +94,9 @@ async function toggleEnabled() {
 }
 
 watch(taskId, () => {
+  resetLoad();
+  task.value = null;
+  schedules.value = [];
   void load();
 });
 

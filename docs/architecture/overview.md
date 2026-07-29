@@ -17,11 +17,14 @@ CLI / HTTP API / scheduler tick (one process)
         ├─ integration (commit / PR / merge queue)
         ├─ sources (GitHub / GitLab / Forgejo / generic work sync)
         ├─ work (durable cross-source ledger, links, events, freshness)
-        ├─ events (durable platform invalidation feed and SSE replay)
+        ├─ events (durable platform invalidation feed)
+        ├─ api/ws (WebSocket hub: platform + run channels + RPC)
         └─ notifications, secrets, backup, telemetry
 ```
 
-Admin UI: Vue app in `web/`, served as static assets (see `src/api/web-dist.ts`).  
+Admin UI: Vue app in `web/`, served as static assets (see `src/api/web-dist.ts`).
+Browser clients use one authenticated WebSocket at `/api/v1/ws` for live events
+and RPC; REST remains for agents, webhooks, and CLI health.
 User docs site: Astro in `site/` (not served by the daemon).
 
 Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared CSS variables in `theme/tokens.css` (Six Eyes cyan / midnight navy, DM Sans + JetBrains Mono). Brand wordmarks use mono; titles use sans with normal tracking. The admin “ops console” look is CSS composition on those tokens, not a separate component library.
@@ -31,7 +34,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | Directory | Role |
 |-----------|------|
 | `cli/` | Command entry and output formatting |
-| `api/` | HTTP router, server lifecycle, web static |
+| `api/` | HTTP router, WebSocket hub/RPC, server lifecycle, web static |
 | `app/` | Composition / context wiring, `project-sync` |
 | `agents/` | Adapter registry and implementations |
 | `scheduler/` | Cron, overlap/missed-run, auto-disable; enqueue only (dispatcher admits) |
@@ -40,7 +43,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
 | `validation/` | Validation profile execution (inherits daemon PATH) |
 | `integration/` | Integration modes, merge queue, external PR status reconciler |
-| `events/` | Durable platform change feed, retention, and SSE delivery |
+| `events/` | Durable platform change feed, retention, and filter helpers |
 | `sources/` | Source adapter registry, repository discovery, polling/webhook ingestion |
 | `storage/` | Schema, DB, repositories |
 | `auth/` | Users, passwords, tokens |

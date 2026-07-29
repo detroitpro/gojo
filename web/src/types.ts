@@ -26,30 +26,11 @@ export interface User {
   role: string;
 }
 
-export type PlatformEventTopic =
-  | "dashboard"
-  | "overview"
-  | "impact"
-  | "queue"
-  | "runs"
-  | "tasks"
-  | "schedules"
-  | "projects"
-  | "work"
-  | "sources";
-
-export interface PlatformChangeEvent {
-  sequence: number;
-  id: string;
-  projectId: string | null;
-  type: string;
-  entityKind: string;
-  entityId: string;
-  topics: PlatformEventTopic[];
-  data: unknown;
-  occurredAt: string;
-  createdAt: string;
-}
+export type {
+  PlatformChangeEvent,
+  PlatformEventTopic,
+} from "@shared/events";
+export type { RunEvent } from "@shared/ws";
 
 export interface ProjectSummaryCounts {
   taskCount: number;
@@ -624,14 +605,6 @@ export interface DirectoryListing {
 export interface BrowseRoot {
   label: string;
   path: string;
-}
-
-export interface RunEvent {
-  id?: number;
-  type: string;
-  runId: string;
-  at: string;
-  data?: unknown;
 }
 
 export interface ValidationStepEventData {

@@ -26,7 +26,10 @@ describe("api/router", () => {
     tempDir = mkdtempSync(`${tmpdir()}/gojo-router-test-`);
     ctx = await createAppContext(tempDir);
     const handler = createRouter(ctx);
-    server = Bun.serve({ port: 0, fetch: handler });
+    server = Bun.serve({
+      port: 0,
+      fetch: async (req, bunServer) => (await handler(req, bunServer)) ?? undefined!,
+    });
     const baseUrl = server.url.toString().replace(/\/$/, "");
 
     const health = await fetch(`${baseUrl}/api/v1/health`);
@@ -113,26 +116,10 @@ describe("api/router", () => {
     ).toBe(true);
   });
 
-  test("authenticates and replays the durable platform event stream", async () => {
-    const { baseUrl, token } = await boot();
-    const unauthorized = await fetch(`${baseUrl}/api/v1/events`);
+  test("rejects unauthenticated WebSocket upgrade", async () => {
+    const { baseUrl } = await boot();
+    const unauthorized = await fetch(`${baseUrl}/api/v1/ws`);
     expect(unauthorized.status).toBe(401);
-
-    const event = ctx!.platformEvents.append({
-      type: "instance.paused",
-      entityKind: "instance",
-      entityId: "instance",
-      topics: ["dashboard", "queue"],
-    });
-    const abort = new AbortController();
-    const response = await fetch(`${baseUrl}/api/v1/events?topic=dashboard`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: abort.signal,
-    });
-    expect(response.status).toBe(200);
-    const chunk = await response.body!.getReader().read();
-    expect(new TextDecoder().decode(chunk.value)).toContain(`id: ${event.sequence}`);
-    abort.abort();
   });
 
   test("serves unified work, status, sources, detail, and run progress", async () => {

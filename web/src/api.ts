@@ -38,6 +38,8 @@ import type {
 } from "./types";
 import { ApiError } from "./types";
 import { buildListQuery, type ListQuery, type PaginatedResult } from "./lib/pagination";
+import { gojoSocket } from "./lib/ws-client";
+import type { WsHttpMethod } from "./lib/ws-types";
 
 export type { ListQuery, PaginatedResult };
 
@@ -54,7 +56,8 @@ interface ApiFailure {
   };
 }
 
-async function request<T>(
+/** Always-HTTP helper for pre-auth and health probes. */
+async function httpRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<{ data: T; response: Response }> {
@@ -79,8 +82,52 @@ async function request<T>(
   return { data: (body as ApiSuccess<T>).data, response };
 }
 
+function syntheticResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Browser RPC: prefer the shared WebSocket, fall back to fetch when the socket
+ * is down so live-refresh polling and degraded mode still work.
+ */
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ data: T; response: Response }> {
+  const method = ((init.method ?? "GET").toUpperCase()) as WsHttpMethod;
+  let body: unknown;
+  if (typeof init.body === "string" && init.body.length > 0) {
+    try {
+      body = JSON.parse(init.body) as unknown;
+    } catch {
+      body = init.body;
+    }
+  }
+
+  if (gojoSocket.connected) {
+    try {
+      const result = await gojoSocket.request(method, path, body);
+      if (result.ok) {
+        return {
+          data: result.data as T,
+          response: syntheticResponse(200, { data: result.data }),
+        };
+      }
+      throw new ApiError(result.error.code, result.error.message, result.status);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // Fall through to HTTP on transport errors.
+    }
+  }
+
+  return httpRequest<T>(path, init);
+}
+
 export async function getHealth(): Promise<HealthInfo> {
-  const { data } = await request<HealthInfo>("/health");
+  const { data } = await httpRequest<HealthInfo>("/health");
   return data;
 }
 
@@ -101,23 +148,33 @@ export async function probeSetupNeeded(): Promise<boolean> {
 }
 
 export async function setup(username: string, password: string): Promise<User> {
-  const { data } = await request<{ user: User }>("/setup", {
+  const { data } = await httpRequest<{ user: User }>("/setup", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+  rememberSession(data.user);
+  gojoSocket.connect();
   return data.user;
 }
 
 export async function login(username: string, password: string): Promise<User> {
-  const { data } = await request<{ user: User }>("/auth/login", {
+  const { data } = await httpRequest<{ user: User }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+  rememberSession(data.user);
+  gojoSocket.connect();
   return data.user;
 }
 
 export async function logout(): Promise<void> {
-  await request<{ ok: boolean }>("/auth/logout", { method: "POST" });
+  gojoSocket.disconnect();
+  clearSessionCache();
+  try {
+    await httpRequest<{ ok: boolean }>("/auth/logout", { method: "POST" });
+  } finally {
+    rememberSession(null);
+  }
 }
 
 export async function getInstance(): Promise<InstanceInfo> {
@@ -518,49 +575,21 @@ export function subscribeRunEvents(
   onEvent: (event: RunEvent) => void,
   onError?: (error: Event) => void,
 ): () => void {
-  const source = new EventSource(`${API_BASE}/runs/${runId}/events`, { withCredentials: true });
-  const seenIds = new Set<number>();
-
-  source.onmessage = (message) => {
-    try {
-      const raw = JSON.parse(message.data) as Record<string, unknown>;
-      const idRaw = raw.id ?? (message.lastEventId ? Number(message.lastEventId) : undefined);
-      const id = typeof idRaw === "number" && Number.isFinite(idRaw) ? idRaw : undefined;
-      if (id != null) {
-        if (seenIds.has(id)) {
-          return;
-        }
-        seenIds.add(id);
-      }
-      // Normalize legacy { timestamp, payload } if a mixed client ever appears.
-      const event: RunEvent = {
-        ...(id != null ? { id } : {}),
-        type: String(raw.type ?? ""),
-        runId: String(raw.runId ?? runId),
-        at: String(raw.at ?? raw.timestamp ?? ""),
-        ...(raw.data !== undefined
-          ? { data: raw.data }
-          : raw.payload !== undefined
-            ? { data: raw.payload }
-            : {}),
-      };
+  const seen = new Set<string>();
+  gojoSocket.connect();
+  return gojoSocket.subscribeRun(
+    runId,
+    (event) => {
+      const key =
+        event.id != null
+          ? `${event.idSpace ?? "live"}:${event.id}`
+          : `${event.type}:${event.at}:${JSON.stringify(event.data ?? null)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
       onEvent(event);
-    } catch {
-      /* ignore malformed events */
-    }
-  };
-
-  source.onerror = (event) => {
-    // Auth failures leave readyState CLOSED; stop infinite reconnect spam.
-    if (source.readyState === EventSource.CLOSED) {
-      onError?.(event);
-      source.close();
-      return;
-    }
-    onError?.(event);
-  };
-
-  return () => source.close();
+    },
+    onError,
+  );
 }
 
 export async function listSchedules(query: ListQuery = {}): Promise<PaginatedResult<Schedule>> {
@@ -633,16 +662,47 @@ export async function testAgent(name: string): Promise<AgentTestResult> {
   return data.result;
 }
 
-export async function checkSession(): Promise<User | null> {
+/** undefined = unknown (not probed yet); null = logged out; User = authenticated. */
+let sessionCache: User | null | undefined;
+
+function rememberSession(user: User | null): void {
+  sessionCache = user;
+}
+
+export function clearSessionCache(): void {
+  sessionCache = undefined;
+}
+
+/**
+ * Auth gate for the router. Probes GET /instance once, then trusts the cache
+ * until login/logout/reauth. Live session loss is handled by the WebSocket
+ * 401 → onReauth path, not by re-hitting /instance on every navigation.
+ */
+export async function checkSession(options?: { force?: boolean }): Promise<User | null> {
+  if (!options?.force && sessionCache !== undefined) {
+    if (sessionCache) gojoSocket.connect();
+    return sessionCache;
+  }
   try {
-    await getInstance();
-    return { id: "", username: "session", role: "admin" };
+    // Session probe always uses HTTP so it works before the socket is up.
+    await httpRequest<InstanceInfo>("/instance");
+    gojoSocket.connect();
+    const user: User = { id: "", username: "session", role: "admin" };
+    rememberSession(user);
+    return user;
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
+      gojoSocket.disconnect();
+      rememberSession(null);
       return null;
     }
     throw error;
   }
 }
+
+gojoSocket.onReauth(() => {
+  rememberSession(null);
+  gojoSocket.disconnect();
+});
 
 export { ApiError };

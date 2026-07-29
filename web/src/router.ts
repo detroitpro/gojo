@@ -14,6 +14,7 @@ import SchedulesView from "./views/SchedulesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import TaskDetailView from "./views/TaskDetailView.vue";
 import TasksView from "./views/TasksView.vue";
+import { gojoSocket } from "./lib/ws-client";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,6 +43,10 @@ const router = createRouter({
       ],
     },
   ],
+});
+
+gojoSocket.onReauth(() => {
+  void router.push({ name: "login" });
 });
 
 router.beforeEach(async (to) => {

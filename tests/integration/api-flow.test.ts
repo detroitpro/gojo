@@ -38,7 +38,10 @@ describe("integration/api-flow", () => {
 
     ctx = await createAppContext(tempDir);
     const handler = createRouter(ctx);
-    server = Bun.serve({ port: 0, fetch: handler });
+    server = Bun.serve({
+      port: 0,
+      fetch: async (req, bunServer) => (await handler(req, bunServer)) ?? undefined!,
+    });
     const baseUrl = server.url.toString().replace(/\/$/, "");
 
     const setup = await fetch(`${baseUrl}/api/v1/setup`, {

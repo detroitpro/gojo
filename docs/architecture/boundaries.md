@@ -11,7 +11,7 @@ Allowed and forbidden edges among daemon modules. Product rules (agent ≠ succe
 5. **SQLite access goes through `storage/`.** Don’t open ad-hoc DB handles from adapters or scheduler.
 6. **Sources preserve native truth.** Adapters normalize observations; they do not collapse provider-specific state into a forge-only model.
 7. **Work is the visibility read model.** UI/API counts come from the same ledger and must expose observation time and freshness.
-8. **Platform events invalidate; HTTP reads hydrate.** SSE payloads identify affected read models but never become a second entity store in the browser.
+8. **Platform events invalidate; WebSocket/HTTP reads hydrate.** Event payloads identify affected read models but never become a second entity store in the browser. The admin UI prefers one authenticated WebSocket (`/api/v1/ws`) for push + RPC; agents, webhooks, and CLI health remain on HTTP.
 
 ## Dependency sketch
 
@@ -40,8 +40,9 @@ workspace ────────► git
 | Domain modules importing `api/` for manifest sync | `app/project-sync` (shared by CLI, API, coordinator) |
 | UI counting raw `run_integrations.status='open'` | Work status (`verifiedOpen` vs `staleOpen`) |
 | Provider conditionals spread through router/UI | A `sources/` adapter + declared capabilities |
-| Per-view polling or one EventSource per page | Shared platform event hub + topic-driven HTTP refresh |
-| Applying SSE payloads as canonical browser state | Invalidate and reload the owning API query |
+| Per-view polling or one WebSocket/EventSource per page | Shared `GojoSocket` + topic-driven refresh |
+| Applying push payloads as canonical browser state | Invalidate and reload the owning API/RPC query |
+| Duplicating route logic for WebSocket RPC | Synthesize `Request` into `handleApiRequest` |
 
 ## When you change a boundary
 

@@ -6,24 +6,45 @@ import {
   PlatformEventHub,
   type PlatformEventConnectionStatus,
 } from "../../../web/src/lib/platform-events";
-import type { PlatformChangeEvent } from "../../../web/src/types";
+import { GojoSocket } from "../../../web/src/lib/ws-client";
+import type { PlatformChangeEvent, ServerFrame } from "../../../web/src/lib/ws-types";
 
-class FakeEventSource {
+class FakeWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  readyState = FakeWebSocket.CONNECTING;
   onopen: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
-  closed = false;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  readonly sent: string[] = [];
+
+  constructor(public readonly url: string) {
+    queueMicrotask(() => {
+      this.readyState = FakeWebSocket.OPEN;
+      this.onopen?.(new Event("open"));
+      this.push({
+        t: "hello",
+        user: { id: "u1", username: "admin" },
+        version: "0.1.0",
+      });
+    });
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
 
   close(): void {
-    this.closed = true;
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.(new CloseEvent("close"));
   }
 
-  open(): void {
-    this.onopen?.(new Event("open"));
-  }
-
-  message(event: PlatformChangeEvent): void {
-    this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(event) }));
+  push(frame: ServerFrame): void {
+    this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(frame) }));
   }
 }
 
@@ -47,15 +68,14 @@ function change(
 }
 
 describe("PlatformEventHub", () => {
-  test("shares one connection and routes deduplicated topic/project events", () => {
-    const sources: FakeEventSource[] = [];
-    const urls: string[] = [];
-    const hub = new PlatformEventHub((url) => {
-      urls.push(url);
-      const source = new FakeEventSource();
-      sources.push(source);
-      return source;
+  test("shares one connection and routes deduplicated topic/project events", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const socket = new GojoSocket((url) => {
+      const ws = new FakeWebSocket(url) as unknown as WebSocket;
+      sockets.push(ws as unknown as FakeWebSocket);
+      return ws;
     });
+    const hub = new PlatformEventHub(socket);
     const received: number[] = [];
     const statuses: PlatformEventConnectionStatus[] = [];
     const stopStatus = hub.subscribeStatus((status) => statuses.push(status));
@@ -65,30 +85,53 @@ describe("PlatformEventHub", () => {
       "project-1",
     );
 
-    expect(urls).toEqual(["/api/v1/events?after=0"]);
-    sources[0]!.open();
-    sources[0]!.message(change(1));
-    sources[0]!.message(change(1));
-    sources[0]!.message(change(2, { projectId: "project-2" }));
-    sources[0]!.message(change(3, { topics: ["tasks"] }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]!.url).toContain("/api/v1/ws");
+    expect(statuses).toContain("connected");
+
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(1),
+    });
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(1),
+    });
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(2, { projectId: "project-2" }),
+    });
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(3, { topics: ["tasks"] }),
+    });
 
     expect(received).toEqual([1]);
-    expect(statuses).toContain("connected");
     unsubscribe();
     stopStatus();
-    expect(sources[0]!.closed).toBe(true);
+    socket.disconnect();
     expect(hub.status).toBe("idle");
   });
 });
 
 describe("useLiveRefresh", () => {
   test("coalesces event bursts into one refresh", async () => {
-    const sources: FakeEventSource[] = [];
-    const hub = new PlatformEventHub(() => {
-      const source = new FakeEventSource();
-      sources.push(source);
-      return source;
+    const sockets: FakeWebSocket[] = [];
+    const socket = new GojoSocket((url) => {
+      const ws = new FakeWebSocket(url) as unknown as WebSocket;
+      sockets.push(ws as unknown as FakeWebSocket);
+      return ws;
     });
+    const hub = new PlatformEventHub(socket);
     const scope = effectScope();
     let refreshes = 0;
     scope.run(() => {
@@ -101,14 +144,23 @@ describe("useLiveRefresh", () => {
         },
       });
     });
-    await Promise.resolve();
-    sources[0]!.open();
-    sources[0]!.message(change(1));
-    sources[0]!.message(change(2));
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(1, { topics: ["runs"] }),
+    });
+    sockets[0]!.push({
+      t: "event",
+      sub: 1,
+      channel: "platform",
+      event: change(2, { topics: ["runs"] }),
+    });
     await new Promise((resolve) => setTimeout(resolve, 25));
 
     expect(refreshes).toBe(2);
     scope.stop();
-    expect(sources[0]!.closed).toBe(true);
+    socket.disconnect();
   });
 });

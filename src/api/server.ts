@@ -4,12 +4,15 @@ import { join } from "node:path";
 import type { AppContext } from "@/app/context";
 
 import { createRouter } from "./router";
+import { createWebSocketHandler } from "./ws/handler";
+import { WsHub } from "./ws/hub";
 
 export interface ApiServer {
   port: number;
   hostname: string;
   stop: () => void;
   url: string;
+  hub: WsHub;
 }
 
 export interface StartServerOptions {
@@ -23,6 +26,7 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   const { ctx } = options;
   const hostname = options.host ?? ctx.instance.bindHost;
   const port = options.port ?? ctx.instance.bindPort;
+  const hub = new WsHub(ctx);
   const handler = createRouter(ctx);
 
   await ctx.scheduler.start();
@@ -31,10 +35,12 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   const server = Bun.serve({
     hostname,
     port,
-    fetch: handler,
-    // SSE run event streams stay open for minutes; Bun's default 10s idle
-    // timeout otherwise closes them ("request timed out" → Vite socket hang up).
-    idleTimeout: 0,
+    async fetch(request, bunServer) {
+      const response = await handler(request, bunServer);
+      // Successful WebSocket upgrades return undefined (Bun owns the 101).
+      return response ?? undefined!;
+    },
+    websocket: createWebSocketHandler(ctx, hub),
   });
 
   if (options.writePid !== false) {
@@ -45,7 +51,9 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   return {
     port: server.port ?? port,
     hostname,
+    hub,
     stop() {
+      hub.close();
       server.stop();
       const pidPath = join(ctx.paths.data, "gojo.pid");
       if (existsSync(pidPath)) {

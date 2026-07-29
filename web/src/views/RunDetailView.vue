@@ -18,6 +18,7 @@ import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
+import { useSoftLoading } from "@/composables/useSoftLoading";
 import {
   durationBetween,
   fmtCost,
@@ -49,7 +50,7 @@ const attempts = ref<Attempt[]>([]);
 const impactItems = ref<RunImpactItem[]>([]);
 const integration = ref<RunIntegration | null>(null);
 const events = ref<RunEvent[]>([]);
-const loading = ref(true);
+const { loading, begin: beginLoad, end: endLoad, reset: resetLoad } = useSoftLoading();
 const error = ref("");
 const busy = ref(false);
 const rejectReason = ref("");
@@ -258,7 +259,7 @@ const costSummary = computed(() => {
     }
   }
 
-  // Live model from SSE (available at agent start).
+  // Live model from the WebSocket run channel (available at agent start).
   for (const event of events.value) {
     if (event.type === "run.agent.model" && event.data && typeof event.data === "object") {
       const m = (event.data as { model?: string }).model;
@@ -334,7 +335,7 @@ const canRetry = computed(() =>
 );
 
 async function load() {
-  loading.value = true;
+  const initial = beginLoad();
   error.value = "";
   try {
     const data = await getRun(runId.value);
@@ -343,9 +344,15 @@ async function load() {
     impactItems.value = data.impactItems ?? [];
     integration.value = data.integration ?? null;
   } catch (err) {
+    if (initial) {
+      run.value = null;
+      attempts.value = [];
+      impactItems.value = [];
+      integration.value = null;
+    }
     error.value = err instanceof Error ? err.message : "Failed to load run";
   } finally {
-    loading.value = false;
+    endLoad(initial);
   }
 }
 
@@ -497,6 +504,18 @@ onMounted(async () => {
   void loadInspect();
 });
 
+watch(runId, async () => {
+  resetLoad();
+  run.value = null;
+  attempts.value = [];
+  impactItems.value = [];
+  integration.value = null;
+  events.value = [];
+  await load();
+  startEvents();
+  void loadInspect();
+});
+
 onUnmounted(() => {
   unsubscribe?.();
   stopDurationTick();
@@ -537,7 +556,7 @@ onUnmounted(() => {
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
-    <div v-if="loading" class="empty">Loading…</div>
+    <div v-if="loading && !run" class="empty">Loading…</div>
 
     <template v-else-if="run">
       <div v-if="run.errorMessage" class="alert alert-error mb-4">

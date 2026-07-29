@@ -6,16 +6,11 @@ export const openApiDocument = {
     description: "Scheduled software-agent orchestration platform",
   },
   paths: {
-    "/api/v1/events": {
+    "/api/v1/ws": {
       get: {
-        summary: "Stream durable platform change events",
+        summary: "WebSocket realtime + RPC transport",
         description:
-          "Authenticated SSE stream with Last-Event-ID replay. Optional projectId and repeatable topic filters scope invalidation events.",
-        parameters: [
-          { name: "projectId", in: "query", schema: { type: "string" } },
-          { name: "topic", in: "query", schema: { type: "string" } },
-          { name: "after", in: "query", schema: { type: "integer", minimum: 0 } },
-        ],
+          "Authenticated WebSocket. Carries platform invalidation events, run activity streams, and request/response RPC frames for browser clients. Agents, webhooks, and CLI health remain on HTTP.",
       },
     },
     "/api/v1/health": {
@@ -107,13 +102,6 @@ export const openApiDocument = {
         summary: "Get project work status",
         description:
           "Canonical counts for working, queued, attention, verified-open, and stale-open work.",
-      },
-    },
-    "/api/v1/projects/{id}/events": {
-      get: {
-        summary: "Stream project-scoped platform events",
-        description:
-          "Compatibility alias over the durable platform change stream, filtered to one project.",
       },
     },
     "/api/v1/projects/{id}/sources": {
@@ -223,9 +211,6 @@ export const openApiDocument = {
     },
     "/api/v1/runs/{id}": {
       get: { summary: "Get run" },
-    },
-    "/api/v1/runs/{id}/events": {
-      get: { summary: "SSE run events" },
     },
     "/api/v1/runs/{id}/progress": {
       post: {

@@ -1,11 +1,6 @@
-export type RunEvent = {
-  /** Monotonic id within the process (for SSE Last-Event-ID / client dedupe). */
-  id?: number;
-  type: string;
-  runId: string;
-  at: string;
-  data?: unknown;
-};
+import type { RunEvent } from "@shared/ws";
+
+export type { RunEvent };
 
 const PINNED_TYPES = new Set([
   'run.created',
@@ -25,7 +20,7 @@ function isOutputEvent(event: RunEvent): boolean {
 }
 
 /**
- * In-memory per-run event log for SSE replay.
+ * In-memory per-run event log for WebSocket run-channel replay.
  * Prefer dropping output chunks when over capacity so early model/state survive.
  */
 export class RunEventHistory {

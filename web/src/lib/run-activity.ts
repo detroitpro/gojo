@@ -182,7 +182,7 @@ function flushToolGroup(open: OpenToolGroup | null, out: ActivityItem[]): void {
 }
 
 /**
- * Build newest-first activity rows from run SSE events.
+ * Build newest-first activity rows from run WebSocket events.
  * Coalesces run.agent.output into assistant turns (not one row per token).
  * Pairs tool started/completed by callId and collapses consecutive tools.
  */

@@ -26,6 +26,24 @@ export type {
   PlatformEventTopic,
 } from './events';
 
+export { WS_PATH, WS_PROTOCOL_VERSION } from './ws';
+export type {
+  ClientFrame,
+  ClientPlatformSubFrame,
+  ClientReqFrame,
+  ClientRunSubFrame,
+  ClientUnsubFrame,
+  RunEvent,
+  RunEventCursor,
+  ServerEndFrame,
+  ServerFrame,
+  ServerHelloFrame,
+  ServerPlatformEventFrame,
+  ServerResFrame,
+  ServerRunEventFrame,
+  WsHttpMethod,
+} from './ws';
+
 export {
   compareSortValues,
   DEFAULT_PAGE_LIMIT,
