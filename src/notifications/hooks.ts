@@ -1,7 +1,7 @@
 import type { AppContext } from "@/app/context";
 import type { NotificationChannel } from "@/notifications/dispatcher";
 import { resolveRunHandoffSummary } from "@/runs/inspect";
-import { recordRunOutcome } from "@/scheduler/disable";
+import { recordRunOutcome } from "@/storage/schedule-outcomes";
 import { getInstanceSetting } from "@/storage/instance-settings";
 import type { Task } from "@/storage/types";
 import { isTerminal, RunState } from "@shared/run-states";

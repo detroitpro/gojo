@@ -153,6 +153,8 @@ export {
   RunStateSchema,
 } from './run-states';
 
+export { describeCron } from './cron-describe';
+
 export {
   DEFAULT_SCHEDULING_POLICY,
   parseSchedulingPolicy,

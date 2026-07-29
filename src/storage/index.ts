@@ -47,6 +47,7 @@ export {
   refreshSchedulerLease,
   releaseSchedulerLease,
 } from "./scheduler-leases";
+export { recordRunOutcome, shouldDisableSchedule } from "./schedule-outcomes";
 export type { RunState } from "@shared/run-states";
 export type {
   AgentProfile,

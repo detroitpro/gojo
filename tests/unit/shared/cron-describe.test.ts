@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { describeCron } from "@/scheduler/describe-cron";
+import { describeCron } from "@shared/cron-describe";
 
 describe("describeCron", () => {
   test("describes common expressions", () => {

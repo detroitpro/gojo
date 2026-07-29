@@ -1,5 +1,5 @@
-import { createRepositories } from "@/storage";
-import type { Database } from "@/storage";
+import { createRepositories } from "./repositories";
+import type { Database } from "./db";
 
 /** Returns true when consecutive failures meet or exceed the disable threshold. */
 export function shouldDisableSchedule(

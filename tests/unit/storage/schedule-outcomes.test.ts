@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
-import { recordRunOutcome, shouldDisableSchedule } from "@/scheduler/disable";
+import { recordRunOutcome, shouldDisableSchedule } from "@/storage/schedule-outcomes";
 
-describe("scheduler/disable", () => {
+describe("storage/schedule-outcomes", () => {
   let db: Database | null = null;
 
   afterEach(() => {
