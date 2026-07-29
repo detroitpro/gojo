@@ -1,6 +1,4 @@
 export { nextOccurrence, nextOccurrences, missedOccurrences } from "./cron";
-export { describeCron } from "./describe-cron";
-export { recordRunOutcome, shouldDisableSchedule } from "./disable";
 export {
   selectMissedRuns,
   shouldStartGivenOverlap,

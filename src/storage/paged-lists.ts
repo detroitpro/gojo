@@ -7,7 +7,7 @@ import type { PageParams, PaginatedList, SortOrder, SortParams } from "@shared/p
 import { parseSortParams } from "@shared/pagination";
 import type { RunState } from "@shared/run-states";
 
-import { describeCron } from "@/scheduler/describe-cron";
+import { describeCron } from "@shared/cron-describe";
 import type { Database } from "@/storage";
 import { createRepositories } from "@/storage";
 import type { DashboardOverviewRun } from "@/storage/dashboard-overview";
