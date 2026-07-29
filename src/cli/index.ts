@@ -710,7 +710,7 @@ Commands:
   task list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next
   run list|inspect|logs|diff|approve|reject|artifacts
-  integration list --open|--merged [--project <id>]
+  integration list --open|--merged|--committed [--project <id>]
   backup create|verify|restore
 `);
 }
@@ -725,14 +725,20 @@ async function runIntegrationCommand(
       case "list": {
         const wantOpen = hasFlag(parsed, "open");
         const wantMerged = hasFlag(parsed, "merged");
-        if (wantOpen === wantMerged) {
-          die("usage: gojo integration list --open|--merged [--project <id>]", format);
+        const wantCommitted = hasFlag(parsed, "committed");
+        const selected = [wantOpen, wantMerged, wantCommitted].filter(Boolean).length;
+        if (selected !== 1) {
+          die(
+            "usage: gojo integration list --open|--merged|--committed [--project <id>]",
+            format,
+          );
         }
         const projectId = getFlagString(parsed, "project");
+        const status = wantOpen ? "open" : wantMerged ? "merged" : "committed";
         const result = listIntegrationsPage(ctx.db, {
           limit: DEFAULT_PAGE_LIMIT,
           offset: 0,
-          status: wantOpen ? "open" : "merged",
+          status,
           ...(projectId ? { projectId } : {}),
         });
         printOutput(format, {

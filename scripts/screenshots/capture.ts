@@ -27,6 +27,8 @@ const SHOTS: { file: string; path: string }[] = [
   { file: "ui-projects.png", path: "/projects" },
   { file: "ui-runs.png", path: "/runs" },
   { file: "ui-schedules.png", path: "/schedules" },
+  { file: "ui-integrations.png", path: "/integrations?status=merged" },
+  { file: "ui-impact.png", path: "/impact" },
 ];
 
 async function waitForShell(page: Page) {

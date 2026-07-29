@@ -69,6 +69,12 @@ describe("DashboardView live refresh", () => {
         { path: "/", name: "dashboard", component: { template: "<div />" } },
         { path: "/queue", name: "queue", component: { template: "<div />" } },
         { path: "/projects", name: "projects", component: { template: "<div />" } },
+        { path: "/projects/:id", name: "project-detail", component: { template: "<div />" } },
+        { path: "/tasks", name: "tasks", component: { template: "<div />" } },
+        { path: "/schedules", name: "schedules", component: { template: "<div />" } },
+        { path: "/runs", name: "runs", component: { template: "<div />" } },
+        { path: "/integrations", name: "integrations", component: { template: "<div />" } },
+        { path: "/impact", name: "impact", component: { template: "<div />" } },
       ],
     });
     await router.push("/");

@@ -67,9 +67,11 @@ const projects = ref<Project[]>([]);
 const tasks = ref<Task[]>([]);
 const projectFilter = ref(queryParam("projectId"));
 const taskFilter = ref(queryParam("taskId"));
-const stateFilter = ref("");
-const triggerFilter = ref("");
-const query = ref("");
+const stateFilter = ref(queryParam("state"));
+const triggerFilter = ref(queryParam("trigger"));
+const fromFilter = ref(queryParam("from"));
+const toFilter = ref(queryParam("to"));
+const query = ref(queryParam("q"));
 const enqueueBusy = ref(false);
 const queuePositions = ref<Record<string, number>>({});
 
@@ -88,7 +90,15 @@ const {
 } = useServerTable({
   defaultSort: initialSort(),
   defaultOrder: initialOrder(),
-  watchSources: [projectFilter, taskFilter, stateFilter, triggerFilter, query],
+  watchSources: [
+    projectFilter,
+    taskFilter,
+    stateFilter,
+    triggerFilter,
+    fromFilter,
+    toFilter,
+    query,
+  ],
   fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listRuns({
       limit,
@@ -99,6 +109,8 @@ const {
       taskId: taskFilter.value || undefined,
       state: stateFilter.value || undefined,
       trigger: triggerFilter.value || undefined,
+      from: fromFilter.value || undefined,
+      to: toFilter.value || undefined,
       q: query.value || undefined,
     }),
 });
@@ -167,47 +179,74 @@ async function enqueueSelectedTask() {
 }
 
 watch(
-  () => [route.query.projectId, route.query.taskId] as const,
-  ([projectId, taskId]) => {
+  () =>
+    [
+      route.query.projectId,
+      route.query.taskId,
+      route.query.state,
+      route.query.trigger,
+      route.query.from,
+      route.query.to,
+      route.query.q,
+    ] as const,
+  ([projectId, taskId, state, trigger, from, to, q]) => {
     const nextProject = typeof projectId === "string" ? projectId : "";
     const nextTask = typeof taskId === "string" ? taskId : "";
-    if (projectFilter.value !== nextProject) {
-      projectFilter.value = nextProject;
-    }
-    if (taskFilter.value !== nextTask) {
-      taskFilter.value = nextTask;
-    }
+    const nextState = typeof state === "string" ? state : "";
+    const nextTrigger = typeof trigger === "string" ? trigger : "";
+    const nextFrom = typeof from === "string" ? from : "";
+    const nextTo = typeof to === "string" ? to : "";
+    const nextQ = typeof q === "string" ? q : "";
+    if (projectFilter.value !== nextProject) projectFilter.value = nextProject;
+    if (taskFilter.value !== nextTask) taskFilter.value = nextTask;
+    if (stateFilter.value !== nextState) stateFilter.value = nextState;
+    if (triggerFilter.value !== nextTrigger) triggerFilter.value = nextTrigger;
+    if (fromFilter.value !== nextFrom) fromFilter.value = nextFrom;
+    if (toFilter.value !== nextTo) toFilter.value = nextTo;
+    if (query.value !== nextQ) query.value = nextQ;
   },
 );
 
-watch([projectFilter, taskFilter, sort, order], () => {
-  const nextQuery = { ...route.query } as Record<string, string>;
-  if (projectFilter.value) {
-    nextQuery.projectId = projectFilter.value;
-  } else {
-    delete nextQuery.projectId;
-  }
-  if (taskFilter.value) {
-    nextQuery.taskId = taskFilter.value;
-  } else {
-    delete nextQuery.taskId;
-  }
-  if (sort.value !== "createdAt" || order.value !== "desc") {
-    nextQuery.sort = sort.value;
-    nextQuery.order = order.value;
-  } else {
-    delete nextQuery.sort;
-    delete nextQuery.order;
-  }
-  const same =
-    (nextQuery.projectId ?? "") === queryParam("projectId") &&
-    (nextQuery.taskId ?? "") === queryParam("taskId") &&
-    (nextQuery.sort ?? "") === queryParam("sort") &&
-    (nextQuery.order ?? "") === queryParam("order");
-  if (!same) {
-    void router.replace({ query: nextQuery });
-  }
-});
+watch(
+  [projectFilter, taskFilter, stateFilter, triggerFilter, fromFilter, toFilter, query, sort, order],
+  () => {
+    const nextQuery = { ...route.query } as Record<string, string>;
+    if (projectFilter.value) nextQuery.projectId = projectFilter.value;
+    else delete nextQuery.projectId;
+    if (taskFilter.value) nextQuery.taskId = taskFilter.value;
+    else delete nextQuery.taskId;
+    if (stateFilter.value) nextQuery.state = stateFilter.value;
+    else delete nextQuery.state;
+    if (triggerFilter.value) nextQuery.trigger = triggerFilter.value;
+    else delete nextQuery.trigger;
+    if (fromFilter.value) nextQuery.from = fromFilter.value;
+    else delete nextQuery.from;
+    if (toFilter.value) nextQuery.to = toFilter.value;
+    else delete nextQuery.to;
+    if (query.value) nextQuery.q = query.value;
+    else delete nextQuery.q;
+    if (sort.value !== "createdAt" || order.value !== "desc") {
+      nextQuery.sort = sort.value;
+      nextQuery.order = order.value;
+    } else {
+      delete nextQuery.sort;
+      delete nextQuery.order;
+    }
+    const same =
+      (nextQuery.projectId ?? "") === queryParam("projectId") &&
+      (nextQuery.taskId ?? "") === queryParam("taskId") &&
+      (nextQuery.state ?? "") === queryParam("state") &&
+      (nextQuery.trigger ?? "") === queryParam("trigger") &&
+      (nextQuery.from ?? "") === queryParam("from") &&
+      (nextQuery.to ?? "") === queryParam("to") &&
+      (nextQuery.q ?? "") === queryParam("q") &&
+      (nextQuery.sort ?? "") === queryParam("sort") &&
+      (nextQuery.order ?? "") === queryParam("order");
+    if (!same) {
+      void router.replace({ query: nextQuery });
+    }
+  },
+);
 
 watch(projectFilter, () => {
   void loadTaskOptions();

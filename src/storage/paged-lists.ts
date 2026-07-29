@@ -51,15 +51,24 @@ export const QUEUE_SORT_ALLOWED = [
 ] as const;
 export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
 export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
-export const INTEGRATION_LIST_STATUSES = ["open", "merged"] as const;
+export const INTEGRATION_LIST_STATUSES = ["open", "merged", "committed"] as const;
 export type IntegrationListStatus = (typeof INTEGRATION_LIST_STATUSES)[number];
 
 export const INTEGRATION_SORT_ALLOWED = [
   "openedAt",
   "mergedAt",
+  "createdAt",
   "projectName",
   "taskName",
   "prNumber",
+] as const;
+
+export const IMPACT_ITEM_SORT_ALLOWED = [
+  "createdAt",
+  "category",
+  "subject",
+  "projectName",
+  "taskName",
 ] as const;
 
 export type ListProjectsPageInput = PageParams &
@@ -73,6 +82,10 @@ export type ListIntegrationsPageInput = PageParams &
   Partial<SortParams> & {
     status: IntegrationListStatus;
     projectId?: string | null;
+    /** Inclusive ISO lower bound on run creation time. */
+    from?: string | null;
+    /** Inclusive ISO upper bound on run creation time. */
+    to?: string | null;
   };
 
 export type IntegrationListRow = {
@@ -85,12 +98,15 @@ export type IntegrationListRow = {
   prUrl: string | null;
   provider: string | null;
   repo: string | null;
-  status: IntegrationListStatus;
+  /** Actual run_integrations.status (not the list filter). */
+  status: string;
+  commitSha: string | null;
   openedAt: string | null;
   mergedAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
   branchName: string | null;
+  runCreatedAt: string;
 };
 
 export type ListTasksPageInput = PageParams &
@@ -107,7 +123,37 @@ export type ListRunsPageInput = PageParams &
     state?: string | null;
     trigger?: string | null;
     q?: string | null;
+    /** Inclusive ISO lower bound on run creation time. */
+    from?: string | null;
+    /** Inclusive ISO upper bound on run creation time. */
+    to?: string | null;
   };
+
+export type ListImpactItemsPageInput = PageParams &
+  Partial<SortParams> & {
+    category?: string | null;
+    projectId?: string | null;
+    /** Inclusive ISO lower bound on run creation time. */
+    from?: string | null;
+    /** Inclusive ISO upper bound on run creation time. */
+    to?: string | null;
+  };
+
+export type ImpactItemListRow = {
+  id: string;
+  runId: string;
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  taskName: string;
+  category: string;
+  subject: string;
+  summary: string;
+  source: string;
+  verification: string;
+  confidence: number | null;
+  createdAt: string;
+};
 
 export type ListSchedulesPageInput = PageParams &
   Partial<SortParams> & {
@@ -453,14 +499,25 @@ export function listIntegrationsPage(
   input: ListIntegrationsPageInput,
 ): PaginatedList<IntegrationListRow> {
   const sqlite = db.connection();
-  const clauses: string[] = [
-    "ri.status = ?",
-    "(ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)",
-  ];
-  const params: SQLQueryBindings[] = [input.status];
+  const clauses: string[] = [];
+  const params: SQLQueryBindings[] = [];
+
+  if (input.status === "committed") {
+    clauses.push("ri.commit_sha IS NOT NULL");
+  } else {
+    clauses.push("ri.status = ?");
+    params.push(input.status);
+    clauses.push("(ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)");
+  }
 
   if (input.projectId) {
     buildWhere(clauses, params, "r.project_id = ?", input.projectId);
+  }
+  if (input.from) {
+    buildWhere(clauses, params, "r.created_at >= ?", input.from);
+  }
+  if (input.to) {
+    buildWhere(clauses, params, "r.created_at <= ?", input.to);
   }
 
   const where = `WHERE ${clauses.join(" AND ")}`;
@@ -481,7 +538,12 @@ export function listIntegrationsPage(
       )
       .get(...params)?.count ?? 0;
 
-  const defaultSort = input.status === "merged" ? "mergedAt" : "openedAt";
+  const defaultSort =
+    input.status === "merged"
+      ? "mergedAt"
+      : input.status === "committed"
+        ? "createdAt"
+        : "openedAt";
   const { sort, order } = parseSortParams(
     { sort: input.sort, order: input.order },
     {
@@ -496,6 +558,7 @@ export function listIntegrationsPage(
     {
       openedAt: "ri.opened_at",
       mergedAt: "ri.merged_at",
+      createdAt: "r.created_at",
       projectName: "p.name COLLATE NOCASE",
       taskName: "t.name COLLATE NOCASE",
       prNumber: "ri.pr_number",
@@ -514,11 +577,13 @@ export function listIntegrationsPage(
     provider: string | null;
     repo: string | null;
     status: string;
+    commit_sha: string | null;
     opened_at: string | null;
     merged_at: string | null;
     last_checked_at: string | null;
     last_error: string | null;
     branch_name: string | null;
+    run_created_at: string;
   };
 
   const rows = sqlite
@@ -534,11 +599,13 @@ export function listIntegrationsPage(
          ri.provider AS provider,
          ri.repo AS repo,
          ri.status AS status,
+         ri.commit_sha AS commit_sha,
          ri.opened_at AS opened_at,
          ri.merged_at AS merged_at,
          ri.last_checked_at AS last_checked_at,
          ri.last_error AS last_error,
-         a.branch_name AS branch_name
+         a.branch_name AS branch_name,
+         r.created_at AS run_created_at
        ${from}
        ${where}
        ${orderBy}
@@ -557,12 +624,120 @@ export function listIntegrationsPage(
       prUrl: row.pr_url,
       provider: row.provider,
       repo: row.repo,
-      status: row.status as IntegrationListStatus,
+      status: row.status,
+      commitSha: row.commit_sha,
       openedAt: row.opened_at,
       mergedAt: row.merged_at,
       lastCheckedAt: row.last_checked_at,
       lastError: row.last_error,
       branchName: row.branch_name,
+      runCreatedAt: row.run_created_at,
+    })),
+    total,
+    limit: input.limit,
+    offset: input.offset,
+  };
+}
+
+export function listImpactItemsPage(
+  db: Database,
+  input: ListImpactItemsPageInput,
+): PaginatedList<ImpactItemListRow> {
+  const sqlite = db.connection();
+  const clauses: string[] = ["ii.verification <> 'rejected'"];
+  const params: SQLQueryBindings[] = [];
+
+  if (input.category) {
+    buildWhere(clauses, params, "ii.category = ?", input.category);
+  }
+  if (input.projectId) {
+    buildWhere(clauses, params, "r.project_id = ?", input.projectId);
+  }
+  if (input.from) {
+    buildWhere(clauses, params, "r.created_at >= ?", input.from);
+  }
+  if (input.to) {
+    buildWhere(clauses, params, "r.created_at <= ?", input.to);
+  }
+
+  const where = `WHERE ${clauses.join(" AND ")}`;
+  const from = `FROM run_impact_items ii
+    INNER JOIN runs r ON r.id = ii.run_id
+    INNER JOIN projects p ON p.id = r.project_id
+    INNER JOIN tasks t ON t.id = r.task_id`;
+
+  const total =
+    sqlite
+      .query<{ count: number }, SQLQueryBindings[]>(
+        `SELECT COUNT(*) AS count ${from} ${where}`,
+      )
+      .get(...params)?.count ?? 0;
+
+  const { sort, order } = parseSortParams(
+    { sort: input.sort, order: input.order },
+    {
+      allowed: IMPACT_ITEM_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "desc",
+    },
+  );
+  const orderBy = sqlOrderBy(
+    sort,
+    order,
+    {
+      createdAt: "ii.created_at",
+      category: "ii.category",
+      subject: "ii.subject COLLATE NOCASE",
+      projectName: "p.name COLLATE NOCASE",
+      taskName: "t.name COLLATE NOCASE",
+    },
+    "ii.id DESC",
+  );
+
+  type ImpactSqlRow = {
+    id: string;
+    run_id: string;
+    project_id: string;
+    project_name: string;
+    task_id: string;
+    task_name: string;
+    category: string;
+    subject: string;
+    summary: string;
+    source: string;
+    verification: string;
+    confidence: number | null;
+    created_at: string;
+  };
+
+  const rows = sqlite
+    .query<ImpactSqlRow, SQLQueryBindings[]>(
+      `SELECT ii.id, ii.run_id, r.project_id, p.name AS project_name,
+              r.task_id, t.name AS task_name,
+              ii.category, ii.subject, ii.summary, ii.source, ii.verification,
+              ii.confidence, ii.created_at
+       ${from}
+       ${where}
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...params, input.limit, input.offset);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      runId: row.run_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      taskId: row.task_id,
+      taskName: row.task_name,
+      category: row.category,
+      subject: row.subject,
+      summary: row.summary,
+      source: row.source,
+      verification: row.verification,
+      confidence: row.confidence,
+      createdAt: row.created_at,
     })),
     total,
     limit: input.limit,
@@ -819,6 +994,12 @@ export function listRunsPage(
   }
   if (input.trigger) {
     buildWhere(clauses, params, "r.trigger = ?", input.trigger);
+  }
+  if (input.from) {
+    buildWhere(clauses, params, "r.created_at >= ?", input.from);
+  }
+  if (input.to) {
+    buildWhere(clauses, params, "r.created_at <= ?", input.to);
   }
   const q = input.q?.trim();
   if (q) {

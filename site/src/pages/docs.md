@@ -28,7 +28,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project task lists (heading + table, not a card wrapping only a table) with a last-five-runs strip. **PRs open** links to projects with open automation PRs (or that project’s delivery section when filtered). Per-item impact audit lives on project detail and run detail.
+**Dashboard** — full-width ops gateway: inventory tiles (projects, tasks, schedules, runs), an Impact strip (merged, PRs open, merge rate, commits, succeeded runs, and category totals), and per-project task lists with a last-five-runs strip. Every metric tile drills into the list behind it — Integrations, Impact items, Runs, and so on.
 
 **Queue** — waiting runs with admission positions, instance scheduling policy caps, and what is actively running.
 
@@ -45,6 +45,14 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 ![gojo schedules](/images/ui-schedules.png)
 
 **Schedules** — human-readable cron, relative next fire, and a future-runs timeline.
+
+![gojo integrations](/images/ui-integrations.png)
+
+**Integrations** — Open / Merged / Commits tabs over `run_integrations`, with project filters and links into run detail. Dashboard Merged / Commits / Merge rate tiles land here.
+
+![gojo impact items](/images/ui-impact.png)
+
+**Impact** — paged impact items (category, subject, verification) behind the dashboard category totals. Filter by category or project; each row opens the producing run.
 
 ![gojo run detail](/images/ui-run-detail.png)
 

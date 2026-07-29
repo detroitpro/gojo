@@ -151,7 +151,8 @@ export interface ProjectSource {
   } | null;
 }
 
-export type IntegrationListStatus = "open" | "merged";
+/** List filter for GET /integrations (not always equal to row.status). */
+export type IntegrationListStatus = "open" | "merged" | "committed";
 
 export interface IntegrationListItem {
   runId: string;
@@ -163,12 +164,31 @@ export interface IntegrationListItem {
   prUrl: string | null;
   provider: string | null;
   repo: string | null;
-  status: IntegrationListStatus;
+  /** Actual run_integrations.status. */
+  status: string;
+  commitSha: string | null;
   openedAt: string | null;
   mergedAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
   branchName: string | null;
+  runCreatedAt: string;
+}
+
+export interface ImpactItemListRow {
+  id: string;
+  runId: string;
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  taskName: string;
+  category: string;
+  subject: string;
+  summary: string;
+  source: string;
+  verification: string;
+  confidence: number | null;
+  createdAt: string;
 }
 
 export interface Project extends ProjectSummaryCounts {

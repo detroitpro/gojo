@@ -119,6 +119,10 @@ Primitive: [`StatusBadge.vue`](web/src/components/StatusBadge.vue) +
 - **list-section** — list-only: title + one table
 - Prefer existing table/pager/action-menu patterns over one-off toolbars
 - AppShell nav may keep path SVGs; new product icons should be Lucide
+- Content fills the shell (`.main` is full width of the column beside the sidebar).
+  Do **not** add page-level `max-width` on AppShell views. Dense tables use
+  `.table-wrap` (`overflow-x: auto`) when columns exceed the viewport. Login stays
+  a centered `.auth-box` outside the shell.
 
 ## Metric tiles
 
@@ -134,6 +138,9 @@ with keys from [`web/src/lib/stat-metrics.ts`](web/src/lib/stat-metrics.ts). Do 
   `stat-metrics`; `impactCategoryLabel` / `impactCategorySpec` read from that catalog).
   Dashboard/project strips render `categoryTotals` as `StatTile`s — distinct-run counts,
   no verification breakdown on the tile.
+- StatTiles that summarize must link (`to` / `href`) to a list of the underlying records
+  (dashboard gateway). Linked tiles never underline — border accent on hover only
+  (`a.stat-tile` rules in `styles.css`).
 - Extend `METRICS` and add cases in `tests/unit/web/stat-metrics.test.ts` when adding keys.
 
 ## Out of scope for this skill

@@ -11,6 +11,7 @@ import type {
   DashboardStats,
   DirectoryListing,
   HealthInfo,
+  ImpactItemListRow,
   InstanceDoctorResult,
   InstanceInfo,
   NotificationChannelConfig,
@@ -344,7 +345,7 @@ export async function listProjects(query: ListQuery = {}): Promise<PaginatedResu
 }
 
 export async function listIntegrations(
-  query: ListQuery & { status: "open" | "merged" },
+  query: ListQuery & { status: "open" | "merged" | "committed" },
 ): Promise<PaginatedResult<IntegrationListItem>> {
   const { data } = await request<{
     integrations: IntegrationListItem[];
@@ -354,6 +355,23 @@ export async function listIntegrations(
   }>(`/integrations${buildListQuery(query)}`);
   return {
     items: data.integrations,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
+}
+
+export async function listImpactItems(
+  query: ListQuery = {},
+): Promise<PaginatedResult<ImpactItemListRow>> {
+  const { data } = await request<{
+    items: ImpactItemListRow[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/impact/items${buildListQuery(query)}`);
+  return {
+    items: data.items,
     total: data.total,
     limit: data.limit,
     offset: data.offset,

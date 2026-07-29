@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
 import {
+  listImpactItemsPage,
   listIntegrationsPage,
   listProjectsPage,
   listRunsPage,
@@ -450,6 +451,191 @@ describe("paged-lists", () => {
     expect(withPrs.total).toBe(1);
     expect(withPrs.items[0]?.id).toBe(withOpen.id);
     expect(withPrs.items[0]?.openPrCount).toBe(2);
+
+    db.close();
+  });
+
+  test("listIntegrationsPage lists committed by commit_sha and supports from/to", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
+    const task = repos.tasks.create({ projectId: project.id, name: "deps", prompt: "x" });
+
+    const commitRun = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "commit",
+      trigger: "manual",
+    });
+    const prRun = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "pr",
+      trigger: "manual",
+    });
+    db.connection()
+      .query("UPDATE runs SET created_at = ? WHERE id = ?")
+      .run("2026-07-10T00:00:00.000Z", commitRun.id);
+    db.connection()
+      .query("UPDATE runs SET created_at = ? WHERE id = ?")
+      .run("2026-01-01T00:00:00.000Z", prRun.id);
+
+    repos.runIntegrations.upsertForRun({
+      runId: commitRun.id,
+      mode: "commit-only",
+      status: "committed",
+      commitSha: "abc123",
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: prRun.id,
+      mode: "pull-request",
+      prNumber: 1,
+      prUrl: "https://example.com/1",
+      status: "open",
+      openedAt: "2026-01-01T00:00:00.000Z",
+      nextCheckAt: "2026-07-27T20:00:00.000Z",
+    });
+
+    const committed = listIntegrationsPage(db, { limit: 25, offset: 0, status: "committed" });
+    expect(committed.total).toBe(1);
+    expect(committed.items[0]?.commitSha).toBe("abc123");
+    expect(committed.items[0]?.prNumber).toBeNull();
+
+    const windowed = listIntegrationsPage(db, {
+      limit: 25,
+      offset: 0,
+      status: "committed",
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-07-31T23:59:59.999Z",
+    });
+    expect(windowed.total).toBe(1);
+
+    const emptyWindow = listIntegrationsPage(db, {
+      limit: 25,
+      offset: 0,
+      status: "committed",
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-01-31T23:59:59.999Z",
+    });
+    expect(emptyWindow.total).toBe(0);
+
+    db.close();
+  });
+
+  test("listRunsPage filters by from/to on created_at", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
+    const task = repos.tasks.create({ projectId: project.id, name: "t", prompt: "x" });
+    const inRange = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "in",
+      trigger: "manual",
+      state: RunState.Succeeded,
+    });
+    const out = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "out",
+      trigger: "manual",
+      state: RunState.Succeeded,
+    });
+    db.connection()
+      .query("UPDATE runs SET created_at = ? WHERE id = ?")
+      .run("2026-07-10T00:00:00.000Z", inRange.id);
+    db.connection()
+      .query("UPDATE runs SET created_at = ? WHERE id = ?")
+      .run("2026-01-01T00:00:00.000Z", out.id);
+
+    const page = listRunsPage(db, {
+      limit: 25,
+      offset: 0,
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-07-31T23:59:59.999Z",
+    });
+    expect(page.total).toBe(1);
+    expect(page.items[0]?.id).toBe(inRange.id);
+    db.close();
+  });
+
+  test("listImpactItemsPage filters by category, excludes rejected, pages", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
+    const task = repos.tasks.create({ projectId: project.id, name: "deps", prompt: "x" });
+    const run = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "k1",
+      trigger: "manual",
+    });
+    db.connection()
+      .query("UPDATE runs SET created_at = ? WHERE id = ?")
+      .run("2026-07-10T00:00:00.000Z", run.id);
+
+    repos.runImpactItems.replaceForRun(run.id, null, [
+      {
+        category: "dependency-update",
+        subject: "package.json",
+        summary: "deps",
+        source: "platform",
+        verification: "verified",
+      },
+      {
+        category: "dependency-update",
+        subject: "croner",
+        summary: "bump",
+        source: "agent",
+        verification: "corroborated",
+      },
+      {
+        category: "documentation",
+        subject: "docs/a.md",
+        summary: "docs",
+        source: "platform",
+        verification: "verified",
+      },
+      {
+        category: "security",
+        subject: "bogus",
+        summary: "nope",
+        source: "agent",
+        verification: "rejected",
+      },
+    ]);
+
+    const deps = listImpactItemsPage(db, {
+      limit: 25,
+      offset: 0,
+      category: "dependency-update",
+    });
+    expect(deps.total).toBe(2);
+    expect(deps.items.every((item) => item.category === "dependency-update")).toBe(true);
+    expect(deps.items[0]?.projectName).toBe("alpha");
+    expect(deps.items[0]?.taskName).toBe("deps");
+
+    const page = listImpactItemsPage(db, {
+      limit: 1,
+      offset: 0,
+      category: "dependency-update",
+    });
+    expect(page.total).toBe(2);
+    expect(page.items).toHaveLength(1);
+
+    const all = listImpactItemsPage(db, { limit: 25, offset: 0 });
+    expect(all.total).toBe(3);
+
+    const windowed = listImpactItemsPage(db, {
+      limit: 25,
+      offset: 0,
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-07-31T23:59:59.999Z",
+    });
+    expect(windowed.total).toBe(3);
 
     db.close();
   });

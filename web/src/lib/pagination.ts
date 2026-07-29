@@ -24,6 +24,11 @@ export type ListQuery = {
   state?: string;
   status?: string;
   trigger?: string;
+  category?: string;
+  /** Inclusive ISO lower bound (run created_at). */
+  from?: string;
+  /** Inclusive ISO upper bound (run created_at). */
+  to?: string;
   enabled?: "all" | "enabled" | "disabled" | "true" | "false" | boolean;
   hasOpenPrs?: boolean;
   sort?: string;
@@ -70,6 +75,15 @@ export function buildListQuery(params: ListQuery): string {
   }
   if (params.trigger) {
     sp.set("trigger", params.trigger);
+  }
+  if (params.category) {
+    sp.set("category", params.category);
+  }
+  if (params.from) {
+    sp.set("from", params.from);
+  }
+  if (params.to) {
+    sp.set("to", params.to);
   }
   if (params.enabled !== undefined && params.enabled !== "all") {
     if (params.enabled === true || params.enabled === "enabled" || params.enabled === "true") {

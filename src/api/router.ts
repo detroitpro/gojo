@@ -49,8 +49,10 @@ import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
   BACKUP_SORT_ALLOWED,
   getTaskDetail,
+  IMPACT_ITEM_SORT_ALLOWED,
   INTEGRATION_LIST_STATUSES,
   INTEGRATION_SORT_ALLOWED,
+  listImpactItemsPage,
   listIntegrationsPage,
   listProjectsPage,
   toProjectDetailRow,
@@ -485,7 +487,8 @@ export async function handleApiRequest(
     const statusParam = url.searchParams.get("status");
     if (
       statusParam !== "open" &&
-      statusParam !== "merged"
+      statusParam !== "merged" &&
+      statusParam !== "committed"
     ) {
       return failure(
         "validation_error",
@@ -495,9 +498,11 @@ export async function handleApiRequest(
     }
     const status = statusParam as IntegrationListStatus;
     const page = parsePageParamsFromUrl(url);
+    const defaultSort =
+      status === "merged" ? "mergedAt" : status === "committed" ? "createdAt" : "openedAt";
     const sort = parseSortParamsFromUrl(url, {
       allowed: INTEGRATION_SORT_ALLOWED,
-      defaultSort: status === "merged" ? "mergedAt" : "openedAt",
+      defaultSort,
       defaultOrder: "desc",
     });
     const result = listIntegrationsPage(ctx.db, {
@@ -505,9 +510,34 @@ export async function handleApiRequest(
       ...sort,
       status,
       projectId: url.searchParams.get("projectId"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
     });
     return success({
       integrations: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/v1/impact/items") {
+    const page = parsePageParamsFromUrl(url);
+    const sort = parseSortParamsFromUrl(url, {
+      allowed: IMPACT_ITEM_SORT_ALLOWED,
+      defaultSort: "createdAt",
+      defaultOrder: "desc",
+    });
+    const result = listImpactItemsPage(ctx.db, {
+      ...page,
+      ...sort,
+      category: url.searchParams.get("category"),
+      projectId: url.searchParams.get("projectId"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
+    });
+    return success({
+      items: result.items,
       total: result.total,
       limit: result.limit,
       offset: result.offset,
@@ -1008,6 +1038,8 @@ export async function handleApiRequest(
       state: url.searchParams.get("state"),
       trigger: url.searchParams.get("trigger"),
       q: url.searchParams.get("q"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
     });
     return success({
       runs: result.items,

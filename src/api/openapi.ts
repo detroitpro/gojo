@@ -58,19 +58,38 @@ export const openApiDocument = {
     },
     "/api/v1/integrations": {
       get: {
-        summary: "List gojo-tracked pull requests by status",
+        summary: "List gojo-tracked integrations by status",
         description:
-          "Rows from run_integrations with status=open|merged (not Impact’s date window). status is required.",
+          "Rows from run_integrations. status=open|merged requires a PR; status=committed means commit_sha IS NOT NULL. Optional from/to filter on run created_at (same window semantics as Impact).",
         parameters: [
           {
             name: "status",
             in: "query",
             required: true,
-            schema: { type: "string", enum: ["open", "merged"] },
+            schema: { type: "string", enum: ["open", "merged", "committed"] },
           },
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "from", in: "query", schema: { type: "string" } },
+          { name: "to", in: "query", schema: { type: "string" } },
+          { name: "sort", in: "query", schema: { type: "string" } },
+          { name: "order", in: "query", schema: { type: "string" } },
+        ],
+      },
+    },
+    "/api/v1/impact/items": {
+      get: {
+        summary: "List impact items",
+        description:
+          "Paged run_impact_items (verification <> rejected) with optional category, projectId, and from/to on run created_at. Drill-down for dashboard category totals.",
+        parameters: [
+          { name: "category", in: "query", schema: { type: "string" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "from", in: "query", schema: { type: "string" } },
+          { name: "to", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "sort", in: "query", schema: { type: "string" } },
           { name: "order", in: "query", schema: { type: "string" } },
         ],
@@ -206,6 +225,8 @@ export const openApiDocument = {
           { name: "state", in: "query", schema: { type: "string" } },
           { name: "trigger", in: "query", schema: { type: "string" } },
           { name: "q", in: "query", schema: { type: "string" } },
+          { name: "from", in: "query", schema: { type: "string" } },
+          { name: "to", in: "query", schema: { type: "string" } },
         ],
       },
     },

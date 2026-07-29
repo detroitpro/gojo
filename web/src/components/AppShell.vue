@@ -32,6 +32,18 @@ const nav = [
     icon: "M13 10V3L4 14h7v7l9-11h-7z",
   },
   {
+    to: "/integrations",
+    label: "Integrations",
+    name: "integrations",
+    icon: "M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5",
+  },
+  {
+    to: "/impact",
+    label: "Impact",
+    name: "impact",
+    icon: "M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z",
+  },
+  {
     to: "/queue",
     label: "Queue",
     name: "queue",

@@ -49,8 +49,14 @@ const pauseBusy = ref(false);
 const projectFilter = ref(queryParam("projectId"));
 
 type ImpactRange = "30d" | "90d" | "all";
+
+function initialImpactRange(): ImpactRange {
+  const value = queryParam("range");
+  return value === "90d" || value === "all" ? value : "30d";
+}
+
 const impact = ref<DashboardImpact | null>(null);
-const impactRange = ref<ImpactRange>("30d");
+const impactRange = ref<ImpactRange>(initialImpactRange());
 
 const visibleProjects = computed(() => {
   if (!projectFilter.value) {
@@ -62,6 +68,51 @@ const visibleProjects = computed(() => {
 function impactCompareLabel(): string {
   return compareLabel("previousWindow", impact.value?.range);
 }
+
+function withProjectQuery(base: Record<string, string> = {}): Record<string, string> {
+  if (projectFilter.value) {
+    return { ...base, projectId: projectFilter.value };
+  }
+  return base;
+}
+
+function impactWindowQuery(base: Record<string, string> = {}): Record<string, string> {
+  const query = withProjectQuery(base);
+  const from = impact.value?.window.from;
+  const to = impact.value?.window.to;
+  if (from) query.from = from;
+  if (to) query.to = to;
+  if (impactRange.value !== "all") {
+    query.range = impactRange.value;
+  }
+  return query;
+}
+
+const projectsRoute = computed(() => ({ name: "projects" as const }));
+const tasksRoute = computed(() => ({
+  name: "tasks" as const,
+  query: withProjectQuery(),
+}));
+const schedulesRoute = computed(() => ({
+  name: "schedules" as const,
+  query: withProjectQuery(),
+}));
+const runsRoute = computed(() => ({
+  name: "runs" as const,
+  query: withProjectQuery(),
+}));
+const succeededRunsRoute = computed(() => ({
+  name: "runs" as const,
+  query: impactWindowQuery({ state: "Succeeded" }),
+}));
+const mergedRoute = computed(() => ({
+  name: "integrations" as const,
+  query: impactWindowQuery({ status: "merged" }),
+}));
+const commitsRoute = computed(() => ({
+  name: "integrations" as const,
+  query: impactWindowQuery({ status: "committed" }),
+}));
 
 const prsOpenRoute = computed(() => {
   const total = impact.value?.totals.prsOpen ?? 0;
@@ -77,6 +128,13 @@ const prsOpenRoute = computed(() => {
   }
   return { name: "projects", query: { hasOpenPrs: "1" } };
 });
+
+function categoryRoute(category: string) {
+  return {
+    name: "impact" as const,
+    query: impactWindowQuery({ category }),
+  };
+}
 
 const runsCompareLabel = computed(() =>
   compareLabel("asOf", dashboardPrevious.value?.compareWindow),
@@ -137,27 +195,38 @@ async function togglePause() {
 }
 
 watch(
-  () => route.query.projectId,
-  (projectId) => {
-    const next = typeof projectId === "string" ? projectId : "";
-    if (next !== projectFilter.value) {
-      projectFilter.value = next;
+  () => [route.query.projectId, route.query.range] as const,
+  ([projectId, range]) => {
+    const nextProject = typeof projectId === "string" ? projectId : "";
+    const nextRange: ImpactRange =
+      range === "90d" || range === "all" ? range : "30d";
+    if (nextProject !== projectFilter.value) {
+      projectFilter.value = nextProject;
+    }
+    if (nextRange !== impactRange.value) {
+      impactRange.value = nextRange;
     }
   },
 );
 
-watch(projectFilter, (value) => {
-  const current = queryParam("projectId");
-  if (value === current) {
-    return;
-  }
-  const nextQuery = { ...route.query };
-  if (value) {
-    nextQuery.projectId = value;
+watch([projectFilter, impactRange], ([project, range]) => {
+  const nextQuery = { ...route.query } as Record<string, string>;
+  if (project) {
+    nextQuery.projectId = project;
   } else {
     delete nextQuery.projectId;
   }
-  void router.replace({ query: nextQuery });
+  if (range !== "30d") {
+    nextQuery.range = range;
+  } else {
+    delete nextQuery.range;
+  }
+  const same =
+    (nextQuery.projectId ?? "") === queryParam("projectId") &&
+    (nextQuery.range ?? "") === queryParam("range");
+  if (!same) {
+    void router.replace({ query: nextQuery });
+  }
 });
 
 useLiveRefresh({
@@ -215,14 +284,23 @@ useLiveRefresh({
           </div>
         </div>
         <StatGrid class="status-band-secondary">
-          <StatTile metric-key="dashboard.projects" :value="projectCount" />
-          <StatTile metric-key="dashboard.tasks" :value="taskCount" />
-          <StatTile metric-key="dashboard.schedules" :value="scheduleCount" />
+          <StatTile
+            metric-key="dashboard.projects"
+            :value="projectCount"
+            :to="projectsRoute"
+          />
+          <StatTile metric-key="dashboard.tasks" :value="taskCount" :to="tasksRoute" />
+          <StatTile
+            metric-key="dashboard.schedules"
+            :value="scheduleCount"
+            :to="schedulesRoute"
+          />
           <StatTile
             metric-key="dashboard.runs"
             :value="runsTotal"
             :previous="dashboardPrevious?.runs"
             :compare-label="runsCompareLabel"
+            :to="runsRoute"
           />
         </StatGrid>
       </div>
@@ -248,6 +326,7 @@ useLiveRefresh({
               :value="impact.totals.mergedRuns"
               :previous="impact.previousTotals?.mergedRuns"
               :compare-label="impactCompareLabel()"
+              :to="mergedRoute"
             />
             <StatTile
               metric-key="impact.prsOpen"
@@ -261,18 +340,21 @@ useLiveRefresh({
               :value="impact.totals.mergeRate"
               :previous="impact.previousTotals?.mergeRate"
               :compare-label="impactCompareLabel()"
+              :to="mergedRoute"
             />
             <StatTile
               metric-key="impact.commits"
               :value="impact.totals.commits"
               :previous="impact.previousTotals?.commits"
               :compare-label="impactCompareLabel()"
+              :to="commitsRoute"
             />
             <StatTile
               metric-key="impact.succeededRuns"
               :value="impact.totals.succeededRuns"
               :previous="impact.previousTotals?.succeededRuns"
               :compare-label="impactCompareLabel()"
+              :to="succeededRunsRoute"
             />
           </StatGrid>
 
@@ -282,6 +364,7 @@ useLiveRefresh({
               :key="entry.category"
               :metric-key="`impact.category.${entry.category}`"
               :value="entry.runs"
+              :to="categoryRoute(entry.category)"
             />
           </StatGrid>
           <div v-else class="muted text-sm impact-empty">

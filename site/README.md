@@ -28,6 +28,6 @@ bun run screenshots:ui
 # Vite HMR UI: GOJO_BASE_URL=http://127.0.0.1:5173 bun run screenshots:ui
 ```
 
-4. Spot-check the five files, tweak docs captions if the UI changed, then commit.
+4. Spot-check the PNGs under `site/public/images/ui-*.png`, tweak docs captions if the UI changed, then commit.
 
 Auth: the capture script mints a `gojo_session` cookie from `$GOJO_HOME` (default `~/.gojo`). Override with `GOJO_SESSION` or `GOJO_USER`.

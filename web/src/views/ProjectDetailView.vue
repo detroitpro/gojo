@@ -104,6 +104,41 @@ function impactCompareLabel(): string {
   return compareLabel("previousWindow", impact.value?.range);
 }
 
+function impactWindowQuery(base: Record<string, string> = {}): Record<string, string> {
+  const query: Record<string, string> = {
+    ...base,
+    projectId: projectId.value,
+  };
+  const from = impact.value?.window.from;
+  const to = impact.value?.window.to;
+  if (from) query.from = from;
+  if (to) query.to = to;
+  if (impactRange.value !== "all") {
+    query.range = impactRange.value;
+  }
+  return query;
+}
+
+const mergedRoute = computed(() => ({
+  name: "integrations" as const,
+  query: impactWindowQuery({ status: "merged" }),
+}));
+const commitsRoute = computed(() => ({
+  name: "integrations" as const,
+  query: impactWindowQuery({ status: "committed" }),
+}));
+const succeededRunsRoute = computed(() => ({
+  name: "runs" as const,
+  query: impactWindowQuery({ state: "Succeeded" }),
+}));
+
+function categoryRoute(category: string) {
+  return {
+    name: "impact" as const,
+    query: impactWindowQuery({ category }),
+  };
+}
+
 function workCompareLabel(): string {
   return compareLabel("asOf", workStatus.value?.compareWindow);
 }
@@ -935,6 +970,7 @@ useLiveRefresh({
               :value="impact.totals.mergedRuns"
               :previous="impact.previousTotals?.mergedRuns"
               :compare-label="impactCompareLabel()"
+              :to="mergedRoute"
             />
             <StatTile
               metric-key="impact.prsOpen"
@@ -948,18 +984,21 @@ useLiveRefresh({
               :value="impact.totals.mergeRate"
               :previous="impact.previousTotals?.mergeRate"
               :compare-label="impactCompareLabel()"
+              :to="mergedRoute"
             />
             <StatTile
               metric-key="impact.commits"
               :value="impact.totals.commits"
               :previous="impact.previousTotals?.commits"
               :compare-label="impactCompareLabel()"
+              :to="commitsRoute"
             />
             <StatTile
               metric-key="impact.succeededRuns"
               :value="impact.totals.succeededRuns"
               :previous="impact.previousTotals?.succeededRuns"
               :compare-label="impactCompareLabel()"
+              :to="succeededRunsRoute"
             />
           </StatGrid>
 
@@ -969,6 +1008,7 @@ useLiveRefresh({
               :key="entry.category"
               :metric-key="`impact.category.${entry.category}`"
               :value="entry.runs"
+              :to="categoryRoute(entry.category)"
             />
           </StatGrid>
           <div v-else class="muted text-sm impact-empty">

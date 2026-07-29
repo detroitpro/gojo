@@ -174,6 +174,8 @@ async function mountView() {
       { path: "/tasks", name: "tasks", component: { template: "<div />" } },
       { path: "/schedules", name: "schedules", component: { template: "<div />" } },
       { path: "/runs", name: "runs", component: { template: "<div />" } },
+      { path: "/integrations", name: "integrations", component: { template: "<div />" } },
+      { path: "/impact", name: "impact", component: { template: "<div />" } },
     ],
   });
   await router.push("/projects/project-1");

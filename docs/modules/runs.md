@@ -65,6 +65,12 @@ After integration the coordinator persists two canonical record sets (accounting
 
 The agent handoff is runtime-validated (`normalizeAgentHandoff`, schema v1/v2) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
 
+Dashboard tiles drill into list endpoints (gateway, not dead ends):
+
+- `GET /api/v1/integrations?status=open|merged|committed` — optional `projectId`, `from`/`to` on run `created_at`. `committed` means `commit_sha IS NOT NULL` (no PR required).
+- `GET /api/v1/impact/items` — paged `run_impact_items` (excludes `rejected`) with optional `category`, `projectId`, `from`/`to`.
+- `GET /api/v1/runs` — optional `from`/`to` on `created_at` (plus existing `state` / `projectId` filters) for Succeeded-runs drill-down.
+
 ## May call
 
 - `workspace/`, `git/`

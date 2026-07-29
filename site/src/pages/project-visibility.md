@@ -24,6 +24,11 @@ updates, …) use the same tile pattern with outcome labels and icons; each coun
 is the number of distinct runs that produced that category of impact, not a
 breakdown by verification level.
 
+The dashboard is a gateway: inventory tiles open Projects / Tasks / Schedules /
+Runs, delivery tiles open Integrations (Open / Merged / Commits), and category
+tiles open the Impact items list for that category — so you can dig into the
+non-summarized records behind each number.
+
 Work is not limited to gojo-created pull requests. Human and bot work discovered
 from connected systems appears with explicit provenance and source.
 
