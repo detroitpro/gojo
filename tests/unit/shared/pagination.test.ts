@@ -7,6 +7,7 @@ import {
   pageCount,
   paginateArray,
   parsePageParams,
+  parsePageParamsFromUrl,
   parseSortParams,
   rangeLabel,
 } from "@shared/pagination";
@@ -58,5 +59,19 @@ describe("pagination", () => {
     expect(compareSortValues("a", "b", "desc")).toBeGreaterThan(0);
     expect(compareSortValues(null, "a", "asc")).toBe(1);
     expect(compareSortValues("a", null, "asc")).toBe(-1);
+    expect(compareSortValues(null, null, "asc")).toBe(0);
+    expect(compareSortValues(2, 10, "asc")).toBeLessThan(0);
+    expect(compareSortValues(10, 2, "desc")).toBeLessThan(0);
+  });
+
+  test("parsePageParamsFromUrl reads query string and rejects invalid offset", () => {
+    const url = new URL("https://gojo.test/runs?limit=15&offset=30");
+    expect(parsePageParamsFromUrl(url)).toEqual({ limit: 15, offset: 30 });
+
+    const invalid = new URL("https://gojo.test/runs?offset=-5&limit=abc");
+    expect(parsePageParamsFromUrl(invalid)).toEqual({
+      limit: DEFAULT_PAGE_LIMIT,
+      offset: 0,
+    });
   });
 });

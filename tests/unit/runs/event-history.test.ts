@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { RunEventHistory } from "@/runs/events";
+import { RunEventBus, RunEventHistory } from "@/runs/events";
 
 describe("RunEventHistory", () => {
   test("assigns monotonic ids and prefers dropping output when trimming", () => {
@@ -42,5 +42,40 @@ describe("RunEventHistory", () => {
     const mid = all[1]!.id!;
     const after = history.list("r1", mid);
     expect(after.map((e) => e.type)).toEqual(["c"]);
+  });
+
+  test("clear removes all stored events", () => {
+    const history = new RunEventHistory(50);
+    history.record({ type: "a", runId: "r1", at: "t1" });
+    history.clear();
+    expect(history.list("r1")).toEqual([]);
+  });
+
+  test("drops oldest non-pinned events when over capacity without output", () => {
+    const history = new RunEventHistory(3);
+    history.record({ type: "custom.one", runId: "r1", at: "t1" });
+    history.record({ type: "run.created", runId: "r1", at: "t2" });
+    history.record({ type: "custom.two", runId: "r1", at: "t3" });
+    history.record({ type: "custom.three", runId: "r1", at: "t4" });
+
+    const types = history.list("r1").map((event) => event.type);
+    expect(types).toEqual(["run.created", "custom.two", "custom.three"]);
+  });
+});
+
+describe("RunEventBus", () => {
+  test("subscribe receives emit and unsubscribe stops delivery", () => {
+    const bus = new RunEventBus();
+    const received: string[] = [];
+    const event = { type: "run.created", runId: "r1", at: "t1" };
+
+    const unsubscribe = bus.subscribe((payload) => {
+      received.push(payload.type);
+    });
+    bus.emit(event);
+    unsubscribe();
+    bus.emit({ ...event, type: "run.finished" });
+
+    expect(received).toEqual(["run.created"]);
   });
 });

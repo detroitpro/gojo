@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  isTelegramChannel,
+  isWebhookLikeChannel,
   NotificationChannelMapSchema,
+  parseNotificationChannelConfig,
+  parseNotificationChannelMap,
   safeParseNotificationChannelConfig,
   safeParseNotificationChannelMap,
 } from "@shared/notifications";
@@ -81,5 +85,19 @@ describe("shared/notifications", () => {
       chatId: "1",
     });
     expect(result.success).toBe(false);
+  });
+
+  test("type guards and parse helpers classify webhook and telegram channels", () => {
+    const map = parseNotificationChannelMap({
+      eng: { type: "slack", webhookUrl: "https://hooks.slack.com/services/T/B/X" },
+      ops: { type: "telegram", botToken: "123:ABC", chatId: "42" },
+    });
+    const slack = parseNotificationChannelConfig(map["eng"]);
+    const telegram = parseNotificationChannelConfig(map["ops"]);
+
+    expect(isWebhookLikeChannel(slack)).toBe(true);
+    expect(isTelegramChannel(slack)).toBe(false);
+    expect(isTelegramChannel(telegram)).toBe(true);
+    expect(isWebhookLikeChannel(telegram)).toBe(false);
   });
 });
