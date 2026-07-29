@@ -42,7 +42,7 @@ Worktrees give each attempt a dedicated filesystem directory linked to the same 
 
 ## Handoff reports
 
-When a run finishes, gojo stores a structured handoff (from the agent’s `.gojo/handoff.json` and/or platform summary): files changed, decisions, unresolved issues, recommended next actions. Future agents should consume that summary — not a raw dump of every prior transcript.
+When a run finishes, gojo stores a structured handoff (from the agent’s `.gojo/handoff.json` and/or platform summary): files changed, decisions, unresolved issues, recommended next actions, and (schema v2) `impact.items` for dashboard accounting. Schema v1 remains accepted; prefer v2 for pull-request tasks. Future agents should consume that summary — not a raw dump of every prior transcript.
 
 ## Idempotency and recovery
 
