@@ -3,12 +3,14 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { getQueue, listProjects, listRuns, listTasks, runTask } from "@/api";
+import AppButton from "@/components/AppButton.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
+import { Play } from "lucide-vue-next";
 import type { Project, Task } from "@/types";
 
 const RUN_SORT_ALLOWED = [
@@ -252,15 +254,18 @@ useLiveRefresh({
         </div>
       </div>
       <div v-if="taskFilter" class="toolbar">
-        <button
-          class="btn btn-sm btn-primary"
-          type="button"
-          :disabled="enqueueBusy || !canEnqueue"
+        <AppButton
+          variant="primary"
+          size="sm"
+          :icon="Play"
+          :loading="enqueueBusy"
+          loading-label="Enqueueing…"
+          :disabled="!canEnqueue"
           :title="selectedTask && !selectedTask.enabled ? 'Task is disabled' : undefined"
           @click="enqueueSelectedTask"
         >
-          {{ enqueueBusy ? "Enqueueing…" : "Enqueue run" }}
-        </button>
+          Enqueue run
+        </AppButton>
       </div>
     </header>
 

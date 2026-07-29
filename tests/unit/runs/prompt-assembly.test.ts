@@ -69,6 +69,20 @@ describe('assembleAgentPrompt', () => {
     ).toThrow(/escapes workspace/);
   });
 
+  test('AI: progress reporting clarifies title is current focus, not work identity', () => {
+    const out = assembleAgentPrompt({
+      taskPrompt: 'do work',
+      adapterName: 'cursor',
+      workspacePath: tempWorkspace(),
+      validationSteps: [],
+      progressReporting: true,
+    });
+    expect(out).toContain('## Gojo progress reporting');
+    expect(out).toContain('current focus');
+    expect(out).toContain('does **not** rename the work item');
+    expect(out).toContain('durable identity stays the task name');
+  });
+
   test('shell: skips instructions and only comment-appends validation', () => {
     const root = tempWorkspace();
     writeFileSync(join(root, 'AGENTS.md'), 'should not appear\n');

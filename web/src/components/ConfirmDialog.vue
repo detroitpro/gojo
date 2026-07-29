@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from "vue";
+import { Check, Trash2, X } from "lucide-vue-next";
+
+import AppButton from "@/components/AppButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -8,11 +11,15 @@ const props = withDefaults(
     confirmLabel?: string;
     cancelLabel?: string;
     danger?: boolean;
+    busy?: boolean;
+    busyLabel?: string;
   }>(),
   {
     confirmLabel: "Confirm",
     cancelLabel: "Cancel",
     danger: false,
+    busy: false,
+    busyLabel: "Working…",
   },
 );
 
@@ -25,7 +32,7 @@ function onKeydown(event: KeyboardEvent) {
   if (!props.open) {
     return;
   }
-  if (event.key === "Escape") {
+  if (event.key === "Escape" && !props.busy) {
     emit("close");
   }
 }
@@ -58,7 +65,7 @@ onUnmounted(() => {
     role="dialog"
     aria-modal="true"
     :aria-label="title"
-    @click.self="emit('close')"
+    @click.self="!busy && emit('close')"
   >
     <div class="confirm-dialog">
       <header class="confirm-dialog-header">
@@ -68,15 +75,18 @@ onUnmounted(() => {
         <slot />
       </div>
       <footer class="confirm-dialog-footer">
-        <button class="btn" type="button" @click="emit('close')">{{ cancelLabel }}</button>
-        <button
-          class="btn"
-          :class="danger ? 'btn-danger' : 'btn-primary'"
-          type="button"
+        <AppButton :icon="X" :disabled="busy" @click="emit('close')">
+          {{ cancelLabel }}
+        </AppButton>
+        <AppButton
+          :variant="danger ? 'danger' : 'primary'"
+          :icon="danger ? Trash2 : Check"
+          :loading="busy"
+          :loading-label="busyLabel"
           @click="emit('confirm')"
         >
           {{ confirmLabel }}
-        </button>
+        </AppButton>
       </footer>
     </div>
   </div>

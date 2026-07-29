@@ -28,6 +28,8 @@ export type ListQuery = {
   hasOpenPrs?: boolean;
   sort?: string;
   order?: SortOrder;
+  /** Project work history view (completed / verified-terminal / operator-resolved). */
+  history?: boolean;
 };
 
 export function rangeLabel(total: number, limit: number, offset: number): string {
@@ -82,6 +84,9 @@ export function buildListQuery(params: ListQuery): string {
   }
   if (params.hasOpenPrs === true) {
     sp.set("hasOpenPrs", "true");
+  }
+  if (params.history === true) {
+    sp.set("history", "1");
   }
   if (params.sort) {
     sp.set("sort", params.sort);

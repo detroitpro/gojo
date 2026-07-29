@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
+import { Check, FolderOpen, X } from "lucide-vue-next";
+
+import AppButton from "@/components/AppButton.vue";
 
 import { browseFilesystem } from "@/api";
 import type { BrowseRoot, DirectoryListing } from "@/types";
@@ -84,19 +87,19 @@ onMounted(() => {
           <div class="picker-title">Choose repository</div>
           <div class="picker-path mono">{{ listing?.path ?? "…" }}</div>
         </div>
-        <button class="btn btn-sm" type="button" @click="emit('close')">Close</button>
+        <AppButton size="sm" :icon="X" @click="emit('close')">Close</AppButton>
       </header>
 
       <div class="picker-roots">
-        <button
+        <AppButton
           v-for="root in roots"
           :key="root.path"
-          class="btn btn-sm"
-          type="button"
+          size="sm"
+          :icon="FolderOpen"
           @click="openEntry(root.path)"
         >
           {{ root.label }}
-        </button>
+        </AppButton>
       </div>
 
       <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -141,15 +144,15 @@ onMounted(() => {
           <template v-else>Select a folder, or open into one (double-click)</template>
         </div>
         <div class="picker-actions">
-          <button class="btn" type="button" @click="emit('close')">Cancel</button>
-          <button
-            class="btn btn-primary"
-            type="button"
+          <AppButton :icon="X" @click="emit('close')">Cancel</AppButton>
+          <AppButton
+            variant="primary"
+            :icon="Check"
             :disabled="!listing"
             @click="chooseCurrent"
           >
             Use this folder
-          </button>
+          </AppButton>
         </div>
       </footer>
     </div>

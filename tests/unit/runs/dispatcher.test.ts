@@ -85,6 +85,7 @@ describe("runs/dispatcher", () => {
       executeRun: mock(async () => {
         throw new Error("should not execute expired runs");
       }),
+      syncWorkFromRun: mock(() => {}),
     } as unknown as RunCoordinator;
 
     const expired = repos.runs.create({

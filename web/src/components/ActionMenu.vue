@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
+import { MoreHorizontal } from "lucide-vue-next";
+
+import AppButton from "@/components/AppButton.vue";
 
 export type ActionMenuItem = {
   id: string;
@@ -153,17 +156,17 @@ onUnmounted(() => {
 
 <template>
   <div ref="root" class="action-menu">
-    <button
-      class="btn btn-sm action-menu-trigger"
-      type="button"
+    <AppButton
+      class="action-menu-trigger"
+      variant="ghost"
+      size="sm"
+      :icon="MoreHorizontal"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       :aria-expanded="open"
       :aria-haspopup="true"
-      :aria-label="ariaLabel"
       @click.stop="toggle"
-    >
-      ⋯
-    </button>
+    />
     <Teleport to="body">
       <div
         v-if="open"

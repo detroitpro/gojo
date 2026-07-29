@@ -54,6 +54,16 @@ Run detail uses a `run` channel subscription for activity/timeline. Durable
 `work_events.sequence` and in-process live output ids are namespaced so they
 never collide.
 
+## Work ledger events
+
+`work_events` (distinct from `platform_change_events`) is the per-item append-only
+ledger. It is not pruned. Narrative types (`source.observed`, `work.stale`,
+`run.progress`, …) keep their JSON payloads. `work.state_changed` additionally
+stores status axes in dedicated nullable columns (`execution`, `delivery`,
+`outcome`, `attention`, `sync_state`, `resolution`, `archived_at`) so status
+counts can be replayed without parsing JSON. Any future pruning of `work_events`
+must never drop the latest state-bearing row for a live work item.
+
 ## Boundaries
 
 - Platform events invalidate API queries; they are not an alternate entity

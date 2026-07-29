@@ -48,6 +48,7 @@ export class Database {
 
     this.sqlite.exec(SCHEMA_INDEXES);
     this.backfillWorkLedger();
+    this.backfillWorkStateEvents();
   }
 
   private currentSchemaVersion(): number {
@@ -270,6 +271,44 @@ export class Database {
         .run();
     });
 
+  }
+
+  /**
+   * Seed one work.state_changed row per work item that has no state-bearing event yet,
+   * stamped at the item's updated_at so upgraded instances start with a coherent baseline.
+   */
+  private backfillWorkStateEvents(): void {
+    this.sqlite
+      .query(
+        `INSERT INTO work_events (
+          id, project_id, work_item_id, run_id, type, data_json, source,
+          occurred_at, created_at, execution, delivery, outcome, attention,
+          sync_state, resolution, archived_at
+        )
+        SELECT
+          'state-backfill:' || w.id,
+          w.project_id,
+          w.id,
+          NULL,
+          'work.state_changed',
+          json_object('kind', w.kind),
+          'gojo',
+          w.updated_at,
+          w.updated_at,
+          w.execution,
+          w.delivery,
+          w.outcome,
+          w.attention,
+          w.sync_state,
+          w.resolution,
+          w.archived_at
+        FROM work_items w
+        WHERE NOT EXISTS (
+          SELECT 1 FROM work_events e
+          WHERE e.work_item_id = w.id AND e.execution IS NOT NULL
+        )`,
+      )
+      .run();
   }
 
   close(): void {

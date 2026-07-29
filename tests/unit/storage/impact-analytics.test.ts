@@ -106,9 +106,9 @@ describe('getDashboardImpact', () => {
     expect(impact.totals.commits).toBe(1);
     expect(impact.totals.mergeRate).toBeCloseTo(1 / 3);
 
-    expect(impact.categories).toEqual([
-      { category: 'bug-prevention', verification: 'claimed', count: 1 },
-      { category: 'dependency-update', verification: 'verified', count: 1 },
+    expect(impact.categoryTotals).toEqual([
+      { category: 'bug-prevention', runs: 1 },
+      { category: 'dependency-update', runs: 1 },
     ]);
 
     expect(impact.recentItems).toHaveLength(2);
@@ -180,8 +180,180 @@ describe('getDashboardImpact', () => {
     const impact = getDashboardImpact(ctx.db);
     expect(impact.totals.mergeRate).toBeNull();
     expect(impact.totals.succeededRuns).toBe(0);
-    expect(impact.categories).toEqual([]);
+    expect(impact.categoryTotals).toEqual([]);
     expect(impact.recentItems).toEqual([]);
+    expect(impact.previousTotals).toBeNull();
+    expect(impact.range).toBeNull();
+    ctx.db.close();
+  });
+
+  test('counts distinct runs per category, not rows (lockfile + package + claim = 1)', () => {
+    const ctx = setup();
+    const run = makeRun(ctx);
+    ctx.repos.runImpactItems.replaceForRun(run.id, null, [
+      {
+        category: 'dependency-update',
+        subject: 'package.json',
+        summary: 'Dependency manifest or lockfile changed',
+        source: 'platform',
+        verification: 'verified',
+      },
+      {
+        category: 'dependency-update',
+        subject: 'bun.lock',
+        summary: 'Dependency manifest or lockfile changed',
+        source: 'platform',
+        verification: 'verified',
+      },
+      {
+        category: 'dependency-update',
+        subject: 'croner',
+        summary: 'bump',
+        source: 'agent',
+        verification: 'corroborated',
+      },
+    ]);
+
+    const impact = getDashboardImpact(ctx.db);
+    expect(impact.categoryTotals).toEqual([{ category: 'dependency-update', runs: 1 }]);
+    ctx.db.close();
+  });
+
+  test('excludes rejected impact items from category totals', () => {
+    const ctx = setup();
+    const run = makeRun(ctx);
+    ctx.repos.runImpactItems.replaceForRun(run.id, null, [
+      {
+        category: 'security',
+        subject: 'cve-1',
+        summary: 'real',
+        source: 'agent',
+        verification: 'verified',
+      },
+      {
+        category: 'security',
+        subject: 'cve-bogus',
+        summary: 'noise',
+        source: 'agent',
+        verification: 'rejected',
+      },
+      {
+        category: 'maintenance',
+        subject: 'chore',
+        summary: 'rejected only',
+        source: 'agent',
+        verification: 'rejected',
+      },
+    ]);
+
+    const impact = getDashboardImpact(ctx.db);
+    expect(impact.categoryTotals).toEqual([{ category: 'security', runs: 1 }]);
+    ctx.db.close();
+  });
+
+  test('counts a multi-category run once in each category (totals overlap by design)', () => {
+    const ctx = setup();
+    const run = makeRun(ctx);
+    ctx.repos.runImpactItems.replaceForRun(run.id, null, [
+      {
+        category: 'documentation',
+        subject: 'docs/a.md',
+        summary: 'docs',
+        source: 'platform',
+        verification: 'verified',
+      },
+      {
+        category: 'dependency-update',
+        subject: 'package.json',
+        summary: 'deps',
+        source: 'platform',
+        verification: 'verified',
+      },
+    ]);
+
+    const impact = getDashboardImpact(ctx.db);
+    expect(impact.categoryTotals).toEqual([
+      { category: 'dependency-update', runs: 1 },
+      { category: 'documentation', runs: 1 },
+    ]);
+    ctx.db.close();
+  });
+
+  test('categoryTotals respect project and time-range filters', () => {
+    const ctx = setup();
+    const { repos } = ctx;
+    const other = repos.projects.create({ name: 'beta', repoPath: '/tmp/beta' });
+    const otherTask = repos.tasks.create({ projectId: other.id, name: 'docs', prompt: 'y' });
+
+    const inRange = makeRun(ctx, { createdAt: '2026-07-10T00:00:00.000Z' });
+    repos.runImpactItems.replaceForRun(inRange.id, null, [
+      {
+        category: 'documentation',
+        subject: 'docs/a.md',
+        summary: 'doc',
+        source: 'platform',
+        verification: 'verified',
+      },
+    ]);
+    makeRun(ctx, { createdAt: '2026-01-01T00:00:00.000Z' });
+    const otherProjectRun = makeRun(ctx, {
+      projectId: other.id,
+      taskId: otherTask.id,
+      createdAt: '2026-07-11T00:00:00.000Z',
+    });
+    repos.runImpactItems.replaceForRun(otherProjectRun.id, null, [
+      {
+        category: 'documentation',
+        subject: 'docs/b.md',
+        summary: 'other',
+        source: 'platform',
+        verification: 'verified',
+      },
+    ]);
+
+    const filtered = getDashboardImpact(ctx.db, {
+      projectId: ctx.project.id,
+      from: '2026-07-01T00:00:00.000Z',
+      to: '2026-07-31T23:59:59.999Z',
+    });
+    expect(filtered.categoryTotals).toEqual([{ category: 'documentation', runs: 1 }]);
+    ctx.db.close();
+  });
+
+  test('range=30d returns previousTotals for the prior equal-length window', () => {
+    const ctx = setup();
+    const { repos } = ctx;
+    const now = Date.now();
+    const recent = makeRun(ctx, {
+      createdAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      state: RunState.Succeeded,
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: recent.id,
+      mode: 'auto-merge',
+      status: 'merged',
+      commitSha: 'recent',
+    });
+    const prior = makeRun(ctx, {
+      createdAt: new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString(),
+      state: RunState.Succeeded,
+    });
+    repos.runIntegrations.upsertForRun({
+      runId: prior.id,
+      mode: 'auto-merge',
+      status: 'merged',
+      commitSha: 'prior',
+    });
+
+    const impact = getDashboardImpact(ctx.db, { range: '30d' });
+    expect(impact.range).toBe('30d');
+    expect(impact.totals.mergedRuns).toBe(1);
+    expect(impact.previousTotals?.mergedRuns).toBe(1);
+    expect(impact.previousWindow).not.toBeNull();
+
+    const lifetime = getDashboardImpact(ctx.db, { range: 'all' });
+    expect(lifetime.previousTotals).toBeNull();
+    expect(lifetime.totals.mergedRuns).toBe(2);
     ctx.db.close();
   });
 });

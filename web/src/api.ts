@@ -193,12 +193,13 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 }
 
 export async function getDashboardImpact(
-  params: { projectId?: string; from?: string; to?: string } = {},
+  params: { projectId?: string; from?: string; to?: string; range?: string } = {},
 ): Promise<DashboardImpact> {
   const search = new URLSearchParams();
   if (params.projectId) search.set("projectId", params.projectId);
   if (params.from) search.set("from", params.from);
   if (params.to) search.set("to", params.to);
+  if (params.range) search.set("range", params.range);
   const suffix = search.size > 0 ? `?${search.toString()}` : "";
   const { data } = await request<DashboardImpact>(`/dashboard/impact${suffix}`);
   return data;
@@ -414,8 +415,12 @@ export async function listProjectWork(
   return data;
 }
 
-export async function getProjectWorkStatus(projectId: string): Promise<WorkStatus> {
-  const { data } = await request<WorkStatus>(`/projects/${projectId}/work/status`);
+export async function getProjectWorkStatus(
+  projectId: string,
+  compare?: string,
+): Promise<WorkStatus> {
+  const suffix = compare ? `?compare=${encodeURIComponent(compare)}` : "";
+  const { data } = await request<WorkStatus>(`/projects/${projectId}/work/status${suffix}`);
   return data;
 }
 

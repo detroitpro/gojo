@@ -72,13 +72,17 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
-import type {
-  WorkAttention,
-  WorkDelivery,
-  WorkExecution,
-  WorkOutcome,
-  WorkProvenance,
+import {
+  compareWindowToMs,
+  parseCompareWindow,
+  type WorkAttention,
+  type WorkDelivery,
+  type WorkExecution,
+  type WorkOutcome,
+  type WorkProvenance,
 } from "@shared/work";
+import { parseImpactRange } from "@/storage/impact-analytics";
+import { createWorkStatusRollup } from "@/storage/work-status-rollup";
 
 /** Minimal Bun.Server surface needed for WebSocket upgrades. */
 export type UpgradeServer = {
@@ -576,6 +580,7 @@ export async function handleApiRequest(
 
     if (method === "GET" && action === "work") {
       const page = parsePageParamsFromUrl(url);
+      const historyParam = url.searchParams.get("history");
       return success(
         ctx.work.items.listByProject(projectId, {
           ...page,
@@ -591,12 +596,14 @@ export async function handleApiRequest(
           from: url.searchParams.get("from"),
           to: url.searchParams.get("to"),
           q: url.searchParams.get("q"),
+          history: historyParam === "1" || historyParam === "true",
         }),
       );
     }
 
     if (method === "GET" && action === "work/status") {
-      return success(ctx.work.items.status(projectId));
+      const compareWindow = parseCompareWindow(url.searchParams.get("compare"));
+      return success(ctx.work.items.status(projectId, { compareWindow }));
     }
 
     if (method === "GET" && action === "sources") {
@@ -1198,6 +1205,7 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/dashboard") {
+    const compareWindow = parseCompareWindow(url.searchParams.get("compare"));
     const projects = ctx.repos.projects.list().length;
     const tasks = ctx.repos.tasks.count();
     const schedules = ctx.repos.schedules.count();
@@ -1207,6 +1215,29 @@ export async function handleApiRequest(
     const runningByProject = ctx.repos.runs.countRunningByProject();
     const runningRuns = Object.values(runningByProject).reduce((a, b) => a + b, 0);
     const policy = getSchedulingPolicy(ctx.db);
+
+    const previousAsOf = new Date(
+      Date.now() - compareWindowToMs(compareWindow),
+    ).toISOString();
+    const rollup = createWorkStatusRollup(ctx.db);
+    const hasRunHistory =
+      ctx.db
+        .connection()
+        .query<{ n: number }, []>(
+          `SELECT COUNT(*) AS n FROM work_events
+           WHERE execution IS NOT NULL
+             AND json_extract(data_json, '$.kind') = 'run'`,
+        )
+        .get()?.n ?? 0;
+    const previousRunCounts =
+      hasRunHistory > 0 ? rollup.countsAtKind("run", previousAsOf) : null;
+    const previousRunsTotal =
+      ctx.db
+        .connection()
+        .query<{ n: number }, [string]>(
+          "SELECT COUNT(*) AS n FROM runs WHERE created_at <= ?",
+        )
+        .get(previousAsOf)?.n ?? 0;
 
     return success({
       projects,
@@ -1218,6 +1249,15 @@ export async function handleApiRequest(
       waitingRuns,
       schedulingPolicy: policy,
       paused: ctx.isPaused(),
+      previous: previousRunCounts
+        ? {
+            runningRuns: previousRunCounts.working,
+            waitingRuns: previousRunCounts.queued,
+            runs: previousRunsTotal,
+            asOf: previousAsOf,
+            compareWindow,
+          }
+        : null,
     });
   }
 
@@ -1226,11 +1266,13 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/dashboard/impact") {
+    const range = parseImpactRange(url.searchParams.get("range"));
     return success(
       getDashboardImpact(ctx.db, {
         projectId: url.searchParams.get("projectId"),
         from: url.searchParams.get("from"),
         to: url.searchParams.get("to"),
+        range,
       }),
     );
   }

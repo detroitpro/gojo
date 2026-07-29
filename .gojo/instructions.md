@@ -28,6 +28,13 @@ Unless the task explicitly owns merge/push (e.g. maintain-merge):
 - Write `.gojo/handoff.json` (schemaVersion 2) before you finish. **gojo opens the PR from this handoff** (`integration.prTool`, default `gh`). Do **not** run `gh pr create` / `tea pulls create` yourself.
 - Use a placeholder ULID for `runId` if unknown.
 
+## Progress vs identity
+
+When gojo injects progress reporting, `title` on `POST /runs/:id/progress` is your
+**current focus** (what you are doing now). It does not rename the work item — the
+durable identity stays the task name. Put short status in `title` / `summary`; put
+the finished PR title in handoff `summary` / `pr-title`.
+
 ## How you report (handoff judgment)
 
 The PR title/body come from the handoff. Reviewers should not need the raw agent transcript.

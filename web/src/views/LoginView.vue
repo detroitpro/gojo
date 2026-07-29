@@ -3,6 +3,8 @@ import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { checkSession, getHealth, login, probeSetupNeeded, setup } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import { KeyRound } from "lucide-vue-next";
 import { ApiError } from "@/types";
 
 const router = useRouter();
@@ -87,9 +89,16 @@ async function submit() {
             required
           />
         </div>
-        <button class="btn btn-primary w-full" type="submit" :disabled="busy">
+        <AppButton
+          variant="primary"
+          class="w-full"
+          :icon="KeyRound"
+          type="submit"
+          :loading="busy"
+          :loading-label="mode === 'setup' ? 'Completing setup…' : 'Signing in…'"
+        >
           {{ mode === "setup" ? "Complete setup" : "Sign in" }}
-        </button>
+        </AppButton>
       </form>
     </div>
   </div>

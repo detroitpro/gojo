@@ -18,35 +18,66 @@ without pretending that gojo owns those systems' native state.
   terminal delivery
 
 An item also records provenance, source identity, native state/JSON, observation
-time, next sync, and freshness. Source sync may upgrade provenance to
-`gojo-agent` (for example `gojo/` PR branches) but never downgrades an existing
-`gojo-agent` row when a forge author looks human. Verified-open counts include
-only current observations. A last-known-open stale item is shown under attention
-and never counted as verified open. Operator-resolved items leave Needs
-attention, stay visible in History, and are excluded from `needsAttention` /
-`staleOpen` until a later source observation reports them active again.
+time, next sync, and freshness. For gojo runs, `title` is the durable task name;
+agent progress updates `summary` (and focus fields in `nativeJson`) without
+renaming the work item. List responses enrich each row with `taskName` (run task
+or delivering task via a `delivers` link), `agentLabel` (actor / profile /
+adapter / provenance), and `deliveredWork` (outbound `delivers` targets on run
+rows so History can nest a PR under its run). Source sync may upgrade provenance to `gojo-agent` (for
+example `gojo/` PR branches) but never downgrades an existing `gojo-agent` row
+when a forge author looks human. Verified-open counts include only current
+observations. A last-known-open stale item is shown under attention and never
+counted as verified open. Operator-resolved items leave Needs attention, stay
+visible in History, and are excluded from `needsAttention` / `staleOpen` until a
+later source observation reports them active again.
 
 `work_links` records causality such as run → delivered PR and healer → failed
 run. `work_events` is append-only and supplies durable lifecycle replay after a
-daemon restart (`work.stale`, `work.verified_terminal`, `work.resolved`, and
-source observations). Raw agent output remains transient/artifact data rather
-than the lifecycle source of truth.
+daemon restart (`work.stale`, `work.verified_terminal`, `work.resolved`,
+`work.state_changed`, and source observations). Raw agent output remains
+transient/artifact data rather than the lifecycle source of truth.
+
+### State history and trends
+
+`work.state_changed` is the state of record for status axes. Every
+`work_items` mutation that changes `execution`, `delivery`, `outcome`,
+`attention`, `sync_state`, `resolution`, or `archived_at` appends one row with
+those columns populated (narrative events leave them NULL). Kind is stored in
+`data_json` so per-kind replay survives hard deletes of the work item row.
+
+`countWorkStateAt({ projectId?, kind?, at })` replays the latest state row per
+item at or before `at`. `work_status_rollup` is a rebuildable hourly
+memoization of that query keyed by `(project_id, kind, bucket_at)` — not a
+second source of truth. Cold reads materialize on miss; the just-closed hour is
+also pinned when a state change lands. Rebuild with
+`gojo work-status rebuild [--project <id>] [--from <iso>]`.
+
+`GET /api/v1/projects/:id/work/status?compare=24h|7d|30d` returns live counts
+plus `previous` / `previousAsOf` / `compareWindow` from the rollup.
+
+Documented limits: items created after `at` are excluded; cascaded deletes remove
+ledger rows (the rollup pins answers already materialized); a bucket with no
+prior activity materializes on first read; `archived_at` is filtered but not yet
+written by any code path.
 
 ## APIs and CLI
 
-- `GET /api/v1/projects/:id/work` (paged and filtered)
-- `GET /api/v1/projects/:id/work/status`
+- `GET /api/v1/projects/:id/work` (paged and filtered; `history=1` for completed / verified-terminal / operator-resolved, ordered by completion)
+- `GET /api/v1/projects/:id/work/status` (`compare=24h|7d|30d`, default `24h`)
+- `gojo work-status rebuild [--project <id>] [--from <iso>]`
 - `GET /api/v1/work/:id`
 - `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/work/:id/resolve`
 - `gojo project work|status <id>`
-- `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale]` (first page only; API adds paging and more filters)
+- `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale] [--history]` (first page only; API adds paging and more filters)
 - `gojo project recheck-work <id> <workItemId>`
 - `gojo project resolve-work <id> <workItemId> [--by <actor>] [--note <text>]`
 
 The project command center consumes these contracts for Now, Needs attention,
 Delivery, and History. Needs attention rows expose reason-specific actions
-(review run, retry source, recheck item, mark resolved). Specialist
+(review run, retry source, recheck item, mark resolved). The Vue UI renders
+work kind, result, execution, delivery, attention, and sync enums as shared
+icon badges (`web/src/components/status/*`) with accessible labels. Specialist
 run/integration views remain compatibility surfaces.
 
 ## Boundaries

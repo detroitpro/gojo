@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
+import AppButton from "@/components/AppButton.vue";
+import { RotateCcw } from "lucide-vue-next";
 import { fmtDuration, fmtTime } from "@/lib/format";
 import { buildActivityItems, type ActivityItem } from "@/lib/run-activity";
 import { buildPhaseSegments, type PhaseKey } from "@/lib/run-phases";
@@ -462,7 +464,7 @@ watch(
         >Bars = phase duration · Dots = activity events (click to jump) · Drag to pan ·
         scroll to zoom</span
       >
-      <button class="btn btn-sm" type="button" @click="resetZoom">Reset zoom</button>
+      <AppButton size="sm" :icon="RotateCcw" @click="resetZoom">Reset zoom</AppButton>
     </div>
 
     <div class="timeline-legend" aria-label="Timeline legend">

@@ -195,6 +195,11 @@ export {
   WorkProvenanceSchema,
   WorkRecheckStatusSchema,
   WorkResolutionSchema,
+  WorkStatusCompareWindowSchema,
+  WorkStatusCountsSchema,
+  WorkStatusSchema,
+  compareWindowToMs,
+  parseCompareWindow,
 } from './work';
 export type {
   SourceCapabilities,
@@ -211,4 +216,6 @@ export type {
   WorkResolveInput,
   WorkResolution,
   WorkStatus,
+  WorkStatusCompareWindow,
+  WorkStatusCounts,
 } from './work';

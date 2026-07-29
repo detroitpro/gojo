@@ -2,9 +2,11 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import { listAgents, testAgent } from "@/api";
+import AppButton from "@/components/AppButton.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
+import { FlaskConical, RefreshCw } from "lucide-vue-next";
 import type { AgentInfo, AgentTestResult } from "@/types";
 
 const agents = ref<AgentInfo[]>([]);
@@ -80,7 +82,9 @@ onMounted(load);
         <h1>Agents</h1>
         <div class="subtitle">Adapter detection status</div>
       </div>
-      <button class="btn btn-sm" type="button" @click="load">Re-detect</button>
+      <AppButton size="sm" :icon="RefreshCw" :loading="loading" loading-label="Detecting…" @click="load">
+        Re-detect
+      </AppButton>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -154,14 +158,15 @@ onMounted(load);
                 </template>
               </td>
               <td>
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  :disabled="busyName === agent.name"
+                <AppButton
+                  size="sm"
+                  :icon="FlaskConical"
+                  :loading="busyName === agent.name"
+                  loading-label="Testing…"
                   @click="runTest(agent.name)"
                 >
                   Test
-                </button>
+                </AppButton>
               </td>
             </tr>
           </tbody>

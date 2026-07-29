@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { runStateBadgeClass } from "@/lib/run-state-badge";
+import StatusBadge from "@/components/StatusBadge.vue";
+import { runStateStatus } from "@/lib/status-icons";
 import type { RunState } from "@/types";
 
-const props = defineProps<{
-  state: RunState | string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    state: RunState | string;
+    showLabel?: boolean;
+  }>(),
+  { showLabel: true },
+);
 
-const badgeClass = computed(() => runStateBadgeClass(props.state));
+const spec = computed(() => runStateStatus(props.state));
 </script>
 
 <template>
-  <span class="badge" :class="badgeClass">{{ state }}</span>
+  <StatusBadge
+    :icon="spec.icon"
+    :tone="spec.tone"
+    :label="spec.label"
+    :show-label="showLabel"
+  />
 </template>

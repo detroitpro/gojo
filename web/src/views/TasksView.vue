@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { disableTask, enableTask, listProjects, listTasks, runTask } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
+import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
@@ -350,8 +351,7 @@ useLiveRefresh({
                 {{ formatRunSuccessRate(task.recentRuns ?? []) }}
               </td>
               <td>
-                <span v-if="task.enabled" class="badge badge-success">enabled</span>
-                <span v-else class="badge badge-neutral">disabled</span>
+                <EnabledBadge :enabled="task.enabled" />
               </td>
               <td>{{ task.agentProfileName || "—" }}</td>
               <td class="mono muted">{{ new Date(task.createdAt).toLocaleString() }}</td>

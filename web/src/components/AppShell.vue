@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 
+import AppButton from "@/components/AppButton.vue";
 import { logout } from "@/api";
+import { LogOut } from "lucide-vue-next";
 import { usePlatformEvents } from "@/composables/usePlatformEvents";
 
 const route = useRoute();
@@ -231,7 +233,7 @@ async function signOut() {
           <span class="live-dot" :class="`live-dot-${eventStatus}`" />
           <span class="live-label">{{ eventStatusLabel }}</span>
         </button>
-        <button class="btn btn-sm" type="button" @click="signOut">Sign out</button>
+        <AppButton size="sm" :icon="LogOut" @click="signOut">Sign out</AppButton>
       </div>
     </aside>
 

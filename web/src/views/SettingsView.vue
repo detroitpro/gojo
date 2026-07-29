@@ -18,11 +18,25 @@ import {
   updateSchedulingPolicy,
   verifyBackup,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import StatGrid from "@/components/StatGrid.vue";
+import StatTile from "@/components/StatTile.vue";
 import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
 import { useServerTable } from "@/composables/useServerTable";
+import {
+  HardDrive,
+  KeyRound,
+  Pause,
+  Play,
+  Power,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Trash2,
+} from "lucide-vue-next";
 import type {
   HealthInfo,
   InstanceDoctorResult,
@@ -345,24 +359,17 @@ onMounted(load);
     <div v-if="loading" class="empty">Loading…</div>
 
     <template v-else-if="instance">
-      <div class="stats-row">
-        <div class="stat">
-          <div class="label">Version</div>
-          <div class="value compact">{{ health?.version ?? "—" }}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Scheduler</div>
-          <div class="value compact" :class="instance.paused ? 'bad' : 'ok'">
-            {{ instance.paused ? "Paused" : "Active" }}
-          </div>
-        </div>
-        <div class="stat">
-          <div class="label">Telemetry</div>
-          <div class="value compact">
-            {{ instance.telemetryEnabled ? "On" : "Off" }}
-          </div>
-        </div>
-      </div>
+      <StatGrid>
+        <StatTile metric-key="settings.version" :value="health?.version ?? '—'" />
+        <StatTile
+          metric-key="settings.scheduler"
+          :value="instance.paused ? 'Paused' : 'Active'"
+        />
+        <StatTile
+          metric-key="settings.telemetry"
+          :value="instance.telemetryEnabled ? 'On' : 'Off'"
+        />
+      </StatGrid>
 
       <section class="panel">
         <div class="panel-header">Instance</div>
@@ -373,12 +380,24 @@ onMounted(load);
             reverse proxy, or VPN.
           </p>
           <div class="toolbar mt-5">
-            <button class="btn btn-sm" type="button" :disabled="busy" @click="togglePause">
+            <AppButton
+              size="sm"
+              :icon="instance.paused ? Play : Pause"
+              :loading="busy"
+              loading-label="Working…"
+              @click="togglePause"
+            >
               {{ instance.paused ? "Resume scheduler" : "Pause scheduler" }}
-            </button>
-            <button class="btn btn-sm" type="button" :disabled="busy" @click="toggleTelemetry">
+            </AppButton>
+            <AppButton
+              size="sm"
+              :icon="Power"
+              :loading="busy"
+              loading-label="Working…"
+              @click="toggleTelemetry"
+            >
               {{ instance.telemetryEnabled ? "Disable telemetry" : "Enable telemetry" }}
-            </button>
+            </AppButton>
           </div>
           <div class="mono muted mt-5">
             health status={{ health?.status ?? "unknown" }} paused={{ String(health?.paused) }}
@@ -438,9 +457,16 @@ onMounted(load);
             </div>
           </div>
           <div class="toolbar mt-5">
-            <button class="btn btn-sm btn-primary" type="button" :disabled="busy" @click="saveScheduling">
+            <AppButton
+              variant="primary"
+              size="sm"
+              :icon="Save"
+              :loading="busy"
+              loading-label="Saving…"
+              @click="saveScheduling"
+            >
               Save admission policy
-            </button>
+            </AppButton>
           </div>
         </div>
       </section>
@@ -448,9 +474,15 @@ onMounted(load);
       <section class="panel">
         <div class="panel-header">
           Diagnostics
-          <button class="btn btn-sm" type="button" :disabled="busy" @click="refreshDoctor">
+          <AppButton
+            size="sm"
+            :icon="RefreshCw"
+            :loading="busy"
+            loading-label="Working…"
+            @click="refreshDoctor"
+          >
             Re-run
-          </button>
+          </AppButton>
         </div>
         <div class="panel-body">
           <div v-if="!doctor" class="muted">No diagnostics yet</div>
@@ -556,9 +588,16 @@ onMounted(load);
               <label for="token-name">Token name</label>
               <input id="token-name" v-model="tokenName" placeholder="ci-bot" required />
             </div>
-            <button class="btn btn-primary" type="submit" :disabled="busy || !tokenName.trim()">
+            <AppButton
+              variant="primary"
+              :icon="KeyRound"
+              type="submit"
+              :loading="busy"
+              loading-label="Creating…"
+              :disabled="!tokenName.trim()"
+            >
               Create token
-            </button>
+            </AppButton>
           </form>
           <div v-if="createdToken" class="alert alert-info mt-5">
             Copy this token now; it will not be shown again.
@@ -607,14 +646,16 @@ onMounted(load);
                     <td>{{ token.name }}</td>
                     <td class="mono muted">{{ new Date(token.createdAt).toLocaleString() }}</td>
                     <td>
-                      <button
-                        class="btn btn-sm btn-danger"
-                        type="button"
-                        :disabled="busy"
+                      <AppButton
+                        variant="danger"
+                        size="sm"
+                        :icon="Trash2"
+                        :loading="busy"
+                        loading-label="Working…"
                         @click="revokeToken(token.id)"
                       >
                         Revoke
-                      </button>
+                      </AppButton>
                     </td>
                   </tr>
                 </tbody>
@@ -643,14 +684,16 @@ onMounted(load);
             Create and verify archives under the Gojo data directory. Restore remains CLI-only
             <span class="mono">gojo backup restore</span>.
           </p>
-          <button
-            class="btn btn-primary mt-4"
-            type="button"
-            :disabled="busy"
+          <AppButton
+            variant="primary"
+            class="mt-4"
+            :icon="HardDrive"
+            :loading="busy"
+            loading-label="Creating…"
             @click="doCreateBackup"
           >
             Create backup
-          </button>
+          </AppButton>
           <div class="inline-form mt-5 task-filters">
             <div class="field flex-2">
               <label for="backup-search">Search</label>
@@ -696,14 +739,15 @@ onMounted(load);
                     <td class="mono muted">{{ formatBytes(backup.size) }}</td>
                     <td class="mono muted">{{ new Date(backup.createdAt).toLocaleString() }}</td>
                     <td>
-                      <button
-                        class="btn btn-sm"
-                        type="button"
-                        :disabled="busy"
+                      <AppButton
+                        size="sm"
+                        :icon="ShieldCheck"
+                        :loading="busy"
+                        loading-label="Verifying…"
                         @click="doVerify(backup.path)"
                       >
                         Verify
-                      </button>
+                      </AppButton>
                     </td>
                   </tr>
                 </tbody>

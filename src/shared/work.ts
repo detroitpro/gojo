@@ -109,8 +109,15 @@ export const WorkItemSchema = z.object({
   updatedAt: z.string(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
+  /** Durable task name for runs, or delivering run task for forge rows. */
+  taskName: z.string().nullable().optional(),
+  /** Agent profile/adapter name, actor, or provenance fallback. */
+  agentLabel: z.string().nullable().optional(),
 });
-export type WorkItem = z.infer<typeof WorkItemSchema>;
+export type WorkItem = z.infer<typeof WorkItemSchema> & {
+  /** Outbound `delivers` targets (PRs/issues), populated on list responses for runs. */
+  deliveredWork?: WorkItem[];
+};
 
 export interface WorkRecheckResult {
   status: WorkRecheckStatus;
@@ -123,13 +130,43 @@ export interface WorkResolveInput {
   note?: string | null;
 }
 
-export interface WorkStatus {
-  working: number;
-  queued: number;
-  needsAttention: number;
-  verifiedOpen: number;
-  staleOpen: number;
-  asOf: string | null;
+export const WorkStatusCountsSchema = z.object({
+  working: z.number().int().nonnegative(),
+  queued: z.number().int().nonnegative(),
+  needsAttention: z.number().int().nonnegative(),
+  verifiedOpen: z.number().int().nonnegative(),
+  staleOpen: z.number().int().nonnegative(),
+});
+export type WorkStatusCounts = z.infer<typeof WorkStatusCountsSchema>;
+
+export const WorkStatusCompareWindowSchema = z.enum(["24h", "7d", "30d"]);
+export type WorkStatusCompareWindow = z.infer<typeof WorkStatusCompareWindowSchema>;
+
+export const WorkStatusSchema = WorkStatusCountsSchema.extend({
+  asOf: z.string().nullable(),
+  previous: WorkStatusCountsSchema.nullable(),
+  previousAsOf: z.string().nullable(),
+  compareWindow: WorkStatusCompareWindowSchema,
+});
+export type WorkStatus = z.infer<typeof WorkStatusSchema>;
+
+export function compareWindowToMs(window: WorkStatusCompareWindow): number {
+  switch (window) {
+    case "24h":
+      return 24 * 60 * 60 * 1000;
+    case "7d":
+      return 7 * 24 * 60 * 60 * 1000;
+    case "30d":
+      return 30 * 24 * 60 * 60 * 1000;
+  }
+}
+
+export function parseCompareWindow(
+  value: string | null | undefined,
+  fallback: WorkStatusCompareWindow = "24h",
+): WorkStatusCompareWindow {
+  const parsed = WorkStatusCompareWindowSchema.safeParse(value);
+  return parsed.success ? parsed.data : fallback;
 }
 
 export const WorkLinkTypeSchema = z.enum([

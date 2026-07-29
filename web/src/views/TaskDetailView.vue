@@ -9,10 +9,13 @@ import {
   listSchedules,
   runTask,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useSoftLoading } from "@/composables/useSoftLoading";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
+import { Calendar, Play, Power } from "lucide-vue-next";
 import type { Schedule, Task } from "@/types";
 
 const route = useRoute();
@@ -115,18 +118,27 @@ useLiveRefresh({
         <div v-if="task?.description" class="subtitle">{{ task.description }}</div>
       </div>
       <div v-if="task" class="toolbar">
-        <button
-          class="btn btn-sm btn-primary"
-          type="button"
-          :disabled="busy || !task.enabled"
+        <AppButton
+          variant="primary"
+          size="sm"
+          :icon="Play"
+          :loading="busy"
+          loading-label="Starting…"
+          :disabled="!task.enabled"
           :title="!task.enabled ? 'Task is disabled' : undefined"
           @click="runNow()"
         >
           Run now
-        </button>
-        <button class="btn btn-sm" type="button" :disabled="busy" @click="toggleEnabled()">
+        </AppButton>
+        <AppButton
+          size="sm"
+          :icon="Power"
+          :loading="busy"
+          loading-label="Working…"
+          @click="toggleEnabled()"
+        >
           {{ task.enabled ? "Disable" : "Enable" }}
-        </button>
+        </AppButton>
       </div>
     </header>
 
@@ -189,8 +201,7 @@ useLiveRefresh({
       <section class="panel mb-7">
         <div class="panel-header">
           Overview
-          <span v-if="task.enabled" class="badge badge-success">enabled</span>
-          <span v-else class="badge badge-neutral">disabled</span>
+          <EnabledBadge :enabled="task.enabled" />
         </div>
         <div class="panel-body">
           <dl class="project-meta">
@@ -219,24 +230,26 @@ useLiveRefresh({
             <RunHistoryStrip :runs="task.recentRuns ?? []" />
           </div>
           <div class="toolbar mt-5">
-            <RouterLink
-              class="btn btn-sm"
+            <AppButton
+              size="sm"
+              :icon="Play"
               :to="{
                 name: 'runs',
                 query: { taskId: task.id, projectId: task.projectId },
               }"
             >
               View all runs
-            </RouterLink>
-            <RouterLink
-              class="btn btn-sm"
+            </AppButton>
+            <AppButton
+              size="sm"
+              :icon="Calendar"
               :to="{
                 name: 'schedules',
                 query: { taskId: task.id, projectId: task.projectId, enabled: 'all' },
               }"
             >
               View schedules
-            </RouterLink>
+            </AppButton>
           </div>
         </div>
       </section>
@@ -302,8 +315,7 @@ useLiveRefresh({
                   <div class="mono muted text-sm">{{ schedule.cronExpr }}</div>
                 </td>
                 <td>
-                  <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
-                  <span v-else class="badge badge-neutral">disabled</span>
+                  <EnabledBadge :enabled="schedule.enabled" />
                 </td>
                 <td class="mono muted">
                   {{

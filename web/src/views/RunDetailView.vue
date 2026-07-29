@@ -12,9 +12,12 @@ import {
   retryRun,
   subscribeRunEvents,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
 import RunActivityFeed from "@/components/RunActivityFeed.vue";
 import RunTimelineChart from "@/components/RunTimelineChart.vue";
 import SortableTh from "@/components/SortableTh.vue";
+import IntegrationStatusBadge from "@/components/status/IntegrationStatusBadge.vue";
+import VerificationBadge from "@/components/status/VerificationBadge.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
@@ -27,12 +30,9 @@ import {
   fmtTokens,
   shortSha,
 } from "@/lib/format";
-import {
-  impactCategoryLabel,
-  integrationStatusBadgeClass,
-  verificationBadgeClass,
-} from "@/lib/impact-format";
+import { impactCategoryLabel } from "@/lib/impact-format";
 import type { PhaseKey } from "@/lib/run-phases";
+import { ArrowLeft, Ban, Check, RotateCcw, X } from "lucide-vue-next";
 import type {
   Attempt,
   Run,
@@ -542,16 +542,39 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-sm" type="button" @click="router.push('/runs')">Back</button>
-        <button v-if="canCancel" class="btn btn-sm btn-danger" type="button" :disabled="busy" @click="doCancel">
+        <AppButton size="sm" :icon="ArrowLeft" @click="router.push('/runs')">Back</AppButton>
+        <AppButton
+          v-if="canCancel"
+          variant="danger"
+          size="sm"
+          :icon="Ban"
+          :loading="busy"
+          loading-label="Working…"
+          @click="doCancel"
+        >
           Cancel
-        </button>
-        <button v-if="canApprove" class="btn btn-sm btn-primary" type="button" :disabled="busy" @click="doApprove">
+        </AppButton>
+        <AppButton
+          v-if="canApprove"
+          variant="primary"
+          size="sm"
+          :icon="Check"
+          :loading="busy"
+          loading-label="Working…"
+          @click="doApprove"
+        >
           Approve
-        </button>
-        <button v-if="canRetry" class="btn btn-sm" type="button" :disabled="busy" @click="doRetry">
+        </AppButton>
+        <AppButton
+          v-if="canRetry"
+          size="sm"
+          :icon="RotateCcw"
+          :loading="busy"
+          loading-label="Working…"
+          @click="doRetry"
+        >
           Retry
-        </button>
+        </AppButton>
       </div>
     </header>
 
@@ -626,9 +649,7 @@ onUnmounted(() => {
         <div class="panel-header">Impact &amp; integration</div>
         <div class="panel-body">
           <div v-if="integration" class="integration-summary">
-            <span class="badge" :class="integrationStatusBadgeClass(integration.status)">
-              {{ integration.status }}
-            </span>
+            <IntegrationStatusBadge :status="integration.status" />
             <span class="mono muted">{{ integration.mode }}</span>
             <a
               v-if="integration.prUrl && !integration.prUrl.startsWith('local://')"
@@ -672,9 +693,7 @@ onUnmounted(() => {
                   <td>{{ item.summary }}</td>
                   <td class="muted">{{ item.source }}</td>
                   <td>
-                    <span class="badge" :class="verificationBadgeClass(item.verification)">
-                      {{ item.verification }}
-                    </span>
+                    <VerificationBadge :verification="item.verification" />
                   </td>
                   <td class="mono muted text-sm">{{ impactEvidence(item) || "—" }}</td>
                 </tr>
@@ -693,7 +712,15 @@ onUnmounted(() => {
               <label for="reason">Reject reason (optional)</label>
               <input id="reason" v-model="rejectReason" placeholder="Policy violation…" />
             </div>
-            <button class="btn btn-danger" type="button" :disabled="busy" @click="doReject">Reject</button>
+            <AppButton
+              variant="danger"
+              :icon="X"
+              :loading="busy"
+              loading-label="Working…"
+              @click="doReject"
+            >
+              Reject
+            </AppButton>
           </div>
         </div>
       </div>
@@ -713,14 +740,13 @@ onUnmounted(() => {
       <section class="panel">
         <div class="panel-header">
           Activity
-          <button
+          <AppButton
             v-if="selectedPhase"
-            class="btn btn-sm"
-            type="button"
+            size="sm"
             @click="selectedPhase = null"
           >
             Clear phase filter
-          </button>
+          </AppButton>
         </div>
         <div class="panel-body">
           <RunActivityFeed

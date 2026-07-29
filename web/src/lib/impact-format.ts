@@ -1,24 +1,10 @@
-/** Labels for automation-impact accounting (categories + trust levels). */
+/** Labels and badge classes for automation-impact accounting. */
 
-const CATEGORY_LABELS: Record<string, string> = {
-  "dependency-update": "Dependency updates",
-  "bug-fix": "Bug fixes",
-  "bug-prevention": "Bugs prevented",
-  documentation: "Documentation",
-  "test-coverage": "Test coverage",
-  security: "Security",
-  feature: "Features",
-  performance: "Performance",
-  maintenance: "Maintenance",
-};
+import { impactCategoryLabel as catalogImpactCategoryLabel } from "./stat-metrics";
 
+/** Outcome label for a category; single source is the impact.category.* MetricSpec catalog. */
 export function impactCategoryLabel(category: string): string {
-  return CATEGORY_LABELS[category] ?? category;
-}
-
-/** e.g. "Dependency updates verified", "Bug fixes claimed". */
-export function impactCountLabel(category: string, verification: string): string {
-  return `${impactCategoryLabel(category)} ${verification}`;
+  return catalogImpactCategoryLabel(category);
 }
 
 export function formatMergeRate(rate: number | null): string {

@@ -3,10 +3,15 @@ import { ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { getQueue } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import StatGrid from "@/components/StatGrid.vue";
+import StatTile from "@/components/StatTile.vue";
+import StateBadge from "@/components/StateBadge.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
+import { RefreshCw } from "lucide-vue-next";
 import type { QueueRunningItem, SchedulingPolicy } from "@/types";
 
 const policy = ref<SchedulingPolicy | null>(null);
@@ -65,29 +70,31 @@ useLiveRefresh({
           Cron times are suggestions — the dispatcher admits runs under the global concurrency cap
         </div>
       </div>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="load">Refresh</button>
+      <AppButton
+        size="sm"
+        :icon="RefreshCw"
+        :loading="loading"
+        loading-label="Refreshing…"
+        @click="load"
+      >
+        Refresh
+      </AppButton>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 
-    <div v-if="policy" class="stats-row">
-      <div class="stat">
-        <div class="label">Running</div>
-        <div class="value">{{ counts.running }} / {{ policy.maxConcurrentRuns }}</div>
-      </div>
-      <div class="stat">
-        <div class="label">Waiting</div>
-        <div class="value">{{ counts.waiting }}</div>
-      </div>
-      <div class="stat">
-        <div class="label">Per project</div>
-        <div class="value compact">{{ policy.maxConcurrentRunsPerProject }}</div>
-      </div>
-      <div class="stat">
-        <div class="label">Stagger</div>
-        <div class="value compact">{{ Math.round(policy.minStartIntervalMs / 1000) }}s</div>
-      </div>
-    </div>
+    <StatGrid v-if="policy">
+      <StatTile
+        metric-key="queue.running"
+        :value="`${counts.running} / ${policy.maxConcurrentRuns}`"
+      />
+      <StatTile metric-key="queue.waiting" :value="counts.waiting" />
+      <StatTile metric-key="queue.perProject" :value="policy.maxConcurrentRunsPerProject" />
+      <StatTile
+        metric-key="queue.stagger"
+        :value="`${Math.round(policy.minStartIntervalMs / 1000)}s`"
+      />
+    </StatGrid>
 
     <section class="list-section">
       <div class="list-section__header">
@@ -113,7 +120,7 @@ useLiveRefresh({
                 </RouterLink>
               </td>
               <td>{{ item.projectName || "—" }}</td>
-              <td><span class="badge badge-queued">{{ item.state }}</span></td>
+              <td><StateBadge :state="item.state" /></td>
               <td class="mono muted text-sm">{{ fmtTime(item.admittedAt) }}</td>
             </tr>
           </tbody>

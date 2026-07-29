@@ -21,7 +21,7 @@ Digest agents ([`.gojo/tasks/activity-digest.md`](../.gojo/tasks/activity-digest
 
 ## Runtime assembly
 
-Coordinator builds AI adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section. Shell adapters skip instructions. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
+Coordinator builds AI adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
 
 ## Handoff → PR body
 

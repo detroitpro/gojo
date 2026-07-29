@@ -39,8 +39,12 @@ function impact() {
       commits: 0,
       mergeRate: null,
     },
-    categories: [],
+    categoryTotals: [],
     recentItems: [],
+    previousTotals: null,
+    window: { from: null, to: null },
+    previousWindow: null,
+    range: "30d",
   };
 }
 

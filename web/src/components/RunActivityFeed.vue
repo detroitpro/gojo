@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import AppButton from "@/components/AppButton.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
 import { fmtDuration, fmtTime } from "@/lib/format";
@@ -122,30 +123,30 @@ function statusClass(item: ActivityItem): string {
       />
       <span class="muted filter-bar-count">{{ total }} events</span>
       <div class="activity-sort" role="group" aria-label="Sort activity">
-        <button
-          type="button"
-          class="btn btn-sm"
-          :class="{ 'btn-primary': sort === 'at' }"
+        <AppButton
+          variant="ghost"
+          size="sm"
+          :selected="sort === 'at'"
           @click="setSort('at', 'desc')"
         >
           Time {{ sort === "at" ? (order === "asc" ? "↑" : "↓") : "" }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm"
-          :class="{ 'btn-primary': sort === 'kind' }"
+        </AppButton>
+        <AppButton
+          variant="ghost"
+          size="sm"
+          :selected="sort === 'kind'"
           @click="setSort('kind', 'asc')"
         >
           Kind {{ sort === "kind" ? (order === "asc" ? "↑" : "↓") : "" }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm"
-          :class="{ 'btn-primary': sort === 'title' }"
+        </AppButton>
+        <AppButton
+          variant="ghost"
+          size="sm"
+          :selected="sort === 'title'"
           @click="setSort('title', 'asc')"
         >
           Title {{ sort === "title" ? (order === "asc" ? "↑" : "↓") : "" }}
-        </button>
+        </AppButton>
       </div>
     </div>
 
@@ -163,9 +164,9 @@ function statusClass(item: ActivityItem): string {
           <div v-if="row.detail" class="activity-detail muted">{{ row.detail }}</div>
 
           <template v-if="row.body">
-            <button class="btn btn-sm mt-2" type="button" @click="toggle(row.id)">
+            <AppButton variant="ghost" size="sm" class="mt-2" @click="toggle(row.id)">
               {{ expanded[row.id] ? "Hide message" : "Show message" }}
-            </button>
+            </AppButton>
             <pre
               v-if="expanded[row.id]"
               class="pre-block mt-2 activity-assistant-body"
@@ -174,7 +175,7 @@ function statusClass(item: ActivityItem): string {
           </template>
 
           <template v-if="row.tools?.length">
-            <button class="btn btn-sm mt-2" type="button" @click="toggle(row.id)">
+            <AppButton variant="ghost" size="sm" class="mt-2" @click="toggle(row.id)">
               {{
                 expanded[row.id]
                   ? "Hide tools"
@@ -182,7 +183,7 @@ function statusClass(item: ActivityItem): string {
                     ? "Show tool"
                     : `Show ${row.tools.length} tools`
               }}
-            </button>
+            </AppButton>
             <ul v-if="expanded[row.id]" class="tool-list mt-2">
               <li v-for="tool in row.tools" :key="tool.callId" class="tool-list-item">
                 <span class="tool-name mono">{{ tool.name }}</span>
@@ -200,9 +201,9 @@ function statusClass(item: ActivityItem): string {
             <div class="activity-meta mono muted">
               {{ row.validation.command }} · {{ fmtDuration(row.validation.durationMs) }}
             </div>
-            <button class="btn btn-sm mt-2" type="button" @click="toggle(row.id)">
+            <AppButton variant="ghost" size="sm" class="mt-2" @click="toggle(row.id)">
               {{ expanded[row.id] ? "Hide output" : "Show output" }}
-            </button>
+            </AppButton>
             <div v-if="expanded[row.id]" class="validation-output mt-2">
               <pre v-if="row.validation.stdout" class="pre-block">{{ row.validation.stdout }}</pre>
               <pre v-if="row.validation.stderr" class="pre-block pre-stderr">{{

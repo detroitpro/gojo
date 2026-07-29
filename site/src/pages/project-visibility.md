@@ -11,7 +11,18 @@ A project page is organized around four questions:
 - **Now:** What is running or queued, who owns it, and what is the current focus?
 - **Needs attention:** What is blocked, awaiting approval, stale, or failing to sync — and what should you do next?
 - **Delivery:** What pull requests, issues, tickets, incidents, or deployments are active?
-- **History:** What completed, was verified terminal, or was marked resolved by an operator?
+- **History:** What completed, was verified terminal, or was marked resolved by an operator? Rows use icon badges for type and result (with accessible labels), keep the durable task name for runs (with progress as a subtitle), show which task/agent produced the work separately from the platform/repo source, and nest a delivered PR under its run when a `delivers` link exists.
+
+Command-center actions use shared icon buttons (`AppButton`) with consistent primary / secondary / danger variants and a loading state while long-running work is in flight.
+
+Status counts (Working, Queued, Needs attention, Verified open, Stale open) use
+shared metric tiles: each has a tone-coded icon, and attention metrics show a
+notification flag when non-zero. When history exists, a delta chip compares the
+count to the same hour one day ago (or the prior impact window for Merged /
+Commits / Merge rate). Impact categories (Dependency updates, Bugs fixed, Test
+updates, …) use the same tile pattern with outcome labels and icons; each count
+is the number of distinct runs that produced that category of impact, not a
+breakdown by verification level.
 
 Work is not limited to gojo-created pull requests. Human and bot work discovered
 from connected systems appears with explicit provenance and source.

@@ -199,7 +199,13 @@ describe("api/router", () => {
     });
     expect(detail.status).toBe(200);
     expect(await detail.json()).toMatchObject({
-      data: { work: { nativeKey: "OPS-7" }, links: [], events: [] },
+      data: {
+        work: { nativeKey: "OPS-7" },
+        links: [],
+        events: expect.arrayContaining([
+          expect.objectContaining({ type: "work.state_changed" }),
+        ]),
+      },
     });
 
     const sources = await fetch(`${baseUrl}/api/v1/projects/${project.id}/sources`, {
@@ -251,9 +257,19 @@ describe("api/router", () => {
     });
     expect(progress.status).toBe(200);
     expect(ctx!.work.items.findById(run.workItemId ?? "")).toMatchObject({
-      title: "Implementing command center",
-      summary: "Storage is complete",
+      title: "maintain-work",
+      summary: "Implementing command center — Storage is complete",
     });
+
+    const history = await fetch(
+      `${baseUrl}/api/v1/projects/${project.id}/work?history=1&limit=25`,
+      { headers: auth },
+    );
+    expect(history.status).toBe(200);
+    const historyBody = (await history.json()) as {
+      data: { items: Array<{ id: string; resolution: string | null }>; total: number };
+    };
+    expect(historyBody.data.items.some((item) => item.id === ticket.id)).toBe(true);
   });
 
   test("direct user service integrates with context", async () => {
@@ -909,14 +925,14 @@ describe("api/router", () => {
     const impactBody = (await impact.json()) as {
       data: {
         totals: { mergedRuns: number; mergeRate: number | null };
-        categories: Array<{ category: string; verification: string; count: number }>;
+        categoryTotals: Array<{ category: string; runs: number }>;
         recentItems: Array<{ subject: string; runId: string }>;
       };
     };
     expect(impactBody.data.totals.mergedRuns).toBe(1);
     expect(impactBody.data.totals.mergeRate).toBe(1);
-    expect(impactBody.data.categories).toEqual([
-      { category: "dependency-update", verification: "corroborated", count: 1 },
+    expect(impactBody.data.categoryTotals).toEqual([
+      { category: "dependency-update", runs: 1 },
     ]);
     expect(impactBody.data.recentItems[0]!.subject).toBe("left-pad");
 

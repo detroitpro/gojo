@@ -23,6 +23,7 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     attention: "stale",
     provenance: "external",
     actorName: null,
+    agentProfileId: null,
     labels: [],
     nativeState: "opened",
     webUrl: "https://gitlab.example.com/acme/app/-/issues/1",
@@ -38,6 +39,8 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     updatedAt: "2026-07-27T16:00:00.000Z",
     startedAt: null,
     completedAt: null,
+    taskName: null,
+    agentLabel: null,
     ...overrides,
   };
 }

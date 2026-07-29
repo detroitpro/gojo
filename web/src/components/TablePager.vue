@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ChevronLeft, ChevronRight } from "lucide-vue-next";
+
+import AppButton from "@/components/AppButton.vue";
+
 defineProps<{
   page: number;
   pageCount: number;
@@ -15,23 +19,25 @@ const emit = defineEmits<{
   <div v-if="total > 0" class="table-pager">
     <span class="muted">{{ rangeLabel }}</span>
     <div class="table-pager-nav">
-      <button
-        class="btn btn-sm"
-        type="button"
+      <AppButton
+        size="sm"
+        :icon="ChevronLeft"
         :disabled="page <= 1"
+        aria-label="Previous page"
         @click="emit('update:page', page - 1)"
       >
         Prev
-      </button>
+      </AppButton>
       <span class="muted">Page {{ page }} / {{ pageCount }}</span>
-      <button
-        class="btn btn-sm"
-        type="button"
+      <AppButton
+        size="sm"
+        :icon="ChevronRight"
         :disabled="page >= pageCount"
+        aria-label="Next page"
         @click="emit('update:page', page + 1)"
       >
         Next
-      </button>
+      </AppButton>
     </div>
   </div>
 </template>

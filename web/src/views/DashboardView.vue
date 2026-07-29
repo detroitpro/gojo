@@ -9,12 +9,22 @@ import {
   pauseInstance,
   resumeInstance,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import StatGrid from "@/components/StatGrid.vue";
+import StatTile from "@/components/StatTile.vue";
+import StatusBadge from "@/components/StatusBadge.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useSoftLoading } from "@/composables/useSoftLoading";
-import { formatMergeRate, impactCountLabel } from "@/lib/impact-format";
 import { formatRunSuccessRate } from "@/lib/run-success-rate";
-import type { DashboardImpact, DashboardOverviewProject } from "@/types";
+import { compareLabel } from "@/lib/stat-metrics";
+import { pausedStatus } from "@/lib/status-icons";
+import { Pause, Play } from "lucide-vue-next";
+import type {
+  DashboardImpact,
+  DashboardOverviewProject,
+  DashboardPreviousStats,
+} from "@/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,7 +43,9 @@ const projectCount = ref(0);
 const taskCount = ref(0);
 const scheduleCount = ref(0);
 const runsTotal = ref(0);
+const dashboardPrevious = ref<DashboardPreviousStats | null>(null);
 const projects = ref<DashboardOverviewProject[]>([]);
+const pauseBusy = ref(false);
 const projectFilter = ref(queryParam("projectId"));
 
 type ImpactRange = "30d" | "90d" | "all";
@@ -47,20 +59,34 @@ const visibleProjects = computed(() => {
   return projects.value.filter((project) => project.id === projectFilter.value);
 });
 
-function impactFrom(range: ImpactRange): string | undefined {
-  if (range === "all") {
+function impactCompareLabel(): string {
+  return compareLabel("previousWindow", impact.value?.range);
+}
+
+const prsOpenRoute = computed(() => {
+  const total = impact.value?.totals.prsOpen ?? 0;
+  if (total <= 0) {
     return undefined;
   }
-  const days = range === "30d" ? 30 : 90;
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
+  if (projectFilter.value) {
+    return {
+      name: "project-detail",
+      params: { id: projectFilter.value },
+      hash: "#open-prs",
+    };
+  }
+  return { name: "projects", query: { hasOpenPrs: "1" } };
+});
+
+const runsCompareLabel = computed(() =>
+  compareLabel("asOf", dashboardPrevious.value?.compareWindow),
+);
 
 async function loadImpact() {
   try {
-    const from = impactFrom(impactRange.value);
     impact.value = await getDashboardImpact({
       ...(projectFilter.value ? { projectId: projectFilter.value } : {}),
-      ...(from ? { from } : {}),
+      range: impactRange.value,
     });
   } catch {
     // Impact accounting is additive; keep the dashboard usable without it.
@@ -87,6 +113,7 @@ async function load() {
     taskCount.value = dashboard.tasks;
     scheduleCount.value = dashboard.schedules;
     runsTotal.value = dashboard.runs;
+    dashboardPrevious.value = dashboard.previous ?? null;
     projects.value = overview.projects;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load dashboard";
@@ -96,12 +123,17 @@ async function load() {
 }
 
 async function togglePause() {
-  if (paused.value) {
-    await resumeInstance();
-  } else {
-    await pauseInstance();
+  pauseBusy.value = true;
+  try {
+    if (paused.value) {
+      await resumeInstance();
+    } else {
+      await pauseInstance();
+    }
+    await load();
+  } finally {
+    pauseBusy.value = false;
   }
-  await load();
 }
 
 watch(
@@ -146,10 +178,21 @@ useLiveRefresh({
         <div class="subtitle">Live scheduler pulse — what is running, waiting, and shipping</div>
       </div>
       <div class="toolbar">
-        <span v-if="paused" class="badge badge-warn">Paused</span>
-        <button class="btn btn-sm" type="button" @click="togglePause">
+        <StatusBadge
+          v-if="paused"
+          :icon="pausedStatus().icon"
+          :tone="pausedStatus().tone"
+          :label="pausedStatus().label"
+        />
+        <AppButton
+          size="sm"
+          :icon="paused ? Play : Pause"
+          :loading="pauseBusy"
+          loading-label="Working…"
+          @click="togglePause"
+        >
           {{ paused ? "Resume scheduler" : "Pause scheduler" }}
-        </button>
+        </AppButton>
       </div>
     </header>
 
@@ -171,24 +214,17 @@ useLiveRefresh({
             </template>
           </div>
         </div>
-        <div class="status-band-secondary">
-          <div class="metric">
-            <div class="label">Projects</div>
-            <div class="value">{{ projectCount }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">Tasks</div>
-            <div class="value">{{ taskCount }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">Schedules</div>
-            <div class="value">{{ scheduleCount }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">Runs</div>
-            <div class="value">{{ runsTotal }}</div>
-          </div>
-        </div>
+        <StatGrid class="status-band-secondary">
+          <StatTile metric-key="dashboard.projects" :value="projectCount" />
+          <StatTile metric-key="dashboard.tasks" :value="taskCount" />
+          <StatTile metric-key="dashboard.schedules" :value="scheduleCount" />
+          <StatTile
+            metric-key="dashboard.runs"
+            :value="runsTotal"
+            :previous="dashboardPrevious?.runs"
+            :compare-label="runsCompareLabel"
+          />
+        </StatGrid>
       </div>
 
       <section v-if="impact" class="panel">
@@ -206,62 +242,48 @@ useLiveRefresh({
           </select>
         </div>
         <div class="panel-body">
-          <div class="stats-row impact-stats">
-            <div class="stat">
-              <div class="label">Merged</div>
-              <div class="value ok">{{ impact.totals.mergedRuns }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">PRs open</div>
-              <div class="value">
-                <RouterLink
-                  v-if="impact.totals.prsOpen > 0 && projectFilter"
-                  :to="{
-                    name: 'project-detail',
-                    params: { id: projectFilter },
-                    hash: '#open-prs',
-                  }"
-                  class="entity-name"
-                >
-                  {{ impact.totals.prsOpen }}
-                </RouterLink>
-                <RouterLink
-                  v-else-if="impact.totals.prsOpen > 0"
-                  :to="{ name: 'projects', query: { hasOpenPrs: '1' } }"
-                  class="entity-name"
-                >
-                  {{ impact.totals.prsOpen }}
-                </RouterLink>
-                <template v-else>{{ impact.totals.prsOpen }}</template>
-              </div>
-            </div>
-            <div class="stat">
-              <div class="label">Merge rate</div>
-              <div class="value">{{ formatMergeRate(impact.totals.mergeRate) }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Commits</div>
-              <div class="value">{{ impact.totals.commits }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Succeeded runs</div>
-              <div class="value">{{ impact.totals.succeededRuns }}</div>
-            </div>
-          </div>
+          <StatGrid>
+            <StatTile
+              metric-key="impact.mergedRuns"
+              :value="impact.totals.mergedRuns"
+              :previous="impact.previousTotals?.mergedRuns"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.prsOpen"
+              :value="impact.totals.prsOpen"
+              :previous="impact.previousTotals?.prsOpen"
+              :compare-label="impactCompareLabel()"
+              :to="prsOpenRoute"
+            />
+            <StatTile
+              metric-key="impact.mergeRate"
+              :value="impact.totals.mergeRate"
+              :previous="impact.previousTotals?.mergeRate"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.commits"
+              :value="impact.totals.commits"
+              :previous="impact.previousTotals?.commits"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.succeededRuns"
+              :value="impact.totals.succeededRuns"
+              :previous="impact.previousTotals?.succeededRuns"
+              :compare-label="impactCompareLabel()"
+            />
+          </StatGrid>
 
-          <div v-if="impact.categories.length > 0" class="stats-row impact-stats impact-category-stats">
-            <div
-              v-for="entry in impact.categories"
-              :key="`${entry.category}-${entry.verification}`"
-              class="stat"
-              :title="`${entry.verification} (trust level)`"
-            >
-              <div class="label">
-                {{ impactCountLabel(entry.category, entry.verification) }}
-              </div>
-              <div class="value">{{ entry.count }}</div>
-            </div>
-          </div>
+          <StatGrid v-if="impact.categoryTotals.length > 0" class="impact-category-stats">
+            <StatTile
+              v-for="entry in impact.categoryTotals"
+              :key="entry.category"
+              :metric-key="`impact.category.${entry.category}`"
+              :value="entry.runs"
+            />
+          </StatGrid>
           <div v-else class="muted text-sm impact-empty">
             No impact items recorded in this range
           </div>

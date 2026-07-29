@@ -10,6 +10,7 @@ import {
   syncProject,
 } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
+import AppButton from "@/components/AppButton.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
 import ModalDialog from "@/components/ModalDialog.vue";
@@ -18,10 +19,12 @@ import TablePager from "@/components/TablePager.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { type SortOrder } from "@/lib/pagination";
+import HealthBadge from "@/components/status/HealthBadge.vue";
 import {
   computeProjectHealth,
   type ProjectHealthSummary,
 } from "@/lib/project-manifest";
+import { FolderOpen, Plus } from "lucide-vue-next";
 import type { Project } from "@/types";
 
 const PROJECT_SORT_ALLOWED = ["name", "createdAt", "updatedAt", "defaultBranch"] as const;
@@ -147,16 +150,6 @@ function healthFor(project: Project): ProjectHealthSummary {
       label: project.hasManifest ? "…" : "No manifest",
     }
   );
-}
-
-function healthBadgeClass(level: ProjectHealthSummary["level"]): string {
-  if (level === "ok") {
-    return "badge-success";
-  }
-  if (level === "missing") {
-    return "badge-neutral";
-  }
-  return "badge-warn";
 }
 
 function rowActions(project: Project): ActionMenuItem[] {
@@ -314,7 +307,7 @@ useLiveRefresh({
         <div class="subtitle">Registered repositories — sync manifests, check health, open details</div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-sm btn-primary" type="button" @click="openAdd">Add project</button>
+        <AppButton variant="primary" size="sm" :icon="Plus" @click="openAdd">Add project</AppButton>
       </div>
     </header>
 
@@ -413,9 +406,10 @@ useLiveRefresh({
                 <span v-else class="muted">—</span>
               </td>
               <td>
-                <span class="badge" :class="healthBadgeClass(healthFor(project).level)">
-                  {{ healthFor(project).label }}
-                </span>
+                <HealthBadge
+                  :level="healthFor(project).level"
+                  :label="healthFor(project).label"
+                />
               </td>
               <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
               <td class="actions-cell">
@@ -473,22 +467,24 @@ useLiveRefresh({
               :disabled="creating"
               @click="pickerOpen = true"
             />
-            <button class="btn" type="button" :disabled="creating" @click="pickerOpen = true">
+            <AppButton :icon="FolderOpen" :disabled="creating" @click="pickerOpen = true">
               Browse
-            </button>
+            </AppButton>
           </div>
         </div>
       </form>
       <template #footer>
-        <button class="btn" type="button" :disabled="creating" @click="closeAdd">Cancel</button>
-        <button
-          class="btn btn-primary"
+        <AppButton :disabled="creating" @click="closeAdd">Cancel</AppButton>
+        <AppButton
+          variant="primary"
+          :icon="Plus"
           type="submit"
           form="add-project-form"
-          :disabled="creating"
+          :loading="creating"
+          loading-label="Adding…"
         >
-          {{ creating ? "Adding…" : "Add project" }}
-        </button>
+          Add project
+        </AppButton>
       </template>
     </ModalDialog>
 
@@ -504,6 +500,7 @@ useLiveRefresh({
       title="Remove project?"
       confirm-label="Remove project"
       danger
+      :busy="Boolean(removeTarget && busyId === removeTarget.id)"
       @close="removeTarget = null"
       @confirm="confirmRemove"
     >

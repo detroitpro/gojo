@@ -262,6 +262,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
               | "sync-error"
               | "stale"
               | undefined) ?? null,
+          history: hasFlag(parsed, "history"),
         });
         printOutput(format, result);
         break;
@@ -825,6 +826,22 @@ async function main(argv: string[]): Promise<void> {
 
     if (group === "backup") {
       await runBackupCommand(parsed, format);
+      return;
+    }
+
+    if (group === "work-status") {
+      if (sub !== "rebuild") {
+        die("usage: gojo work-status rebuild [--project <id>] [--from <iso>]", format);
+      }
+      await withContext(getHome(parsed), async (ctx) => {
+        const projectId = getFlagString(parsed, "project");
+        const from = getFlagString(parsed, "from");
+        const deleted = ctx.work.rollup.rebuild({
+          ...(projectId ? { projectId } : {}),
+          ...(from ? { from } : {}),
+        });
+        printOutput(format, { rebuilt: true, deleted });
+      });
       return;
     }
 

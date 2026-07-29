@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -339,7 +339,27 @@ CREATE TABLE IF NOT EXISTS work_events (
   data_json TEXT NOT NULL DEFAULT '{}',
   source TEXT NOT NULL,
   occurred_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  execution TEXT,
+  delivery TEXT,
+  outcome TEXT,
+  attention TEXT,
+  sync_state TEXT,
+  resolution TEXT,
+  archived_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS work_status_rollup (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  bucket_at TEXT NOT NULL,
+  working INTEGER NOT NULL,
+  queued INTEGER NOT NULL,
+  needs_attention INTEGER NOT NULL,
+  verified_open INTEGER NOT NULL,
+  stale_open INTEGER NOT NULL,
+  computed_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, kind, bucket_at)
 );
 
 CREATE TABLE IF NOT EXISTS platform_change_events (
@@ -653,6 +673,30 @@ ALTER TABLE work_items ADD COLUMN resolution_note TEXT;
 ALTER TABLE tasks ADD COLUMN notifications_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
+  {
+    version: 10,
+    sql: `
+ALTER TABLE work_events ADD COLUMN execution TEXT;
+ALTER TABLE work_events ADD COLUMN delivery TEXT;
+ALTER TABLE work_events ADD COLUMN outcome TEXT;
+ALTER TABLE work_events ADD COLUMN attention TEXT;
+ALTER TABLE work_events ADD COLUMN sync_state TEXT;
+ALTER TABLE work_events ADD COLUMN resolution TEXT;
+ALTER TABLE work_events ADD COLUMN archived_at TEXT;
+CREATE TABLE IF NOT EXISTS work_status_rollup (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  bucket_at TEXT NOT NULL,
+  working INTEGER NOT NULL,
+  queued INTEGER NOT NULL,
+  needs_attention INTEGER NOT NULL,
+  verified_open INTEGER NOT NULL,
+  stale_open INTEGER NOT NULL,
+  computed_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, kind, bucket_at)
+);
+`,
+  },
 ];
 
 /** Applied after incremental migrations so upgraded DBs have columns first. */
@@ -666,6 +710,11 @@ CREATE INDEX IF NOT EXISTS idx_work_items_project_state ON work_items(project_id
 CREATE INDEX IF NOT EXISTS idx_work_items_project_resolution ON work_items(project_id, resolution);
 CREATE INDEX IF NOT EXISTS idx_work_events_project_sequence ON work_events(project_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_work_events_item_sequence ON work_events(work_item_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_work_events_state
+  ON work_events(project_id, work_item_id, sequence DESC)
+  WHERE execution IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_work_status_rollup_bucket
+  ON work_status_rollup(bucket_at, kind);
 CREATE INDEX IF NOT EXISTS idx_platform_events_project_sequence ON platform_change_events(project_id, sequence);
 `;
 
@@ -695,6 +744,7 @@ export const EXPECTED_TABLES = [
   "work_items",
   "work_links",
   "work_events",
+  "work_status_rollup",
   "platform_change_events",
   "external_resources",
   "run_context",

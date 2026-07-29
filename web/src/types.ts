@@ -86,6 +86,7 @@ export interface WorkItem {
   attention: WorkAttention;
   provenance: "gojo-agent" | "human" | "bot" | "external";
   actorName: string | null;
+  agentProfileId?: string | null;
   labels: string[];
   nativeState: string | null;
   webUrl: string | null;
@@ -101,6 +102,10 @@ export interface WorkItem {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  taskName?: string | null;
+  agentLabel?: string | null;
+  /** Outbound delivers targets (PRs/issues) when returned from list APIs. */
+  deliveredWork?: WorkItem[];
 }
 
 export interface WorkRecheckResult {
@@ -109,13 +114,21 @@ export interface WorkRecheckResult {
   detail: string | null;
 }
 
-export interface WorkStatus {
+export type WorkStatusCompareWindow = "24h" | "7d" | "30d";
+
+export interface WorkStatusCounts {
   working: number;
   queued: number;
   needsAttention: number;
   verifiedOpen: number;
   staleOpen: number;
+}
+
+export interface WorkStatus extends WorkStatusCounts {
   asOf: string | null;
+  previous: WorkStatusCounts | null;
+  previousAsOf: string | null;
+  compareWindow: WorkStatusCompareWindow;
 }
 
 export interface ProjectSource {
@@ -319,6 +332,14 @@ export interface AgentInfo {
   authenticated?: boolean;
 }
 
+export interface DashboardPreviousStats {
+  runningRuns: number;
+  waitingRuns: number;
+  runs: number;
+  asOf: string;
+  compareWindow: WorkStatusCompareWindow;
+}
+
 export interface DashboardStats {
   projects: number;
   tasks: number;
@@ -329,6 +350,7 @@ export interface DashboardStats {
   waitingRuns?: number;
   schedulingPolicy?: SchedulingPolicy;
   paused: boolean;
+  previous?: DashboardPreviousStats | null;
 }
 
 export interface DashboardOverviewRun {
@@ -366,10 +388,10 @@ export interface DashboardImpactTotals {
   mergeRate: number | null;
 }
 
-export interface DashboardImpactCategoryCount {
+/** Distinct runs that produced impact in a category (dashboard strip). */
+export interface DashboardImpactCategoryTotal {
   category: string;
-  verification: string;
-  count: number;
+  runs: number;
 }
 
 export interface DashboardImpactRecentItem {
@@ -388,10 +410,21 @@ export interface DashboardImpactRecentItem {
   createdAt: string;
 }
 
+export type DashboardImpactRange = "30d" | "90d" | "all";
+
+export interface DashboardImpactWindow {
+  from: string | null;
+  to: string | null;
+}
+
 export interface DashboardImpact {
   totals: DashboardImpactTotals;
-  categories: DashboardImpactCategoryCount[];
+  categoryTotals: DashboardImpactCategoryTotal[];
   recentItems: DashboardImpactRecentItem[];
+  previousTotals: DashboardImpactTotals | null;
+  window: DashboardImpactWindow;
+  previousWindow: DashboardImpactWindow | null;
+  range: DashboardImpactRange | null;
 }
 
 export interface RunImpactItem {

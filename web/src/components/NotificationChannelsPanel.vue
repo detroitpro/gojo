@@ -6,9 +6,12 @@ import {
   putNotificationChannels,
   testNotificationChannel,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import ChannelTypeBadge from "@/components/status/ChannelTypeBadge.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
+import { Pencil, Plus, Save, Send, Trash2 } from "lucide-vue-next";
 import type {
   NotificationChannelConfig,
   NotificationChannelEntry,
@@ -308,9 +311,7 @@ defineExpose({ reload });
   <section class="panel">
     <div class="panel-header">
       Notification channels
-      <button class="btn btn-sm" type="button" :disabled="busy" @click="openAdd">
-        Add channel
-      </button>
+      <AppButton size="sm" :icon="Plus" :disabled="busy" @click="openAdd">Add channel</AppButton>
     </div>
     <div class="panel-body">
       <p class="muted">
@@ -370,34 +371,35 @@ defineExpose({ reload });
                 <tr v-for="entry in channelItems" :key="entry.name">
                   <td class="mono">{{ entry.name }}</td>
                   <td>
-                    <span class="badge badge-neutral">{{ entry.type }}</span>
+                    <ChannelTypeBadge :type="entry.type" />
                   </td>
                   <td class="mono muted">{{ endpointLabel(entry) }}</td>
                   <td>
-                    <button
-                      class="btn btn-sm"
-                      type="button"
+                    <AppButton
+                      size="sm"
+                      :icon="Send"
                       :disabled="busy"
                       @click="sendTestForRow(entry)"
                     >
                       Send test
-                    </button>
-                    <button
-                      class="btn btn-sm"
-                      type="button"
+                    </AppButton>
+                    <AppButton
+                      size="sm"
+                      :icon="Pencil"
                       :disabled="busy"
                       @click="openEdit(entry)"
                     >
                       Edit
-                    </button>
-                    <button
-                      class="btn btn-sm btn-danger"
-                      type="button"
+                    </AppButton>
+                    <AppButton
+                      variant="danger"
+                      size="sm"
+                      :icon="Trash2"
                       :disabled="busy"
                       @click="removeChannel(entry.name)"
                     >
                       Delete
-                    </button>
+                    </AppButton>
                   </td>
                 </tr>
               </tbody>
@@ -482,13 +484,17 @@ defineExpose({ reload });
           {{ testMessage }}
         </div>
         <div class="toolbar mt-4">
-          <button class="btn btn-primary" type="button" :disabled="busy" @click="saveChannel">
+          <AppButton
+            variant="primary"
+            :icon="Save"
+            :loading="busy"
+            loading-label="Saving…"
+            @click="saveChannel"
+          >
             {{ editingName ? "Save changes" : "Save channel" }}
-          </button>
-          <button class="btn" type="button" :disabled="busy" @click="sendTest()">
-            Send test
-          </button>
-          <button class="btn" type="button" :disabled="busy" @click="resetForm">Cancel</button>
+          </AppButton>
+          <AppButton :icon="Send" :disabled="busy" @click="sendTest()">Send test</AppButton>
+          <AppButton :disabled="busy" @click="resetForm">Cancel</AppButton>
         </div>
       </div>
     </div>

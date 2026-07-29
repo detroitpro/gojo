@@ -13,9 +13,19 @@ import type {
   WorkResolveInput,
   WorkResolution,
   WorkStatus,
+  WorkStatusCompareWindow,
+  WorkStatusCounts,
 } from "@shared/work";
+import { compareWindowToMs } from "@shared/work";
 
 import type { Database } from "./db";
+import {
+  WORK_STATUS_AGGREGATE_SQL,
+  axesChanged,
+  axesFromWorkItem,
+  mapStatusCountsRow,
+} from "./work-status-counts";
+import { createWorkStatusRollup } from "./work-status-rollup";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -134,6 +144,8 @@ export interface WorkListInput {
   from?: string | null;
   to?: string | null;
   q?: string | null;
+  /** Completed / verified-terminal / operator-resolved history view. */
+  history?: boolean;
 }
 
 export interface WorkPage {
@@ -162,7 +174,19 @@ export interface WorkEvent {
   source: string;
   occurredAt: string;
   createdAt: string;
+  execution: string | null;
+  delivery: string | null;
+  outcome: string | null;
+  attention: string | null;
+  syncState: string | null;
+  resolution: string | null;
+  archivedAt: string | null;
 }
+
+export type WorkStatusOptions = {
+  compareWindow?: WorkStatusCompareWindow;
+  now?: Date;
+};
 
 export interface RunContextRecord {
   runId: string;
@@ -261,8 +285,308 @@ function attentionForSync(
   return "none";
 }
 
+function placeholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function enrichWorkAttribution(
+  sqlite: ReturnType<Database["connection"]>,
+  items: WorkItem[],
+): WorkItem[] {
+  if (items.length === 0) return items;
+
+  const ids = items.map((item) => item.id);
+  const idPlaceholders = placeholders(ids.length);
+
+  const contexts = sqlite
+    .query<{ work_item_id: string; task_name: string; adapter: string | null }, string[]>(
+      `SELECT work_item_id, task_name, adapter
+       FROM run_context
+       WHERE work_item_id IN (${idPlaceholders})`,
+    )
+    .all(...ids);
+  const contextByWorkId = new Map(
+    contexts.map((row) => [row.work_item_id, row] as const),
+  );
+
+  const delivers = sqlite
+    .query<
+      { source_work_item_id: string; target_work_item_id: string },
+      string[]
+    >(
+      `SELECT source_work_item_id, target_work_item_id
+       FROM work_links
+       WHERE type = 'delivers'
+         AND target_work_item_id IN (${idPlaceholders})`,
+    )
+    .all(...ids);
+
+  const delivererIds = [
+    ...new Set(
+      delivers
+        .map((link) => link.source_work_item_id)
+        .filter((id) => !contextByWorkId.has(id)),
+    ),
+  ];
+  if (delivererIds.length > 0) {
+    const extraContexts = sqlite
+      .query<{ work_item_id: string; task_name: string; adapter: string | null }, string[]>(
+        `SELECT work_item_id, task_name, adapter
+         FROM run_context
+         WHERE work_item_id IN (${placeholders(delivererIds.length)})`,
+      )
+      .all(...delivererIds);
+    for (const row of extraContexts) {
+      contextByWorkId.set(row.work_item_id, row);
+    }
+  }
+
+  const missingDelivererIds = delivererIds.filter((id) => !contextByWorkId.has(id));
+  const delivererTitleById = new Map<string, string>();
+  if (missingDelivererIds.length > 0) {
+    const titles = sqlite
+      .query<{ id: string; title: string }, string[]>(
+        `SELECT id, title FROM work_items WHERE id IN (${placeholders(missingDelivererIds.length)})`,
+      )
+      .all(...missingDelivererIds);
+    for (const row of titles) {
+      delivererTitleById.set(row.id, row.title);
+    }
+  }
+
+  const taskNameByTarget = new Map<string, string>();
+  for (const link of delivers) {
+    const fromContext = contextByWorkId.get(link.source_work_item_id)?.task_name;
+    const fromTitle = delivererTitleById.get(link.source_work_item_id);
+    const taskName = fromContext?.trim() || fromTitle?.trim();
+    if (taskName) {
+      taskNameByTarget.set(link.target_work_item_id, taskName);
+    }
+  }
+
+  const profileIds = [
+    ...new Set(
+      items
+        .map((item) => item.agentProfileId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const profileById = new Map<string, { name: string; adapter: string }>();
+  if (profileIds.length > 0) {
+    const profiles = sqlite
+      .query<{ id: string; name: string; adapter: string }, string[]>(
+        `SELECT id, name, adapter FROM agent_profiles WHERE id IN (${placeholders(profileIds.length)})`,
+      )
+      .all(...profileIds);
+    for (const row of profiles) {
+      profileById.set(row.id, { name: row.name, adapter: row.adapter });
+    }
+  }
+
+  return items.map((item) => {
+    const context = contextByWorkId.get(item.id);
+    const profile = item.agentProfileId
+      ? profileById.get(item.agentProfileId)
+      : undefined;
+    const taskName =
+      item.kind === "run"
+        ? context?.task_name?.trim() || item.title
+        : taskNameByTarget.get(item.id) ?? null;
+    const agentLabel =
+      item.actorName?.trim() ||
+      profile?.name?.trim() ||
+      profile?.adapter?.trim() ||
+      context?.adapter?.trim() ||
+      item.provenance;
+    return {
+      ...item,
+      taskName,
+      agentLabel,
+    };
+  });
+}
+
+function attachDeliveredWork(
+  sqlite: ReturnType<Database["connection"]>,
+  items: WorkItem[],
+): WorkItem[] {
+  const runIds = items.filter((item) => item.kind === "run").map((item) => item.id);
+  if (runIds.length === 0) {
+    return items;
+  }
+
+  const outbound = sqlite
+    .query<
+      { source_work_item_id: string; target_work_item_id: string },
+      string[]
+    >(
+      `SELECT source_work_item_id, target_work_item_id
+       FROM work_links
+       WHERE type = 'delivers'
+         AND source_work_item_id IN (${placeholders(runIds.length)})
+       ORDER BY created_at`,
+    )
+    .all(...runIds);
+
+  if (outbound.length === 0) {
+    return items.map((item) =>
+      item.kind === "run" ? { ...item, deliveredWork: [] } : item,
+    );
+  }
+
+  const targetIds = [...new Set(outbound.map((link) => link.target_work_item_id))];
+  const targetRows = sqlite
+    .query<WorkItemRow, string[]>(
+      `SELECT * FROM work_items
+       WHERE id IN (${placeholders(targetIds.length)})
+         AND archived_at IS NULL`,
+    )
+    .all(...targetIds);
+  const targetsById = new Map(
+    enrichWorkAttribution(sqlite, targetRows.map(mapWorkItem)).map(
+      (item) => [item.id, item] as const,
+    ),
+  );
+
+  const deliveriesBySource = new Map<string, WorkItem[]>();
+  for (const link of outbound) {
+    const target = targetsById.get(link.target_work_item_id);
+    if (!target) continue;
+    const list = deliveriesBySource.get(link.source_work_item_id) ?? [];
+    list.push(target);
+    deliveriesBySource.set(link.source_work_item_id, list);
+  }
+
+  return items.map((item) => {
+    if (item.kind !== "run") return item;
+    return {
+      ...item,
+      deliveredWork: deliveriesBySource.get(item.id) ?? [],
+    };
+  });
+}
+
+type AppendWorkEventInput = {
+  projectId: string;
+  workItemId: string;
+  runId?: string | null;
+  type: string;
+  dataJson?: string;
+  source: string;
+  occurredAt?: string;
+  execution?: string | null;
+  delivery?: string | null;
+  outcome?: string | null;
+  attention?: string | null;
+  syncState?: string | null;
+  resolution?: string | null;
+  archivedAt?: string | null;
+};
+
+type WorkEventRow = {
+  sequence: number;
+  id: string;
+  project_id: string;
+  work_item_id: string;
+  run_id: string | null;
+  type: string;
+  data_json: string;
+  source: string;
+  occurred_at: string;
+  created_at: string;
+  execution: string | null;
+  delivery: string | null;
+  outcome: string | null;
+  attention: string | null;
+  sync_state: string | null;
+  resolution: string | null;
+  archived_at: string | null;
+};
+
+function mapWorkEvent(row: WorkEventRow): WorkEvent {
+  return {
+    sequence: row.sequence,
+    id: row.id,
+    projectId: row.project_id,
+    workItemId: row.work_item_id,
+    runId: row.run_id,
+    type: row.type,
+    dataJson: row.data_json,
+    source: row.source,
+    occurredAt: row.occurred_at,
+    createdAt: row.created_at,
+    execution: row.execution ?? null,
+    delivery: row.delivery ?? null,
+    outcome: row.outcome ?? null,
+    attention: row.attention ?? null,
+    syncState: row.sync_state ?? null,
+    resolution: row.resolution ?? null,
+    archivedAt: row.archived_at ?? null,
+  };
+}
+
 export function createWorkRepositories(db: Database) {
   const sqlite = db.connection();
+  const rollup = createWorkStatusRollup(db);
+
+  function appendWorkEvent(input: AppendWorkEventInput): WorkEvent {
+    const id = ulid();
+    const createdAt = nowIso();
+    sqlite
+      .query(
+        `INSERT INTO work_events (
+          id, project_id, work_item_id, run_id, type, data_json, source,
+          occurred_at, created_at, execution, delivery, outcome, attention,
+          sync_state, resolution, archived_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.projectId,
+        input.workItemId,
+        input.runId ?? null,
+        input.type,
+        input.dataJson ?? "{}",
+        input.source,
+        input.occurredAt ?? createdAt,
+        createdAt,
+        input.execution ?? null,
+        input.delivery ?? null,
+        input.outcome ?? null,
+        input.attention ?? null,
+        input.syncState ?? null,
+        input.resolution ?? null,
+        input.archivedAt ?? null,
+      );
+    return mapWorkEvent(
+      sqlite.query<WorkEventRow, [string]>("SELECT * FROM work_events WHERE id = ?").get(id)!,
+    );
+  }
+
+  function recordStateChange(
+    before: WorkItem | null,
+    after: WorkItem,
+    source = "gojo",
+  ): void {
+    const beforeAxes = before ? axesFromWorkItem(before) : null;
+    const afterAxes = axesFromWorkItem(after);
+    if (!axesChanged(beforeAxes, afterAxes)) return;
+    appendWorkEvent({
+      projectId: after.projectId,
+      workItemId: after.id,
+      type: "work.state_changed",
+      dataJson: JSON.stringify({ kind: after.kind }),
+      source,
+      execution: afterAxes.execution,
+      delivery: afterAxes.delivery,
+      outcome: afterAxes.outcome,
+      attention: afterAxes.attention,
+      syncState: afterAxes.syncState,
+      resolution: afterAxes.resolution,
+      archivedAt: afterAxes.archivedAt,
+    });
+    rollup.materializeClosedHour(after.projectId);
+  }
 
   const connections = {
     create(input: CreateSourceConnectionInput): SourceConnection {
@@ -563,6 +887,15 @@ export function createWorkRepositories(db: Database) {
       const now = nowIso();
       const superseded = `Superseded by source ${primary.id}`;
       db.transaction(() => {
+        const colliding = sqlite
+          .query<WorkItemRow, [string, string]>(
+            `SELECT * FROM work_items
+             WHERE source_id = ?
+               AND native_key IN (
+                 SELECT native_key FROM work_items WHERE source_id = ?
+               )`,
+          )
+          .all(duplicate.id, primary.id);
         // Preserve any colliding historical rows as stale, source-less records.
         sqlite
           .query(
@@ -585,6 +918,12 @@ export function createWorkRepositories(db: Database) {
                )`,
           )
           .run(superseded, now, duplicate.id, primary.id);
+        for (const row of colliding) {
+          const afterRow = sqlite
+            .query<WorkItemRow, [string]>("SELECT * FROM work_items WHERE id = ?")
+            .get(row.id);
+          if (afterRow) recordStateChange(mapWorkItem(row), mapWorkItem(afterRow));
+        }
         sqlite
           .query("UPDATE external_resources SET source_id = ? WHERE source_id = ?")
           .run(primary.id, duplicate.id);
@@ -699,7 +1038,9 @@ export function createWorkRepositories(db: Database) {
           input.startedAt ?? null,
           input.completedAt ?? null,
         );
-      return this.findById(id)!;
+      const created = this.findById(id)!;
+      recordStateChange(null, created);
+      return created;
     },
 
     findById(id: string): WorkItem | null {
@@ -734,6 +1075,7 @@ export function createWorkRepositories(db: Database) {
           existing?.provenance === "gojo-agent" && incomingProvenance !== "gojo-agent"
             ? "gojo-agent"
             : incomingProvenance;
+        const before = existing ? mapWorkItem(existing) : null;
         const workItem = existing
           ? (() => {
               sqlite
@@ -778,7 +1120,9 @@ export function createWorkRepositories(db: Database) {
                   input.completedAt === undefined ? existing.completed_at : input.completedAt,
                   existing.id,
                 );
-              return this.findById(existing.id)!;
+              const updated = this.findById(existing.id)!;
+              recordStateChange(before, updated);
+              return updated;
             })()
           : this.create(input);
 
@@ -885,7 +1229,9 @@ export function createWorkRepositories(db: Database) {
           nowIso(),
           id,
         );
-      return this.findById(id);
+      const updated = this.findById(id);
+      if (updated) recordStateChange(existing, updated);
+      return updated;
     },
 
     mergeInto(canonicalId: string, duplicateId: string): WorkItem | null {
@@ -968,7 +1314,9 @@ export function createWorkRepositories(db: Database) {
           WHERE id = ?`,
         )
         .run(now, input.resolvedBy ?? null, input.note ?? null, now, id);
-      return this.findById(id);
+      const updated = this.findById(id);
+      if (updated) recordStateChange(existing, updated);
+      return updated;
     },
 
     clearResolution(id: string): WorkItem | null {
@@ -982,11 +1330,21 @@ export function createWorkRepositories(db: Database) {
           WHERE id = ?`,
         )
         .run(nowIso(), id);
-      return this.findById(id);
+      const updated = this.findById(id);
+      if (updated) recordStateChange(existing, updated);
+      return updated;
     },
 
     markSourceFailure(sourceId: string, message: string, nextSyncAt: string): void {
       const now = nowIso();
+      const beforeRows = sqlite
+        .query<WorkItemRow, [string]>(
+          `SELECT * FROM work_items
+           WHERE source_id = ? AND archived_at IS NULL
+             AND resolution IS NULL
+             AND delivery IN ('draft', 'open', 'review', 'blocked')`,
+        )
+        .all(sourceId);
       sqlite
         .query(
           `UPDATE work_items
@@ -1009,6 +1367,10 @@ export function createWorkRepositories(db: Database) {
              )`,
         )
         .run(nextSyncAt, message, now, sourceId, sourceId);
+      for (const row of beforeRows) {
+        const after = this.findById(row.id);
+        if (after) recordStateChange(mapWorkItem(row), after);
+      }
     },
 
     listByProject(projectId: string, input: WorkListInput): WorkPage {
@@ -1064,7 +1426,17 @@ export function createWorkRepositories(db: Database) {
         const pattern = `%${q}%`;
         values.push(pattern, pattern, pattern);
       }
+      if (input.history) {
+        clauses.push(
+          `(resolution IS NOT NULL
+            OR execution = 'terminal'
+            OR delivery IN ('merged', 'closed'))`,
+        );
+      }
       const where = clauses.join(" AND ");
+      const orderBy = input.history
+        ? "COALESCE(resolved_at, completed_at, updated_at) DESC, id DESC"
+        : "updated_at DESC, id DESC";
       const total =
         sqlite
           .query<{ count: number }, Array<string | number>>(
@@ -1075,19 +1447,24 @@ export function createWorkRepositories(db: Database) {
         .query<WorkItemRow, Array<string | number>>(
           `SELECT * FROM work_items
            WHERE ${where}
-           ORDER BY updated_at DESC, id DESC
+           ORDER BY ${orderBy}
            LIMIT ? OFFSET ?`,
         )
         .all(...values, input.limit, input.offset);
       return {
-        items: rows.map(mapWorkItem),
+        items: attachDeliveredWork(
+          sqlite,
+          enrichWorkAttribution(sqlite, rows.map(mapWorkItem)),
+        ),
         total,
         limit: input.limit,
         offset: input.offset,
       };
     },
 
-    status(projectId: string): WorkStatus {
+    status(projectId: string, options: WorkStatusOptions = {}): WorkStatus {
+      const compareWindow = options.compareWindow ?? "24h";
+      const now = options.now ?? new Date();
       const row = sqlite
         .query<
           {
@@ -1101,31 +1478,36 @@ export function createWorkRepositories(db: Database) {
           [string]
         >(
           `SELECT
-            SUM(CASE WHEN execution IN (
-              'preparing', 'running', 'validating', 'awaiting-approval',
-              'integrating', 'reporting'
-            ) THEN 1 ELSE 0 END) AS working,
-            SUM(CASE WHEN execution = 'queued' THEN 1 ELSE 0 END) AS queued,
-            SUM(CASE WHEN attention <> 'none' AND resolution IS NULL
-              THEN 1 ELSE 0 END) AS needs_attention,
-            SUM(CASE WHEN delivery IN ('draft', 'open', 'review')
-              AND sync_state = 'current' AND resolution IS NULL
-              THEN 1 ELSE 0 END) AS verified_open,
-            SUM(CASE WHEN delivery IN ('draft', 'open', 'review')
-              AND sync_state IN ('stale', 'error') AND resolution IS NULL
-              THEN 1 ELSE 0 END) AS stale_open,
+            ${WORK_STATUS_AGGREGATE_SQL},
             MAX(observed_at) AS as_of
           FROM work_items
           WHERE project_id = ? AND archived_at IS NULL`,
         )
         .get(projectId);
+      const current = mapStatusCountsRow(row);
+      const previousAsOf = new Date(
+        now.getTime() - compareWindowToMs(compareWindow),
+      ).toISOString();
+      let previous: WorkStatusCounts | null = null;
+      try {
+        previous = rollup.countsAt(projectId, previousAsOf);
+      } catch {
+        previous = null;
+      }
+      // No history yet — treat as unavailable rather than zeros.
+      const hasHistory =
+        sqlite
+          .query<{ n: number }, [string]>(
+            `SELECT COUNT(*) AS n FROM work_events
+             WHERE project_id = ? AND execution IS NOT NULL`,
+          )
+          .get(projectId)?.n ?? 0;
       return {
-        working: row?.working ?? 0,
-        queued: row?.queued ?? 0,
-        needsAttention: row?.needs_attention ?? 0,
-        verifiedOpen: row?.verified_open ?? 0,
-        staleOpen: row?.stale_open ?? 0,
+        ...current,
         asOf: row?.as_of ?? null,
+        previous: hasHistory > 0 ? previous : null,
+        previousAsOf: hasHistory > 0 ? previousAsOf : null,
+        compareWindow,
       };
     },
   };
@@ -1180,136 +1562,30 @@ export function createWorkRepositories(db: Database) {
   };
 
   const events = {
-    append(input: {
-      projectId: string;
-      workItemId: string;
-      runId?: string | null;
-      type: string;
-      dataJson?: string;
-      source: string;
-      occurredAt?: string;
-    }): WorkEvent {
-      const id = ulid();
-      const createdAt = nowIso();
-      sqlite
-        .query(
-          `INSERT INTO work_events (
-            id, project_id, work_item_id, run_id, type, data_json, source,
-            occurred_at, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          id,
-          input.projectId,
-          input.workItemId,
-          input.runId ?? null,
-          input.type,
-          input.dataJson ?? "{}",
-          input.source,
-          input.occurredAt ?? createdAt,
-          createdAt,
-        );
-      const row = sqlite
-        .query<
-          {
-            sequence: number;
-            id: string;
-            project_id: string;
-            work_item_id: string;
-            run_id: string | null;
-            type: string;
-            data_json: string;
-            source: string;
-            occurred_at: string;
-            created_at: string;
-          },
-          [string]
-        >("SELECT * FROM work_events WHERE id = ?")
-        .get(id)!;
-      return {
-        sequence: row.sequence,
-        id: row.id,
-        projectId: row.project_id,
-        workItemId: row.work_item_id,
-        runId: row.run_id,
-        type: row.type,
-        dataJson: row.data_json,
-        source: row.source,
-        occurredAt: row.occurred_at,
-        createdAt: row.created_at,
-      };
+    append(input: AppendWorkEventInput): WorkEvent {
+      return appendWorkEvent(input);
     },
 
     listByWorkItem(workItemId: string, afterSequence = 0, limit = 500): WorkEvent[] {
       return sqlite
-        .query<
-          {
-            sequence: number;
-            id: string;
-            project_id: string;
-            work_item_id: string;
-            run_id: string | null;
-            type: string;
-            data_json: string;
-            source: string;
-            occurred_at: string;
-            created_at: string;
-          },
-          [string, number, number]
-        >(
+        .query<WorkEventRow, [string, number, number]>(
           `SELECT * FROM work_events
            WHERE work_item_id = ? AND sequence > ?
            ORDER BY sequence LIMIT ?`,
         )
         .all(workItemId, afterSequence, limit)
-        .map((row) => ({
-          sequence: row.sequence,
-          id: row.id,
-          projectId: row.project_id,
-          workItemId: row.work_item_id,
-          runId: row.run_id,
-          type: row.type,
-          dataJson: row.data_json,
-          source: row.source,
-          occurredAt: row.occurred_at,
-          createdAt: row.created_at,
-        }));
+        .map(mapWorkEvent);
     },
 
     listByProject(projectId: string, afterSequence = 0, limit = 500): WorkEvent[] {
       return sqlite
-        .query<
-          {
-            sequence: number;
-            id: string;
-            project_id: string;
-            work_item_id: string;
-            run_id: string | null;
-            type: string;
-            data_json: string;
-            source: string;
-            occurred_at: string;
-            created_at: string;
-          },
-          [string, number, number]
-        >(
+        .query<WorkEventRow, [string, number, number]>(
           `SELECT * FROM work_events
            WHERE project_id = ? AND sequence > ?
            ORDER BY sequence LIMIT ?`,
         )
         .all(projectId, afterSequence, limit)
-        .map((row) => ({
-          sequence: row.sequence,
-          id: row.id,
-          projectId: row.project_id,
-          workItemId: row.work_item_id,
-          runId: row.run_id,
-          type: row.type,
-          dataJson: row.data_json,
-          source: row.source,
-          occurredAt: row.occurred_at,
-          createdAt: row.created_at,
-        }));
+        .map(mapWorkEvent);
     },
   };
 
@@ -1456,7 +1732,7 @@ export function createWorkRepositories(db: Database) {
     },
   };
 
-  return { connections, sources, items, links, events, sync, runContexts };
+  return { connections, sources, items, links, events, sync, runContexts, rollup };
 }
 
 export type WorkRepositories = ReturnType<typeof createWorkRepositories>;

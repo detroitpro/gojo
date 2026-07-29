@@ -9,6 +9,8 @@ import {
   listSchedules,
   listSchedulesUpcoming,
 } from "@/api";
+import AppButton from "@/components/AppButton.vue";
+import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import SchedulesTimelineChart from "@/components/SchedulesTimelineChart.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
@@ -21,6 +23,7 @@ import {
   formatRelativeNextRun,
   formatTimezoneLabel,
 } from "@/lib/schedule-format";
+import { Power } from "lucide-vue-next";
 import type { Project, Schedule, SchedulesUpcomingResult } from "@/types";
 
 const SCHEDULE_SORT_ALLOWED = [
@@ -398,8 +401,7 @@ useLiveRefresh({
               </td>
               <td class="mono muted text-sm">{{ schedule.overlapPolicy || "skip" }}</td>
               <td>
-                <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
-                <span v-else class="badge badge-neutral">disabled</span>
+                <EnabledBadge :enabled="schedule.enabled" />
               </td>
               <td>
                 <template v-if="schedule.enabled && schedule.nextRunAt">
@@ -414,14 +416,15 @@ useLiveRefresh({
               </td>
               <td class="mono">{{ schedule.consecutiveFailures }}</td>
               <td>
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  :disabled="busyId === schedule.id"
+                <AppButton
+                  size="sm"
+                  :icon="Power"
+                  :loading="busyId === schedule.id"
+                  loading-label="Working…"
                   @click="toggle(schedule)"
                 >
                   {{ schedule.enabled ? "Disable" : "Enable" }}
-                </button>
+                </AppButton>
               </td>
             </tr>
           </tbody>

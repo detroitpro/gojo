@@ -116,6 +116,8 @@ export class RunDispatcher {
           finishedAt: now.toISOString(),
           errorMessage: 'Expired waiting for an admission slot (past next cron occurrence)',
         });
+        const updated = this.repos.runs.findById(runId);
+        if (updated) this.coordinator.syncWorkFromRun(updated);
       }
 
       const admitted: string[] = [];

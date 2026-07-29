@@ -2,12 +2,21 @@ import { RunState } from "@shared/run-states";
 
 import type { Database } from "@/storage";
 
+export type DashboardImpactRange = "30d" | "90d" | "all";
+
 export interface DashboardImpactQuery {
   projectId?: string | null;
   /** Inclusive ISO lower bound on run creation time. */
   from?: string | null;
   /** Inclusive ISO upper bound on run creation time. */
   to?: string | null;
+  /** Preferred over raw from/to when set; enables previousTotals. */
+  range?: DashboardImpactRange | null;
+}
+
+export interface DashboardImpactWindow {
+  from: string | null;
+  to: string | null;
 }
 
 export interface DashboardImpactTotals {
@@ -26,10 +35,14 @@ export interface DashboardImpactTotals {
   mergeRate: number | null;
 }
 
-export interface DashboardImpactCategoryCount {
+/**
+ * Distinct runs that produced impact in a category.
+ * Totals intentionally overlap across categories: a run that changed docs and
+ * deps counts in both, so categoryTotals do not sum to a run total.
+ */
+export interface DashboardImpactCategoryTotal {
   category: string;
-  verification: string;
-  count: number;
+  runs: number;
 }
 
 export interface DashboardImpactRecentItem {
@@ -50,8 +63,44 @@ export interface DashboardImpactRecentItem {
 
 export interface DashboardImpact {
   totals: DashboardImpactTotals;
-  categories: DashboardImpactCategoryCount[];
+  categoryTotals: DashboardImpactCategoryTotal[];
   recentItems: DashboardImpactRecentItem[];
+  previousTotals: DashboardImpactTotals | null;
+  window: DashboardImpactWindow;
+  previousWindow: DashboardImpactWindow | null;
+  range: DashboardImpactRange | null;
+}
+
+export function parseImpactRange(
+  value: string | null | undefined,
+): DashboardImpactRange | null {
+  if (value === "30d" || value === "90d" || value === "all") return value;
+  return null;
+}
+
+export function impactWindowsForRange(
+  range: DashboardImpactRange,
+  now = new Date(),
+): {
+  window: DashboardImpactWindow;
+  previousWindow: DashboardImpactWindow | null;
+} {
+  if (range === "all") {
+    return {
+      window: { from: null, to: null },
+      previousWindow: null,
+    };
+  }
+  const days = range === "30d" ? 30 : 90;
+  const ms = days * 24 * 60 * 60 * 1000;
+  const to = now.toISOString();
+  const from = new Date(now.getTime() - ms).toISOString();
+  const previousTo = from;
+  const previousFrom = new Date(now.getTime() - 2 * ms).toISOString();
+  return {
+    window: { from, to },
+    previousWindow: { from: previousFrom, to: previousTo },
+  };
 }
 
 const RECENT_ITEMS_LIMIT = 20;
@@ -98,14 +147,10 @@ function workFilter(query: DashboardImpactQuery): { clause: string; params: stri
   };
 }
 
-/**
- * Aggregate canonical impact and integration outcomes in SQL.
- * Counts only persisted records — never raw handoff JSON or run states.
- */
-export function getDashboardImpact(
+function computeImpactTotals(
   db: Database,
-  query: DashboardImpactQuery = {},
-): DashboardImpact {
+  query: DashboardImpactQuery,
+): DashboardImpactTotals {
   const sqlite = db.connection();
   const { clause, params } = runFilter(query);
 
@@ -166,17 +211,49 @@ export function getDashboardImpact(
       )
       .get(...work.params)?.count ?? 0;
 
-  const categories = sqlite
-    .query<{ category: string; verification: string; count: number }, string[]>(
-      `SELECT ii.category, ii.verification, COUNT(*) AS count
+  return {
+    succeededRuns,
+    prsOpened: integrationTotals?.prs_opened ?? 0,
+    prsOpen: verifiedOpenPrs + (integrationTotals?.prs_open ?? 0),
+    mergedRuns,
+    closedUnmerged: integrationTotals?.closed_unmerged ?? 0,
+    commits: integrationTotals?.commits ?? 0,
+    mergeRate: mergeTracked > 0 ? mergedRuns / mergeTracked : null,
+  };
+}
+
+function computeCategoryTotals(
+  db: Database,
+  query: DashboardImpactQuery,
+): DashboardImpactCategoryTotal[] {
+  const sqlite = db.connection();
+  const { clause, params } = runFilter(query);
+  // Distinct runs per category (not rows): one lockfile + package + claim
+  // still counts as 1. Rejected items are excluded. Categories overlap when
+  // a run produced impact in more than one category.
+  const rows = sqlite
+    .query<{ category: string; runs: number }, string[]>(
+      `SELECT ii.category, COUNT(DISTINCT ii.run_id) AS runs
        FROM run_impact_items ii
        JOIN runs r ON r.id = ii.run_id
-       WHERE 1 = 1${clause}
-       GROUP BY ii.category, ii.verification
-       ORDER BY ii.category, ii.verification`,
+       WHERE ii.verification <> 'rejected'${clause}
+       GROUP BY ii.category
+       ORDER BY runs DESC, ii.category`,
     )
     .all(...params);
 
+  return rows.map((row) => ({
+    category: row.category,
+    runs: row.runs,
+  }));
+}
+
+function computeRecentItems(
+  db: Database,
+  query: DashboardImpactQuery,
+): DashboardImpactRecentItem[] {
+  const sqlite = db.connection();
+  const { clause, params } = runFilter(query);
   const recentItems = sqlite
     .query<
       {
@@ -210,35 +287,67 @@ export function getDashboardImpact(
     )
     .all(...params);
 
+  return recentItems.map((row) => ({
+    id: row.id,
+    runId: row.run_id,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    taskId: row.task_id,
+    taskName: row.task_name,
+    category: row.category,
+    subject: row.subject,
+    summary: row.summary,
+    source: row.source,
+    verification: row.verification,
+    confidence: row.confidence,
+    createdAt: row.created_at,
+  }));
+}
+
+/**
+ * Aggregate canonical impact and integration outcomes in SQL.
+ * Counts only persisted records — never raw handoff JSON or run states.
+ * When `range` is set, also returns previousTotals for the prior equal-length window.
+ */
+export function getDashboardImpact(
+  db: Database,
+  query: DashboardImpactQuery = {},
+): DashboardImpact {
+  const range = query.range ?? null;
+  if (range) {
+    const { window, previousWindow } = impactWindowsForRange(range);
+    const scoped =
+      query.projectId !== undefined ? { projectId: query.projectId } : {};
+    const currentQuery: DashboardImpactQuery = {
+      ...scoped,
+      from: window.from,
+      to: window.to,
+    };
+    const previous = previousWindow
+      ? computeImpactTotals(db, {
+          ...scoped,
+          from: previousWindow.from,
+          to: previousWindow.to,
+        })
+      : null;
+    return {
+      totals: computeImpactTotals(db, currentQuery),
+      categoryTotals: computeCategoryTotals(db, currentQuery),
+      recentItems: computeRecentItems(db, currentQuery),
+      previousTotals: previous,
+      window,
+      previousWindow,
+      range,
+    };
+  }
+
   return {
-    totals: {
-      succeededRuns,
-      prsOpened: integrationTotals?.prs_opened ?? 0,
-      prsOpen: verifiedOpenPrs + (integrationTotals?.prs_open ?? 0),
-      mergedRuns,
-      closedUnmerged: integrationTotals?.closed_unmerged ?? 0,
-      commits: integrationTotals?.commits ?? 0,
-      mergeRate: mergeTracked > 0 ? mergedRuns / mergeTracked : null,
-    },
-    categories: categories.map((row) => ({
-      category: row.category,
-      verification: row.verification,
-      count: row.count,
-    })),
-    recentItems: recentItems.map((row) => ({
-      id: row.id,
-      runId: row.run_id,
-      projectId: row.project_id,
-      projectName: row.project_name,
-      taskId: row.task_id,
-      taskName: row.task_name,
-      category: row.category,
-      subject: row.subject,
-      summary: row.summary,
-      source: row.source,
-      verification: row.verification,
-      confidence: row.confidence,
-      createdAt: row.created_at,
-    })),
+    totals: computeImpactTotals(db, query),
+    categoryTotals: computeCategoryTotals(db, query),
+    recentItems: computeRecentItems(db, query),
+    previousTotals: null,
+    window: { from: query.from ?? null, to: query.to ?? null },
+    previousWindow: null,
+    range: null,
   };
 }

@@ -94,14 +94,14 @@ export const openApiDocument = {
       get: {
         summary: "List project work",
         description:
-          "Paged source-agnostic work ledger with execution, delivery, provenance, attention, and freshness filters.",
+          "Paged source-agnostic work ledger with execution, delivery, provenance, attention, freshness, and history filters. Rows include taskName/agentLabel attribution. history=1 returns completed, verified-terminal, and operator-resolved items ordered by completion time.",
       },
     },
     "/api/v1/projects/{id}/work/status": {
       get: {
         summary: "Get project work status",
         description:
-          "Canonical counts for working, queued, attention, verified-open, and stale-open work.",
+          "Canonical counts for working, queued, attention, verified-open, and stale-open work. Optional compare=24h|7d|30d (default 24h) returns previous counts from the work_status_rollup memoization of the work_events ledger.",
       },
     },
     "/api/v1/projects/{id}/sources": {
@@ -237,7 +237,11 @@ export const openApiDocument = {
       post: { summary: "Retry run" },
     },
     "/api/v1/dashboard": {
-      get: { summary: "Dashboard summary counts" },
+      get: {
+        summary: "Dashboard summary counts",
+        description:
+          "Live inventory and run gauges. Optional compare=24h|7d|30d adds previous runningRuns/waitingRuns/runs from the work status rollup (run kind) and runs.created_at.",
+      },
     },
     "/api/v1/dashboard/overview": {
       get: {
@@ -250,7 +254,7 @@ export const openApiDocument = {
       get: {
         summary: "Automation impact analytics",
         description:
-          "Auditable impact accounting aggregated in SQL: merged automation runs, PR states, merge rate, impact counts by category and verification level (claimed/corroborated/verified), and recent impact items. Query params: projectId, from, to (ISO run creation bounds).",
+          "Auditable impact accounting aggregated in SQL: merged automation runs, PR states, merge rate, distinct-run counts per impact category (excluding rejected; verification remains item-level), and recent impact items. Query params: projectId, range=30d|90d|all (preferred; returns previousTotals for the prior equal-length window), or from/to (ISO run creation bounds).",
       },
     },
     "/api/v1/instance": {

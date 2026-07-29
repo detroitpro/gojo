@@ -18,23 +18,46 @@ import {
   syncProject,
 } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
+import AppButton from "@/components/AppButton.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useSoftLoading } from "@/composables/useSoftLoading";
-import {
-  formatMergeRate,
-  impactCountLabel,
-  verificationBadgeClass,
-} from "@/lib/impact-format";
-import { MAX_PAGE_LIMIT } from "@/lib/pagination";
+import AttentionBadge from "@/components/status/AttentionBadge.vue";
+import DeliveryBadge from "@/components/status/DeliveryBadge.vue";
+import ExecutionBadge from "@/components/status/ExecutionBadge.vue";
+import ProvenanceBadge from "@/components/status/ProvenanceBadge.vue";
+import SyncStateBadge from "@/components/status/SyncStateBadge.vue";
+import VerificationBadge from "@/components/status/VerificationBadge.vue";
+import WorkKindBadge from "@/components/status/WorkKindBadge.vue";
+import WorkResultBadge from "@/components/status/WorkResultBadge.vue";
+import HealthBadge from "@/components/status/HealthBadge.vue";
+import StatGrid from "@/components/StatGrid.vue";
+import StatTile from "@/components/StatTile.vue";
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "@/lib/pagination";
 import { computeProjectHealth, parseManifestView } from "@/lib/project-manifest";
 import {
   attentionMenuItems,
   attentionPrimaryAction,
-  attentionReasonLabel,
   workExternalHref,
 } from "@/lib/work-attention";
+import {
+  collapseHistoryTimeline,
+  workHistoryHref,
+  workPrimaryLabel,
+  workSecondaryLabel,
+  workTaskAgentLabel,
+} from "@/lib/work-display";
+import { compareLabel } from "@/lib/stat-metrics";
 import { isVerifiedActiveDelivery } from "@/lib/work-visibility";
+import {
+  Calendar,
+  ExternalLink,
+  GitMerge,
+  ListTodo,
+  Play,
+  RefreshCw,
+  Trash2,
+} from "lucide-vue-next";
 import type {
   DashboardImpact,
   Project,
@@ -55,6 +78,8 @@ const lastSync = ref<ProjectSyncResult | null>(null);
 const projectTasks = ref<Task[]>([]);
 const openPrTotal = ref(0);
 const workItems = ref<WorkItem[]>([]);
+const historyItems = ref<WorkItem[]>([]);
+const historyTotal = ref(0);
 const workStatus = ref<WorkStatus | null>(null);
 const projectSources = ref<ProjectSource[]>([]);
 const mergeBusy = ref(false);
@@ -75,12 +100,12 @@ const hiddenTaskIds = ref<Set<string>>(new Set());
 
 const projectId = computed(() => route.params.id as string);
 
-function impactFrom(range: ImpactRange): string | undefined {
-  if (range === "all") {
-    return undefined;
-  }
-  const days = range === "30d" ? 30 : 90;
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+function impactCompareLabel(): string {
+  return compareLabel("previousWindow", impact.value?.range);
+}
+
+function workCompareLabel(): string {
+  return compareLabel("asOf", workStatus.value?.compareWindow);
 }
 
 const impactTasks = computed(() => {
@@ -120,10 +145,9 @@ function toggleTaskVisibility(taskId: string) {
 
 async function loadImpact() {
   try {
-    const from = impactFrom(impactRange.value);
     impact.value = await getDashboardImpact({
       projectId: projectId.value,
-      ...(from ? { from } : {}),
+      range: impactRange.value,
     });
     // Drop hide state for tasks no longer present in this range.
     const known = new Set(impactTasks.value.map((task) => task.id));
@@ -169,15 +193,11 @@ const attentionWork = computed(() =>
 const deliveryWork = computed(() =>
   workItems.value.filter(isVerifiedActiveDelivery),
 );
-const historyWork = computed(() =>
-  workItems.value.filter(
-    (item) =>
-      item.resolution != null ||
-      item.execution === "terminal" ||
-      item.delivery === "merged" ||
-      item.delivery === "closed",
-  ),
+const historyRows = computed(() => collapseHistoryTimeline(historyItems.value));
+const historyTopLevelCount = computed(
+  () => historyRows.value.filter((row) => !row.nested).length,
 );
+
 const sourceNames = computed(
   () => new Map(projectSources.value.map((source) => [source.id, source.displayName])),
 );
@@ -202,6 +222,16 @@ function observedLabel(item: WorkItem): string {
 
 function attentionHref(item: WorkItem): string | null {
   return workExternalHref(item, sourceWebUrl(item));
+}
+
+function historyRunId(item: WorkItem): string | null {
+  const href = workHistoryHref(item);
+  return href?.type === "run" ? href.id : null;
+}
+
+function historyExternalUrl(item: WorkItem): string | null {
+  const href = workHistoryHref(item);
+  return href?.type === "external" ? href.url : null;
 }
 
 function primaryAttentionAction(item: WorkItem) {
@@ -310,17 +340,26 @@ async function runPrimaryAttentionAction(item: WorkItem) {
 
 async function loadWork() {
   try {
-    const [page, status, sources] = await Promise.all([
+    const [page, history, status, sources] = await Promise.all([
       listProjectWork(projectId.value, { limit: MAX_PAGE_LIMIT, offset: 0 }),
+      listProjectWork(projectId.value, {
+        limit: DEFAULT_PAGE_LIMIT,
+        offset: 0,
+        history: true,
+      }),
       getProjectWorkStatus(projectId.value),
       listProjectSources(projectId.value),
     ]);
     workItems.value = page.items;
+    historyItems.value = history.items;
+    historyTotal.value = history.total;
     workStatus.value = status;
     projectSources.value = sources;
     openPrTotal.value = status.verifiedOpen;
   } catch {
     workItems.value = [];
+    historyItems.value = [];
+    historyTotal.value = 0;
     workStatus.value = null;
     projectSources.value = [];
     openPrTotal.value = 0;
@@ -422,6 +461,8 @@ watch(projectId, () => {
   doctor.value = null;
   projectTasks.value = [];
   workItems.value = [];
+  historyItems.value = [];
+  historyTotal.value = 0;
   workStatus.value = null;
   projectSources.value = [];
   impact.value = null;
@@ -472,22 +513,26 @@ useLiveRefresh({
         <div v-if="project" class="subtitle mono">{{ project.id }}</div>
       </div>
       <div class="toolbar">
-        <button
-          class="btn btn-sm btn-primary"
-          type="button"
-          :disabled="busy || !project"
+        <AppButton
+          variant="primary"
+          size="sm"
+          :icon="RefreshCw"
+          :loading="busy"
+          loading-label="Syncing…"
+          :disabled="!project"
           @click="runSync()"
         >
           Sync
-        </button>
-        <button
-          class="btn btn-sm btn-danger"
-          type="button"
+        </AppButton>
+        <AppButton
+          variant="danger"
+          size="sm"
+          :icon="Trash2"
           :disabled="busy || !project"
           @click="removeOpen = true"
         >
           Remove
-        </button>
+        </AppButton>
       </div>
     </header>
 
@@ -499,15 +544,7 @@ useLiveRefresh({
       <section class="panel mb-7">
         <div class="panel-header">
           Overview
-          <span
-            class="badge"
-            :class="{
-              'badge-success': health.level === 'ok',
-              'badge-warn': health.level === 'warn',
-              'badge-neutral': health.level === 'missing',
-            }"
-            >{{ health.label }}</span
-          >
+          <HealthBadge :level="health.level" :label="health.label" />
         </div>
         <div class="panel-body">
           <dl class="project-meta">
@@ -546,21 +583,27 @@ useLiveRefresh({
           </dl>
 
           <div class="toolbar mt-5">
-            <RouterLink
-              class="btn btn-sm"
+            <AppButton
+              size="sm"
+              :icon="ListTodo"
               :to="{ name: 'tasks', query: { projectId: project.id } }"
-              >Tasks</RouterLink
             >
-            <RouterLink
-              class="btn btn-sm"
+              Tasks
+            </AppButton>
+            <AppButton
+              size="sm"
+              :icon="Calendar"
               :to="{ name: 'schedules', query: { projectId: project.id } }"
-              >Schedules</RouterLink
             >
-            <RouterLink
-              class="btn btn-sm"
+              Schedules
+            </AppButton>
+            <AppButton
+              size="sm"
+              :icon="Play"
               :to="{ name: 'runs', query: { projectId: project.id } }"
-              >Runs</RouterLink
             >
+              Runs
+            </AppButton>
           </div>
         </div>
       </section>
@@ -577,45 +620,47 @@ useLiveRefresh({
           </span>
         </div>
         <div class="panel-body">
-          <div class="stats-row impact-stats">
-            <div class="stat">
-              <div class="label">Working</div>
-              <div class="value">{{ workStatus?.working ?? 0 }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Queued</div>
-              <div class="value">{{ workStatus?.queued ?? 0 }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Needs attention</div>
-              <div class="value" :class="{ warn: (workStatus?.needsAttention ?? 0) > 0 }">
-                {{ workStatus?.needsAttention ?? 0 }}
-              </div>
-            </div>
-            <div class="stat">
-              <div class="label">Verified open</div>
-              <div class="value">{{ workStatus?.verifiedOpen ?? 0 }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Stale open</div>
-              <div class="value" :class="{ warn: (workStatus?.staleOpen ?? 0) > 0 }">
-                {{ workStatus?.staleOpen ?? 0 }}
-              </div>
-            </div>
-          </div>
+          <StatGrid>
+            <StatTile
+              metric-key="work.working"
+              :value="workStatus?.working ?? 0"
+              :previous="workStatus?.previous?.working"
+              :compare-label="workCompareLabel()"
+            />
+            <StatTile
+              metric-key="work.queued"
+              :value="workStatus?.queued ?? 0"
+              :previous="workStatus?.previous?.queued"
+              :compare-label="workCompareLabel()"
+            />
+            <StatTile
+              metric-key="work.needsAttention"
+              :value="workStatus?.needsAttention ?? 0"
+              :previous="workStatus?.previous?.needsAttention"
+              :compare-label="workCompareLabel()"
+            />
+            <StatTile
+              metric-key="work.verifiedOpen"
+              :value="workStatus?.verifiedOpen ?? 0"
+              :previous="workStatus?.previous?.verifiedOpen"
+              :compare-label="workCompareLabel()"
+            />
+            <StatTile
+              metric-key="work.staleOpen"
+              :value="workStatus?.staleOpen ?? 0"
+              :previous="workStatus?.previous?.staleOpen"
+              :compare-label="workCompareLabel()"
+            />
+          </StatGrid>
           <div class="source-health mt-5">
             <span
               v-for="source in projectSources"
               :key="source.id"
-              class="badge"
-              :class="{
-                'badge-success': source.syncState === 'current',
-                'badge-warn': ['stale', 'error'].includes(source.syncState),
-                'badge-neutral': !['current', 'stale', 'error'].includes(source.syncState),
-              }"
+              class="source-health__item"
               :title="source.lastError ?? `Observed ${source.observedAt ?? 'never'}`"
             >
-              {{ source.displayName }} · {{ source.syncState }}
+              <span class="muted text-sm">{{ source.displayName }}</span>
+              <SyncStateBadge :sync-state="source.syncState" :show-label="false" />
             </span>
           </div>
         </div>
@@ -629,7 +674,7 @@ useLiveRefresh({
         <div v-if="nowWork.length === 0" class="muted text-sm">No active or queued work</div>
         <div v-else class="table-wrap">
           <table class="data">
-            <thead><tr><th>Work</th><th>Agent / actor</th><th>Phase</th><th>Source</th><th>Activity</th></tr></thead>
+            <thead><tr><th>Work</th><th>Task / agent</th><th>Phase</th><th>Platform / repo</th><th>Activity</th></tr></thead>
             <tbody>
               <tr v-for="item in nowWork" :key="item.id">
                 <td>
@@ -637,19 +682,21 @@ useLiveRefresh({
                     v-if="item.kind === 'run' && item.nativeKey"
                     :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
                     class="entity-name"
-                  >{{ item.title }}</RouterLink>
+                  >{{ workPrimaryLabel(item) }}</RouterLink>
                   <a
                     v-else-if="item.webUrl"
                     :href="item.webUrl"
                     class="entity-name"
                     target="_blank"
                     rel="noopener noreferrer"
-                  >{{ item.title }}</a>
-                  <span v-else>{{ item.title }}</span>
-                  <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
+                  >{{ workPrimaryLabel(item) }}</a>
+                  <span v-else>{{ workPrimaryLabel(item) }}</span>
+                  <div v-if="workSecondaryLabel(item)" class="muted text-sm">
+                    {{ workSecondaryLabel(item) }}
+                  </div>
                 </td>
-                <td>{{ item.actorName ?? item.provenance }}</td>
-                <td><span class="badge badge-neutral">{{ item.execution }}</span></td>
+                <td>{{ workTaskAgentLabel(item) }}</td>
+                <td><ExecutionBadge :execution="item.execution" /></td>
                 <td>{{ sourceLabel(item) }}</td>
                 <td class="mono muted">{{ observedLabel(item) }}</td>
               </tr>
@@ -694,41 +741,41 @@ useLiveRefresh({
                   <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
                 </td>
                 <td>
-                  <span class="badge badge-warn">{{ attentionReasonLabel(item.attention) }}</span>
+                  <AttentionBadge :attention="item.attention" />
                   <div v-if="item.lastError" class="muted text-sm">{{ item.lastError }}</div>
                 </td>
                 <td>{{ sourceLabel(item) }}</td>
                 <td class="mono muted">{{ observedLabel(item) }}</td>
                 <td>
-                  <RouterLink
+                  <AppButton
                     v-if="primaryAttentionAction(item)?.kind === 'route'"
-                    class="btn btn-sm btn-primary"
+                    variant="primary"
+                    size="sm"
+                    :icon="Play"
                     :to="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'route' }>).to"
                   >
                     {{ primaryAttentionAction(item)?.label }}
-                  </RouterLink>
-                  <a
+                  </AppButton>
+                  <AppButton
                     v-else-if="primaryAttentionAction(item)?.kind === 'href'"
-                    class="btn btn-sm btn-primary"
+                    size="sm"
+                    :icon="ExternalLink"
                     :href="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'href' }>).href"
                     target="_blank"
-                    rel="noopener noreferrer"
                   >
                     {{ primaryAttentionAction(item)?.label }}
-                  </a>
-                  <button
+                  </AppButton>
+                  <AppButton
                     v-else-if="primaryAttentionAction(item)?.kind === 'action'"
-                    class="btn btn-sm btn-primary"
-                    type="button"
-                    :disabled="attentionBusyId === item.id"
+                    variant="primary"
+                    size="sm"
+                    :icon="RefreshCw"
+                    :loading="attentionBusyId === item.id"
+                    loading-label="Working…"
                     @click="runPrimaryAttentionAction(item)"
                   >
-                    {{
-                      attentionBusyId === item.id
-                        ? "Working…"
-                        : primaryAttentionAction(item)?.label
-                    }}
-                  </button>
+                    {{ primaryAttentionAction(item)?.label }}
+                  </AppButton>
                   <span v-else class="muted text-sm">No action available</span>
                 </td>
                 <td class="actions-col">
@@ -751,15 +798,17 @@ useLiveRefresh({
             Delivery
             <span class="list-section__meta">· {{ deliveryWork.length }}</span>
           </span>
-          <button
+          <AppButton
             v-if="mergeBabysitter && openPrTotal > 0"
-            class="btn btn-sm btn-primary"
-            type="button"
-            :disabled="mergeBusy"
+            variant="primary"
+            size="sm"
+            :icon="GitMerge"
+            :loading="mergeBusy"
+            loading-label="Enqueueing…"
             @click="runMergeBabysitter()"
           >
-            {{ mergeBusy ? "Enqueueing…" : "Run merge babysitter" }}
-          </button>
+            Run merge babysitter
+          </AppButton>
         </div>
         <div class="panel-body" :class="{ 'panel-body--flush-table': deliveryWork.length > 0 }">
           <div v-if="deliveryWork.length === 0" class="muted text-sm">No active delivery work</div>
@@ -781,11 +830,12 @@ useLiveRefresh({
                       {{ item.labels.join(" · ") }}
                     </div>
                   </td>
-                  <td><span class="badge badge-neutral">{{ item.delivery }}</span></td>
-                  <td>{{ item.provenance }}</td>
+                  <td><DeliveryBadge :delivery="item.delivery" /></td>
+                  <td><ProvenanceBadge :provenance="item.provenance" /></td>
                   <td>{{ sourceLabel(item) }}</td>
                   <td class="mono muted">
-                    {{ observedLabel(item) }} · {{ item.syncState }}
+                    {{ observedLabel(item) }}
+                    <SyncStateBadge :sync-state="item.syncState" :show-label="false" />
                   </td>
                 </tr>
               </tbody>
@@ -796,38 +846,65 @@ useLiveRefresh({
 
       <section class="list-section">
         <div class="list-section__header">
-          <h2 class="list-section__title">History</h2>
+          <div>
+            <h2 class="list-section__title">History</h2>
+            <p class="muted text-sm mt-1">
+              Completed runs and verified merged/closed delivery
+            </p>
+          </div>
           <span class="list-section__meta">
-            {{ historyWork.length === 0 ? "0" : `latest ${Math.min(historyWork.length, 25)}` }}
+            {{
+              historyTopLevelCount === 0
+                ? "0"
+                : `latest ${historyTopLevelCount}${historyTotal > historyItems.length ? ` of ${historyTotal}` : ""}`
+            }}
           </span>
         </div>
-        <div v-if="historyWork.length === 0" class="muted text-sm">No completed work yet</div>
+        <div v-if="historyRows.length === 0" class="muted text-sm">No completed work yet</div>
         <div v-else class="table-wrap">
           <table class="data">
-            <thead><tr><th>Work</th><th>Outcome</th><th>Source</th><th>Completed / updated</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Work</th>
+                <th>Task / agent</th>
+                <th>Result</th>
+                <th>Platform / repo</th>
+                <th>When</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr v-for="item in historyWork.slice(0, 25)" :key="item.id">
-                <td>
+              <tr
+                v-for="row in historyRows"
+                :key="row.nested ? `${row.parentId}:${row.item.id}` : row.item.id"
+                :class="{ 'history-row--nested': row.nested }"
+              >
+                <td><WorkKindBadge :kind="row.item.kind" /></td>
+                <td :class="{ 'history-work--nested': row.nested }">
+                  <RouterLink
+                    v-if="historyRunId(row.item)"
+                    :to="{ name: 'run-detail', params: { id: historyRunId(row.item)! } }"
+                    class="entity-name"
+                  >{{ workPrimaryLabel(row.item) }}</RouterLink>
                   <a
-                    v-if="attentionHref(item)"
-                    :href="attentionHref(item)!"
+                    v-else-if="historyExternalUrl(row.item)"
+                    :href="historyExternalUrl(row.item)!"
                     class="entity-name"
                     target="_blank"
                     rel="noopener noreferrer"
-                  >{{ item.title }}</a>
-                  <span v-else>{{ item.title }}</span>
+                  >{{ workPrimaryLabel(row.item) }}</a>
+                  <span v-else>{{ workPrimaryLabel(row.item) }}</span>
+                  <div v-if="workSecondaryLabel(row.item)" class="muted text-sm">
+                    {{ workSecondaryLabel(row.item) }}
+                  </div>
                 </td>
-                <td>
-                  <template v-if="item.resolution === 'operator'">Resolved by operator</template>
-                  <template v-else>
-                    {{ item.delivery !== "none" ? item.delivery : item.outcome }}
-                  </template>
-                </td>
-                <td>{{ sourceLabel(item) }}</td>
+                <td>{{ workTaskAgentLabel(row.item) }}</td>
+                <td><WorkResultBadge :item="row.item" /></td>
+                <td>{{ sourceLabel(row.item) }}</td>
                 <td class="mono muted">
                   {{
                     new Date(
-                      item.resolvedAt ?? item.completedAt ?? item.updatedAt,
+                      row.item.resolvedAt ?? row.item.completedAt ?? row.item.updatedAt,
                     ).toLocaleString()
                   }}
                 </td>
@@ -852,55 +929,48 @@ useLiveRefresh({
           </select>
         </div>
         <div class="panel-body">
-          <div class="stats-row impact-stats">
-            <div class="stat">
-              <div class="label">Merged</div>
-              <div class="value ok">{{ impact.totals.mergedRuns }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">PRs open</div>
-              <div class="value">
-                <a
-                  v-if="openPrTotal > 0"
-                  href="#delivery"
-                  class="entity-name"
-                  @click.prevent="scrollToOpenPrs"
-                >
-                  {{ openPrTotal }}
-                </a>
-                <template v-else>0</template>
-              </div>
-            </div>
-            <div class="stat">
-              <div class="label">Merge rate</div>
-              <div class="value">{{ formatMergeRate(impact.totals.mergeRate) }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Commits</div>
-              <div class="value">{{ impact.totals.commits }}</div>
-            </div>
-            <div class="stat">
-              <div class="label">Succeeded runs</div>
-              <div class="value">{{ impact.totals.succeededRuns }}</div>
-            </div>
-          </div>
+          <StatGrid>
+            <StatTile
+              metric-key="impact.mergedRuns"
+              :value="impact.totals.mergedRuns"
+              :previous="impact.previousTotals?.mergedRuns"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.prsOpen"
+              :value="openPrTotal"
+              :previous="impact.previousTotals?.prsOpen"
+              :compare-label="impactCompareLabel()"
+              :href="openPrTotal > 0 ? '#delivery' : undefined"
+            />
+            <StatTile
+              metric-key="impact.mergeRate"
+              :value="impact.totals.mergeRate"
+              :previous="impact.previousTotals?.mergeRate"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.commits"
+              :value="impact.totals.commits"
+              :previous="impact.previousTotals?.commits"
+              :compare-label="impactCompareLabel()"
+            />
+            <StatTile
+              metric-key="impact.succeededRuns"
+              :value="impact.totals.succeededRuns"
+              :previous="impact.previousTotals?.succeededRuns"
+              :compare-label="impactCompareLabel()"
+            />
+          </StatGrid>
 
-          <div
-            v-if="impact.categories.length > 0"
-            class="stats-row impact-stats impact-category-stats"
-          >
-            <div
-              v-for="entry in impact.categories"
-              :key="`${entry.category}-${entry.verification}`"
-              class="stat"
-              :title="`${entry.verification} (trust level)`"
-            >
-              <div class="label">
-                {{ impactCountLabel(entry.category, entry.verification) }}
-              </div>
-              <div class="value">{{ entry.count }}</div>
-            </div>
-          </div>
+          <StatGrid v-if="impact.categoryTotals.length > 0" class="impact-category-stats">
+            <StatTile
+              v-for="entry in impact.categoryTotals"
+              :key="entry.category"
+              :metric-key="`impact.category.${entry.category}`"
+              :value="entry.runs"
+            />
+          </StatGrid>
           <div v-else class="muted text-sm impact-empty">
             No impact items recorded in this range
           </div>
@@ -944,9 +1014,7 @@ useLiveRefresh({
                   <td class="mono">{{ item.subject }}</td>
                   <td>{{ item.summary }}</td>
                   <td>
-                    <span class="badge" :class="verificationBadgeClass(item.verification)">
-                      {{ item.verification }}
-                    </span>
+                    <VerificationBadge :verification="item.verification" />
                   </td>
                 </tr>
               </tbody>
@@ -1169,6 +1237,7 @@ useLiveRefresh({
       title="Remove project?"
       confirm-label="Remove project"
       danger
+      :busy="busy"
       @close="removeOpen = false"
       @confirm="confirmRemove"
     >
@@ -1187,6 +1256,7 @@ useLiveRefresh({
       title="Mark work resolved?"
       confirm-label="Mark resolved"
       danger
+      :busy="Boolean(resolveTarget && attentionBusyId === resolveTarget.id)"
       @close="resolveOpen = false; resolveTarget = null"
       @confirm="confirmResolve"
     >
@@ -1240,5 +1310,32 @@ useLiveRefresh({
 
 .impact-recent {
   margin-top: 1rem;
+}
+
+.history-row--nested td {
+  background: color-mix(in srgb, var(--bg) 65%, transparent);
+  color: var(--text-muted);
+}
+
+.history-work--nested {
+  padding-left: calc(var(--space-4) + 1rem);
+  position: relative;
+}
+
+.history-work--nested::before {
+  content: "";
+  position: absolute;
+  left: 0.35rem;
+  top: 0.55rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.source-health__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 </style>

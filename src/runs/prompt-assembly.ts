@@ -153,9 +153,14 @@ export function assembleAgentPrompt(input: AssembleAgentPromptInput): string {
 
 ## Gojo progress reporting
 
-Report your current focus when work starts or changes, and report blockers promptly.
+Report your **current focus** when work starts or changes, and report blockers promptly.
 POST JSON with \`title\`, \`summary\`, optional \`blockedReason\`, and optional
 \`references\` to \`$GOJO_API_URL/runs/$GOJO_RUN_ID/progress\` using
 \`Authorization: Bearer $GOJO_API_TOKEN\`. The token is scoped to this run only.
+
+- \`title\` — short **current focus** line for operators (what you are doing now).
+  It does **not** rename the work item; the durable identity stays the task name.
+- \`summary\` — optional elaboration of that focus (or the same short status).
+- \`blockedReason\` — set when you are blocked; clear by omitting or null when unblocked.
 `;
 }

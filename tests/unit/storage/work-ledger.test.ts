@@ -19,9 +19,10 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(9);
+    expect(SCHEMA_VERSION).toBe(10);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
+    expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 10)).toBe(true);
     expect(db.tableNames()).toEqual(
       expect.arrayContaining([
         "source_connections",
@@ -30,6 +31,7 @@ describe("storage/work-ledger", () => {
         "work_items",
         "work_links",
         "work_events",
+        "work_status_rollup",
         "external_resources",
         "run_context",
       ]),
@@ -246,6 +248,104 @@ describe("storage/work-ledger", () => {
       verifiedOpen: 1,
       needsAttention: 0,
     });
+    db.close();
+  });
+
+  test("history filter orders by completion and enriches task/agent attribution", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { repos, project } = seedProject(db);
+    const work = createWorkRepositories(db);
+    const profile = repos.agentProfiles.create({
+      projectId: project.id,
+      name: "cursor-local",
+      adapter: "cursor",
+    });
+    const task = repos.tasks.create({
+      projectId: project.id,
+      name: "activity-digest",
+      prompt: "digest",
+      agentProfileId: profile.id,
+    });
+    const run = repos.runs.create({
+      projectId: project.id,
+      taskId: task.id,
+      idempotencyKey: "history-run-1",
+      trigger: "manual",
+    });
+    const runWork = work.items.create({
+      projectId: project.id,
+      kind: "run",
+      nativeKey: run.id,
+      title: "Done",
+      summary: "Finished digest",
+      execution: "terminal",
+      outcome: "succeeded",
+      provenance: "gojo-agent",
+      agentProfileId: profile.id,
+      actorName: "cursor-local",
+      completedAt: "2026-07-28T12:00:00.000Z",
+    });
+    work.runContexts.create({
+      runId: run.id,
+      workItemId: runWork.id,
+      taskName: "activity-digest",
+      taskDescription: "Digest activity",
+      prompt: "digest",
+      manifestHash: null,
+      instructions: "{}",
+      agentProfileJson: "{}",
+      adapter: "cursor",
+      model: null,
+      validationJson: "{}",
+      integrationJson: "{}",
+      failurePolicyJson: "{}",
+      baseBranch: "main",
+      scheduleJson: null,
+    });
+    const active = work.items.create({
+      projectId: project.id,
+      kind: "run",
+      nativeKey: "run-active",
+      title: "maintain-merge",
+      execution: "running",
+      outcome: "pending",
+      provenance: "gojo-agent",
+    });
+    const pr = work.items.create({
+      projectId: project.id,
+      kind: "pull-request",
+      nativeKey: "12",
+      title: "Fix scheduler storage",
+      delivery: "merged",
+      outcome: "succeeded",
+      provenance: "gojo-agent",
+      completedAt: "2026-07-28T13:00:00.000Z",
+    });
+    work.links.create(runWork.id, pr.id, "delivers");
+
+    const history = work.items.listByProject(project.id, {
+      limit: 25,
+      offset: 0,
+      history: true,
+    });
+    expect(history.total).toBe(2);
+    expect(history.items.map((item) => item.id)).toEqual([pr.id, runWork.id]);
+    expect(history.items[0]).toMatchObject({
+      id: pr.id,
+      taskName: "activity-digest",
+      agentLabel: "gojo-agent",
+    });
+    expect(history.items[1]).toMatchObject({
+      id: runWork.id,
+      taskName: "activity-digest",
+      agentLabel: "cursor-local",
+      deliveredWork: [expect.objectContaining({ id: pr.id, title: "Fix scheduler storage" })],
+    });
+
+    const all = work.items.listByProject(project.id, { limit: 25, offset: 0 });
+    expect(all.total).toBe(3);
+    expect(all.items.some((item) => item.id === active.id)).toBe(true);
     db.close();
   });
 

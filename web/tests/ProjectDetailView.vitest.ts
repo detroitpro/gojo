@@ -116,6 +116,15 @@ async function mountView() {
     verifiedOpen: 0,
     staleOpen: 1,
     asOf: "2026-07-27T20:23:47.000Z",
+    previous: {
+      working: 0,
+      queued: 0,
+      needsAttention: 0,
+      verifiedOpen: 0,
+      staleOpen: 0,
+    },
+    previousAsOf: "2026-07-26T20:23:47.000Z",
+    compareWindow: "24h",
   });
   mocks.listProjectSources.mockResolvedValue([
     {
@@ -148,8 +157,12 @@ async function mountView() {
       commits: 0,
       mergeRate: null,
     },
-    categories: [],
+    categoryTotals: [],
     recentItems: [],
+    previousTotals: null,
+    window: { from: null, to: null },
+    previousWindow: null,
+    range: "30d",
   });
 
   const router = createRouter({
@@ -215,6 +228,9 @@ describe("ProjectDetailView attention actions", () => {
       verifiedOpen: 0,
       staleOpen: 0,
       asOf: "2026-07-27T21:00:00.000Z",
+      previous: null,
+      previousAsOf: null,
+      compareWindow: "24h",
     });
 
     const recheckButton = wrapper
@@ -230,7 +246,8 @@ describe("ProjectDetailView attention actions", () => {
       false,
     );
     expect(wrapper.text()).toContain("History");
-    expect(wrapper.text()).toContain("closed");
+    expect(wrapper.find('[aria-label="Closed"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="Issue"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("Verified Add report-only maintain-issue-tags agent as closed");
     wrapper.unmount();
   });

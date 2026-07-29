@@ -33,7 +33,16 @@ export type {
   WorkListInput,
   WorkPage,
   WorkRepositories,
+  WorkStatusOptions,
 } from "./work-repositories";
+export {
+  countWorkStateAt,
+  countWorkStateAtByKind,
+  hourBucketAt,
+  previousClosedHour,
+} from "./work-status-counts";
+export { createWorkStatusRollup } from "./work-status-rollup";
+export type { WorkStatusRollup } from "./work-status-rollup";
 export {
   getInstanceSetting,
   getSchedulingPolicy,

@@ -212,6 +212,7 @@ export class RunCoordinator {
         outcome: workOutcomeForRunState(created.state),
         attention: workAttentionForRunState(created.state),
         provenance: "gojo-agent",
+        actorName: profile?.name ?? profile?.adapter ?? null,
         agentProfileId: task.agentProfileId,
         nativeState: created.state,
         nativeJson: JSON.stringify({ trigger: created.trigger }),
@@ -558,13 +559,32 @@ export class RunCoordinator {
     if (!run || !run.workItemId) {
       throw new Error(`Run not found: ${runId}`);
     }
+    const existing = this.work.items.findById(run.workItemId);
+    if (!existing) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    let previousNative: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(existing.nativeJson) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        previousNative = parsed as Record<string, unknown>;
+      }
+    } catch {
+      previousNative = {};
+    }
+    const focusParts = [input.title.trim(), input.summary.trim()].filter(
+      (part, index, parts) => part.length > 0 && parts.indexOf(part) === index,
+    );
     this.work.items.update(run.workItemId, {
-      title: input.title,
-      summary: input.summary,
+      // Keep durable run identity (task name); progress is the live focus line.
+      summary: focusParts.join(" — "),
       attention: input.blockedReason ? "blocked" : workAttentionForRunState(run.state),
       nativeJson: JSON.stringify({
+        ...previousNative,
         blockedReason: input.blockedReason ?? null,
         references: input.references ?? [],
+        focusTitle: input.title,
+        focusSummary: input.summary,
       }),
     });
     this.emit("run.progress", run.id, input);
@@ -642,10 +662,13 @@ export class RunCoordinator {
       switch (run.state) {
         case RunState.Scheduled:
         case RunState.Queued:
-        case RunState.Preparing:
+        case RunState.Preparing: {
           this.repos.runs.update(run.id, { state: RunState.Queued });
+          const updated = this.repos.runs.findById(run.id);
+          if (updated) this.syncWorkFromRun(updated);
           recovered += 1;
           break;
+        }
         case RunState.Running:
         case RunState.Validating:
         case RunState.Integrating:
@@ -1482,7 +1505,8 @@ export class RunCoordinator {
       .run(ulid(), run.id, attempt?.id ?? null, kind, path, createdAt);
   }
 
-  private syncWorkFromRun(run: Run): void {
+  /** Keep the run's work item axes in sync with run state (also used by the dispatcher). */
+  syncWorkFromRun(run: Run): void {
     if (!run.workItemId) return;
     this.work.items.update(run.workItemId, {
       execution: workExecutionForRunState(run.state),
