@@ -31,26 +31,28 @@ failurePolicy:
 - Agent or validation failure creates a **new attempt** under the same run (history kept).
 - `disableAfterConsecutiveFailedRuns` is copied onto the schedule’s auto-disable threshold when you sync.
 
-### Agent API access
+### Agent environment
 
 Every agent invocation receives:
 
 | Env var | Purpose |
 | --- | --- |
 | `GOJO_API_URL` | Base API URL (e.g. `http://127.0.0.1:7430/api/v1`) |
-| `GOJO_API_TOKEN` | Short-lived bearer token |
+| `GOJO_API_TOKEN` | Short-lived bearer token **scoped to this run only** |
 | `GOJO_RUN_ID` | Current run |
 | `GOJO_TASK_ID` / `GOJO_PROJECT_ID` | Current task and project |
 
-Typical healer calls:
+`GOJO_API_TOKEN` may call **only** `POST $GOJO_API_URL/runs/$GOJO_RUN_ID/progress` (structured focus updates while the run is active). It cannot list runs, read artifacts, or call other API routes — use the CLI or artifact files for diagnosis.
+
+Typical healer diagnostics (same machine as the daemon; `gojo` on `PATH`):
 
 ```bash
-curl -sS -H "Authorization: Bearer $GOJO_API_TOKEN" \
-  "$GOJO_API_URL/runs?projectId=$GOJO_PROJECT_ID"
-
-curl -sS -H "Authorization: Bearer $GOJO_API_TOKEN" \
-  "$GOJO_API_URL/runs/<failed-run-id>/artifacts"
+gojo run list --project "$GOJO_PROJECT_ID" --output json
+gojo run inspect <failed-run-id> --output json
+gojo run artifacts <failed-run-id> --output json
 ```
+
+Artifacts also land under `~/.gojo/artifacts/<runId>/` (`failure.json`, `validation.json`, `handoff.json`) when the agent process can read the instance home.
 
 ### Failure artifacts
 
