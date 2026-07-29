@@ -774,8 +774,11 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-header">Attempts</div>
+      <section class="list-section">
+        <div class="list-section__header">
+          <h2 class="list-section__title">Attempts</h2>
+          <span class="list-section__meta">{{ attempts.length }}</span>
+        </div>
         <div class="table-wrap">
           <table class="data">
             <thead>

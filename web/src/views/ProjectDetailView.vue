@@ -610,131 +610,136 @@ useLiveRefresh({
         </div>
       </section>
 
-      <section class="panel mb-7">
-        <div class="panel-header">Now</div>
-        <div class="panel-body">
-          <div v-if="nowWork.length === 0" class="muted text-sm">No active or queued work</div>
-          <div v-else class="table-wrap">
-            <table class="data">
-              <thead><tr><th>Work</th><th>Agent / actor</th><th>Phase</th><th>Source</th><th>Activity</th></tr></thead>
-              <tbody>
-                <tr v-for="item in nowWork" :key="item.id">
-                  <td>
-                    <RouterLink
-                      v-if="item.kind === 'run' && item.nativeKey"
-                      :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
-                      class="entity-name"
-                    >{{ item.title }}</RouterLink>
-                    <a
-                      v-else-if="item.webUrl"
-                      :href="item.webUrl"
-                      class="entity-name"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >{{ item.title }}</a>
-                    <span v-else>{{ item.title }}</span>
-                    <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
-                  </td>
-                  <td>{{ item.actorName ?? item.provenance }}</td>
-                  <td><span class="badge badge-neutral">{{ item.execution }}</span></td>
-                  <td>{{ sourceLabel(item) }}</td>
-                  <td class="mono muted">{{ observedLabel(item) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <section class="list-section">
+        <div class="list-section__header">
+          <h2 class="list-section__title">Now</h2>
+          <span class="list-section__meta">{{ nowWork.length }}</span>
+        </div>
+        <div v-if="nowWork.length === 0" class="muted text-sm">No active or queued work</div>
+        <div v-else class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Work</th><th>Agent / actor</th><th>Phase</th><th>Source</th><th>Activity</th></tr></thead>
+            <tbody>
+              <tr v-for="item in nowWork" :key="item.id">
+                <td>
+                  <RouterLink
+                    v-if="item.kind === 'run' && item.nativeKey"
+                    :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
+                    class="entity-name"
+                  >{{ item.title }}</RouterLink>
+                  <a
+                    v-else-if="item.webUrl"
+                    :href="item.webUrl"
+                    class="entity-name"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >{{ item.title }}</a>
+                  <span v-else>{{ item.title }}</span>
+                  <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
+                </td>
+                <td>{{ item.actorName ?? item.provenance }}</td>
+                <td><span class="badge badge-neutral">{{ item.execution }}</span></td>
+                <td>{{ sourceLabel(item) }}</td>
+                <td class="mono muted">{{ observedLabel(item) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <section v-if="attentionWork.length > 0" class="panel mb-7">
-        <div class="panel-header">Needs attention</div>
-        <div class="panel-body">
-          <div class="table-wrap">
-            <table class="data">
-              <thead>
-                <tr>
-                  <th>Work</th>
-                  <th>Reason</th>
-                  <th>Source</th>
-                  <th>Last observation</th>
-                  <th>Recommended</th>
-                  <th class="actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in attentionWork" :key="item.id">
-                  <td>
-                    <RouterLink
-                      v-if="item.kind === 'run' && item.nativeKey"
-                      :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
-                      class="entity-name"
-                    >{{ item.title }}</RouterLink>
-                    <a
-                      v-else-if="attentionHref(item)"
-                      :href="attentionHref(item)!"
-                      class="entity-name"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >{{ item.title }}</a>
-                    <span v-else>{{ item.title }}</span>
-                    <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
-                  </td>
-                  <td>
-                    <span class="badge badge-warn">{{ attentionReasonLabel(item.attention) }}</span>
-                    <div v-if="item.lastError" class="muted text-sm">{{ item.lastError }}</div>
-                  </td>
-                  <td>{{ sourceLabel(item) }}</td>
-                  <td class="mono muted">{{ observedLabel(item) }}</td>
-                  <td>
-                    <RouterLink
-                      v-if="primaryAttentionAction(item)?.kind === 'route'"
-                      class="btn btn-sm btn-primary"
-                      :to="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'route' }>).to"
-                    >
-                      {{ primaryAttentionAction(item)?.label }}
-                    </RouterLink>
-                    <a
-                      v-else-if="primaryAttentionAction(item)?.kind === 'href'"
-                      class="btn btn-sm btn-primary"
-                      :href="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'href' }>).href"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {{ primaryAttentionAction(item)?.label }}
-                    </a>
-                    <button
-                      v-else-if="primaryAttentionAction(item)?.kind === 'action'"
-                      class="btn btn-sm btn-primary"
-                      type="button"
-                      :disabled="attentionBusyId === item.id"
-                      @click="runPrimaryAttentionAction(item)"
-                    >
-                      {{
-                        attentionBusyId === item.id
-                          ? "Working…"
-                          : primaryAttentionAction(item)?.label
-                      }}
-                    </button>
-                    <span v-else class="muted text-sm">No action available</span>
-                  </td>
-                  <td class="actions-col">
-                    <ActionMenu
-                      :items="attentionActions(item)"
-                      :disabled="attentionBusyId === item.id"
-                      :label="`Actions for ${item.title}`"
-                      @select="(id) => onAttentionAction(item, id)"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <section v-if="attentionWork.length > 0" class="list-section">
+        <div class="list-section__header">
+          <h2 class="list-section__title">Needs attention</h2>
+          <span class="list-section__meta">{{ attentionWork.length }}</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Work</th>
+                <th>Reason</th>
+                <th>Source</th>
+                <th>Last observation</th>
+                <th>Recommended</th>
+                <th class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in attentionWork" :key="item.id">
+                <td>
+                  <RouterLink
+                    v-if="item.kind === 'run' && item.nativeKey"
+                    :to="{ name: 'run-detail', params: { id: item.nativeKey } }"
+                    class="entity-name"
+                  >{{ item.title }}</RouterLink>
+                  <a
+                    v-else-if="attentionHref(item)"
+                    :href="attentionHref(item)!"
+                    class="entity-name"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >{{ item.title }}</a>
+                  <span v-else>{{ item.title }}</span>
+                  <div v-if="item.summary" class="muted text-sm">{{ item.summary }}</div>
+                </td>
+                <td>
+                  <span class="badge badge-warn">{{ attentionReasonLabel(item.attention) }}</span>
+                  <div v-if="item.lastError" class="muted text-sm">{{ item.lastError }}</div>
+                </td>
+                <td>{{ sourceLabel(item) }}</td>
+                <td class="mono muted">{{ observedLabel(item) }}</td>
+                <td>
+                  <RouterLink
+                    v-if="primaryAttentionAction(item)?.kind === 'route'"
+                    class="btn btn-sm btn-primary"
+                    :to="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'route' }>).to"
+                  >
+                    {{ primaryAttentionAction(item)?.label }}
+                  </RouterLink>
+                  <a
+                    v-else-if="primaryAttentionAction(item)?.kind === 'href'"
+                    class="btn btn-sm btn-primary"
+                    :href="(primaryAttentionAction(item) as Extract<ReturnType<typeof primaryAttentionAction>, { kind: 'href' }>).href"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ primaryAttentionAction(item)?.label }}
+                  </a>
+                  <button
+                    v-else-if="primaryAttentionAction(item)?.kind === 'action'"
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    :disabled="attentionBusyId === item.id"
+                    @click="runPrimaryAttentionAction(item)"
+                  >
+                    {{
+                      attentionBusyId === item.id
+                        ? "Working…"
+                        : primaryAttentionAction(item)?.label
+                    }}
+                  </button>
+                  <span v-else class="muted text-sm">No action available</span>
+                </td>
+                <td class="actions-col">
+                  <ActionMenu
+                    :items="attentionActions(item)"
+                    :disabled="attentionBusyId === item.id"
+                    :label="`Actions for ${item.title}`"
+                    @select="(id) => onAttentionAction(item, id)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
       <section id="delivery" class="panel mb-7">
         <div class="panel-header impact-header">
-          <span>Delivery</span>
+          <span>
+            Delivery
+            <span class="list-section__meta">· {{ deliveryWork.length }}</span>
+          </span>
           <button
             v-if="mergeBabysitter && openPrTotal > 0"
             class="btn btn-sm btn-primary"
@@ -745,7 +750,7 @@ useLiveRefresh({
             {{ mergeBusy ? "Enqueueing…" : "Run merge babysitter" }}
           </button>
         </div>
-        <div class="panel-body">
+        <div class="panel-body" :class="{ 'panel-body--flush-table': deliveryWork.length > 0 }">
           <div v-if="deliveryWork.length === 0" class="muted text-sm">No active delivery work</div>
           <div v-else class="table-wrap">
             <table class="data">
@@ -778,43 +783,46 @@ useLiveRefresh({
         </div>
       </section>
 
-      <section class="panel mb-7">
-        <div class="panel-header">History</div>
-        <div class="panel-body">
-          <div v-if="historyWork.length === 0" class="muted text-sm">No completed work yet</div>
-          <div v-else class="table-wrap">
-            <table class="data">
-              <thead><tr><th>Work</th><th>Outcome</th><th>Source</th><th>Completed / updated</th></tr></thead>
-              <tbody>
-                <tr v-for="item in historyWork.slice(0, 25)" :key="item.id">
-                  <td>
-                    <a
-                      v-if="attentionHref(item)"
-                      :href="attentionHref(item)!"
-                      class="entity-name"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >{{ item.title }}</a>
-                    <span v-else>{{ item.title }}</span>
-                  </td>
-                  <td>
-                    <template v-if="item.resolution === 'operator'">Resolved by operator</template>
-                    <template v-else>
-                      {{ item.delivery !== "none" ? item.delivery : item.outcome }}
-                    </template>
-                  </td>
-                  <td>{{ sourceLabel(item) }}</td>
-                  <td class="mono muted">
-                    {{
-                      new Date(
-                        item.resolvedAt ?? item.completedAt ?? item.updatedAt,
-                      ).toLocaleString()
-                    }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <section class="list-section">
+        <div class="list-section__header">
+          <h2 class="list-section__title">History</h2>
+          <span class="list-section__meta">
+            {{ historyWork.length === 0 ? "0" : `latest ${Math.min(historyWork.length, 25)}` }}
+          </span>
+        </div>
+        <div v-if="historyWork.length === 0" class="muted text-sm">No completed work yet</div>
+        <div v-else class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Work</th><th>Outcome</th><th>Source</th><th>Completed / updated</th></tr></thead>
+            <tbody>
+              <tr v-for="item in historyWork.slice(0, 25)" :key="item.id">
+                <td>
+                  <a
+                    v-if="attentionHref(item)"
+                    :href="attentionHref(item)!"
+                    class="entity-name"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >{{ item.title }}</a>
+                  <span v-else>{{ item.title }}</span>
+                </td>
+                <td>
+                  <template v-if="item.resolution === 'operator'">Resolved by operator</template>
+                  <template v-else>
+                    {{ item.delivery !== "none" ? item.delivery : item.outcome }}
+                  </template>
+                </td>
+                <td>{{ sourceLabel(item) }}</td>
+                <td class="mono muted">
+                  {{
+                    new Date(
+                      item.resolvedAt ?? item.completedAt ?? item.updatedAt,
+                    ).toLocaleString()
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

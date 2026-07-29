@@ -272,40 +272,41 @@ useLiveRefresh({
         </div>
       </section>
 
-      <section class="panel mb-7">
-        <div class="panel-header">Schedules ({{ schedules.length }})</div>
-        <div class="panel-body">
-          <div v-if="schedules.length === 0" class="muted">No schedules for this task</div>
-          <div v-else class="table-wrap">
-            <table class="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Cron</th>
-                  <th>Status</th>
-                  <th>Next</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="schedule in schedules" :key="schedule.id">
-                  <td>{{ schedule.name }}</td>
-                  <td>
-                    <div>{{ schedule.cronDescription || schedule.cronExpr }}</div>
-                    <div class="mono muted text-sm">{{ schedule.cronExpr }}</div>
-                  </td>
-                  <td>
-                    <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
-                    <span v-else class="badge badge-neutral">disabled</span>
-                  </td>
-                  <td class="mono muted">
-                    {{
-                      schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleString() : "—"
-                    }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <section class="list-section">
+        <div class="list-section__header">
+          <h2 class="list-section__title">Schedules</h2>
+          <span class="list-section__meta">{{ schedules.length }}</span>
+        </div>
+        <div v-if="schedules.length === 0" class="muted">No schedules for this task</div>
+        <div v-else class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Cron</th>
+                <th>Status</th>
+                <th>Next</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="schedule in schedules" :key="schedule.id">
+                <td>{{ schedule.name }}</td>
+                <td>
+                  <div>{{ schedule.cronDescription || schedule.cronExpr }}</div>
+                  <div class="mono muted text-sm">{{ schedule.cronExpr }}</div>
+                </td>
+                <td>
+                  <span v-if="schedule.enabled" class="badge badge-success">enabled</span>
+                  <span v-else class="badge badge-neutral">disabled</span>
+                </td>
+                <td class="mono muted">
+                  {{
+                    schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleString() : "—"
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </template>

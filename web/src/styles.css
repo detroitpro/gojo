@@ -612,6 +612,14 @@ table.data tr:hover td {
   background: var(--warn-soft);
 }
 
+/*
+ * Composition rule — panels vs list sections
+ *
+ * - panel: mixed chrome (stats, chips, filters, primary actions) optionally plus a table.
+ * - list-section: list-only content — page heading + a single table-wrap. Never wrap a
+ *   table-only block in a panel; that reads as a table inside a card.
+ * - Never nest framed surfaces: a table inside a panel must be flush (no second border).
+ */
 .panel {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
@@ -643,6 +651,65 @@ table.data tr:hover td {
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/* Drop the inner frame when a table lives inside a panel. */
+.panel .table-wrap {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Table-only panel bodies: cancel padding so the table meets the header edge. */
+.panel-body:has(> .table-wrap:only-child),
+.panel-body--flush-table {
+  padding: 0;
+}
+
+.list-section {
+  margin-bottom: var(--space-7);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.list-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.list-section__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Project / entity names as section titles (dashboard) keep natural casing. */
+.list-section__title--plain {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.list-section__meta {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.list-section__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
 }
 
 .timeline {

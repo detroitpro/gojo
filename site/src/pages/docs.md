@@ -28,7 +28,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project tables of enabled tasks with a last-five-runs strip. **PRs open** links to projects with open automation PRs (or that project’s Open PRs panel when filtered). Per-item impact audit lives on project detail and run detail.
+**Dashboard** — counts, pause/resume, an Impact panel (merged automation, PR states, merge rate, and category counts as stats), and per-project task lists (heading + table, not a card wrapping only a table) with a last-five-runs strip. **PRs open** links to projects with open automation PRs (or that project’s delivery section when filtered). Per-item impact audit lives on project detail and run detail.
 
 **Queue** — waiting runs with admission positions, instance scheduling policy caps, and what is actively running.
 

@@ -288,16 +288,21 @@ useLiveRefresh({
 
         <div v-if="visibleProjects.length === 0" class="empty">No project matches this filter</div>
 
-        <section v-for="project in visibleProjects" :key="project.id" class="panel">
-          <div class="panel-header">
-            <RouterLink
-              :to="{ name: 'project-detail', params: { id: project.id } }"
-              class="entity-name"
-            >
-              {{ project.name }}
-            </RouterLink>
+        <section v-for="project in visibleProjects" :key="project.id" class="list-section">
+          <div class="list-section__header">
+            <h2 class="list-section__title list-section__title--plain">
+              <RouterLink
+                :to="{ name: 'project-detail', params: { id: project.id } }"
+                class="entity-name"
+              >
+                {{ project.name }}
+              </RouterLink>
+            </h2>
+            <span class="list-section__meta">
+              {{ project.tasks.length }} task{{ project.tasks.length === 1 ? "" : "s" }}
+            </span>
           </div>
-          <div v-if="project.tasks.length === 0" class="panel-body muted">No enabled tasks</div>
+          <div v-if="project.tasks.length === 0" class="muted">No enabled tasks</div>
           <div v-else class="table-wrap">
             <table class="data dashboard-task-table">
               <colgroup>
