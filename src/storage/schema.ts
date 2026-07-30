@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS agent_profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -44,12 +44,12 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
   created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS tasks (
+CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  agent_profile_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
+  profile_id TEXT REFERENCES profiles(id) ON DELETE SET NULL,
   prompt TEXT NOT NULL,
   validation_profile_json TEXT NOT NULL DEFAULT '{}',
   integration_json TEXT NOT NULL DEFAULT '{}',
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS schedules (
   id TEXT PRIMARY KEY NOT NULL,
-  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   cron_expr TEXT NOT NULL,
   timezone TEXT NOT NULL DEFAULT 'UTC',
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS schedules (
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   schedule_id TEXT REFERENCES schedules(id) ON DELETE SET NULL,
   state TEXT NOT NULL,
   idempotency_key TEXT NOT NULL UNIQUE,
@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS work_items (
   attention TEXT NOT NULL DEFAULT 'none',
   provenance TEXT NOT NULL DEFAULT 'external',
   actor_name TEXT,
-  agent_profile_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
+  profile_id TEXT REFERENCES profiles(id) ON DELETE SET NULL,
   labels_json TEXT NOT NULL DEFAULT '[]',
   native_state TEXT,
   native_json TEXT NOT NULL DEFAULT '{}',
@@ -402,12 +402,12 @@ CREATE TABLE IF NOT EXISTS external_resources (
 CREATE TABLE IF NOT EXISTS run_context (
   run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
   work_item_id TEXT NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
-  task_name TEXT NOT NULL,
-  task_description TEXT NOT NULL DEFAULT '',
+  agent_name TEXT NOT NULL,
+  agent_description TEXT NOT NULL DEFAULT '',
   prompt TEXT NOT NULL,
   manifest_hash TEXT,
   instructions TEXT NOT NULL DEFAULT '',
-  agent_profile_json TEXT NOT NULL DEFAULT '{}',
+  profile_json TEXT NOT NULL DEFAULT '{}',
   adapter TEXT,
   model TEXT,
   validation_json TEXT NOT NULL DEFAULT '{}',
@@ -697,6 +697,28 @@ CREATE TABLE IF NOT EXISTS work_status_rollup (
 );
 `,
   },
+  {
+    // v11 renames tasks→agents and agent_profiles→profiles as part of the
+    // Tasks→Agents vocabulary rebrand. SCHEMA_DDL now targets the new names,
+    // so on upgrade the DDL creates empty stub agents/profiles tables which
+    // this migration drops before performing the RENAME so foreign keys and
+    // rows carry over cleanly. Column renames use SQLite's RENAME COLUMN
+    // (3.25+) which also rewrites FK constraint text in other tables.
+    version: 11,
+    sql: `
+DROP TABLE IF EXISTS agents;
+DROP TABLE IF EXISTS profiles;
+ALTER TABLE tasks RENAME TO agents;
+ALTER TABLE agent_profiles RENAME TO profiles;
+ALTER TABLE agents RENAME COLUMN agent_profile_id TO profile_id;
+ALTER TABLE schedules RENAME COLUMN task_id TO agent_id;
+ALTER TABLE runs RENAME COLUMN task_id TO agent_id;
+ALTER TABLE work_items RENAME COLUMN agent_profile_id TO profile_id;
+ALTER TABLE run_context RENAME COLUMN task_name TO agent_name;
+ALTER TABLE run_context RENAME COLUMN task_description TO agent_description;
+ALTER TABLE run_context RENAME COLUMN agent_profile_json TO profile_json;
+`,
+  },
 ];
 
 /** Applied after incremental migrations so upgraded DBs have columns first. */
@@ -723,8 +745,8 @@ export const EXPECTED_TABLES = [
   "users",
   "api_tokens",
   "projects",
-  "agent_profiles",
-  "tasks",
+  "profiles",
+  "agents",
   "schedules",
   "runs",
   "attempts",

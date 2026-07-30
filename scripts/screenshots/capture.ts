@@ -25,6 +25,8 @@ const VIEWPORT = { width: 1440, height: 900 };
 const SHOTS: { file: string; path: string }[] = [
   { file: "ui-dashboard.png", path: "/" },
   { file: "ui-projects.png", path: "/projects" },
+  { file: "ui-agents.png", path: "/agents" },
+  { file: "ui-adapters.png", path: "/adapters" },
   { file: "ui-runs.png", path: "/runs" },
   { file: "ui-schedules.png", path: "/schedules" },
   { file: "ui-integrations.png", path: "/integrations?status=merged" },

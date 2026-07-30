@@ -1,7 +1,7 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Self-healing
-description: How gojo recovers from failed tasks — platform plumbing, per-project healer tasks, propagation, and loop guards.
+description: How gojo recovers from failed agents — platform plumbing, per-project healer agents, propagation, and loop guards.
 ---
 
 Failed runs are normal. Self-healing is how gojo turns a durable failure into a **reviewable fix in the project repo**, without gojo inventing domain knowledge for every project.
@@ -10,10 +10,10 @@ Failed runs are normal. Self-healing is how gojo turns a durable failure into a 
 
 | Layer | Owns | Lives in |
 | --- | --- | --- |
-| **Platform plumbing** | Retries, API access for agents, failure artifacts, heal trigger, fetch + re-sync before runs | gojo daemon (`src/`) |
-| **Healing logic** | Diagnosis, edits to prompts/manifest/validation/code, opening a PR | Each project’s `self-heal` task (git) |
+| **Platform plumbing** | Retries, API access for the adapter subprocess, failure artifacts, heal trigger, fetch + re-sync before runs | gojo daemon (`src/`) |
+| **Healing logic** | Diagnosis, edits to prompts/manifest/validation/code, opening a PR | Each project's `self-heal` agent (git) |
 
-**Why the split?** `gojo project sync` overwrites task prompts and policies from `gojo.yaml`. A “fix” that only edits the SQLite database is erased on the next sync. Fixes that should stick must be committed in the repo.
+**Why the split?** `gojo project sync` overwrites agent prompts and policies from `gojo.yaml`. A "fix" that only edits the SQLite database is erased on the next sync. Fixes that should stick must be committed in the repo.
 
 gojo can heal **itself** the same way: register the gojo checkout as a project (this repo ships a dogfood [`gojo.yaml`](https://github.com/detroitpro/gojo/blob/main/gojo.yaml)).
 
@@ -28,19 +28,19 @@ failurePolicy:
   disableAfterConsecutiveFailedRuns: 3
 ```
 
-- Agent or validation failure creates a **new attempt** under the same run (history kept).
-- `disableAfterConsecutiveFailedRuns` is copied onto the schedule’s auto-disable threshold when you sync.
+- Adapter or validation failure creates a **new attempt** under the same run (history kept).
+- `disableAfterConsecutiveFailedRuns` is copied onto the schedule's auto-disable threshold when you sync.
 
-### Agent environment
+### Adapter environment
 
-Every agent invocation receives:
+Every adapter invocation receives:
 
 | Env var | Purpose |
 | --- | --- |
 | `GOJO_API_URL` | Base API URL (e.g. `http://127.0.0.1:7430/api/v1`) |
 | `GOJO_API_TOKEN` | Short-lived bearer token **scoped to this run only** |
 | `GOJO_RUN_ID` | Current run |
-| `GOJO_TASK_ID` / `GOJO_PROJECT_ID` | Current task and project |
+| `GOJO_AGENT_ID` / `GOJO_PROJECT_ID` | Current agent (work unit) and project |
 
 `GOJO_API_TOKEN` may call **only** `POST $GOJO_API_URL/runs/$GOJO_RUN_ID/progress` (structured focus updates while the run is active). It cannot list runs, read artifacts, or call other API routes — use the CLI or artifact files for diagnosis.
 
@@ -58,7 +58,7 @@ Artifacts also land under `~/.gojo/artifacts/<runId>/` (`failure.json`, `validat
 
 On failure, gojo writes under `~/.gojo/artifacts/<runId>/`:
 
-- `failure.json` — error message, phase, task/project names, optional validation summary
+- `failure.json` — error message, phase, agent/project names, optional validation summary
 - `validation.json` — when validation was the failing stage (stdout/stderr per step)
 
 Inspect with `gojo run artifacts <id>` or the Runs UI.
@@ -66,15 +66,15 @@ Inspect with `gojo run artifacts <id>` or the Runs UI.
 ### Heal trigger
 
 ```yaml
-tasks:
+agents:
   deps-dotnet:
     # …
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1   # default 1
 ```
 
-When the task fails and the consecutive-failure threshold is met, gojo enqueues the named healer with `trigger: heal`.
+When the agent fails and the consecutive-failure threshold is met, gojo enqueues the named healer with `trigger: heal`.
 
 ### Propagation (merged fixes actually apply)
 
@@ -83,12 +83,12 @@ If the manifest has `repository.syncBeforeRun: true`, before preparing a worktre
 1. `git fetch` and fast-forward the local base branch from `origin`
 2. Re-sync `gojo.yaml` into the database
 
-Without that, a merged healer PR would not update local `main` or the task prompt until you sync manually.
+Without that, a merged healer PR would not update local `main` or the agent prompt until you sync manually.
 
 ## What each project should ship
 
-1. A **healer task** (prompt + validation + `pull-request` integration).
-2. `selfHeal` on the tasks you want repaired automatically.
+1. A **healer agent** (prompt + validation + `pull-request` integration).
+2. `selfHeal` on the agents you want repaired automatically.
 3. Prefer **human review** of healer PRs (do not auto-merge).
 
 Minimal shape:
@@ -99,6 +99,11 @@ repository:
   syncBeforeRun: true
   # …
 
+profiles:
+  cursor:
+    adapter: cursor
+    timeout: 30m
+
 validationProfiles:
   self-heal:
     steps:
@@ -106,17 +111,17 @@ validationProfiles:
         command: test -f .gojo/handoff.json
         timeout: 30s
 
-tasks:
-  my-task:
+agents:
+  my-agent:
     # …
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1
 
   self-heal:
     description: Diagnose failed runs and open a reviewable fix PR
-    agent: cursor
-    promptFile: .gojo/tasks/self-heal.md
+    profile: cursor
+    promptFile: .gojo/agents/self-heal.md
     validationProfile: self-heal
     concurrency:
       projectLimit: 1
@@ -138,27 +143,27 @@ The healer prompt should:
 4. Re-run the failing validation command when practical
 5. Leave a PR for humans — never weaken CI to force green
 
-See this repo’s [`.gojo/tasks/self-heal.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/tasks/self-heal.md) as a starting template.
+See this repo's [`.gojo/agents/self-heal.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/agents/self-heal.md) as a starting template.
 
 ## Loop guards
 
 | Guard | Behavior |
 | --- | --- |
 | Heal does not re-heal | Runs with `trigger: heal` never enqueue another healer |
-| Healer excluded | If the failing task **is** the healer, no heal is enqueued |
+| Healer excluded | If the failing agent **is** the healer, no heal is enqueued |
 | Preflight / infra | Runs that never started (`startedAt` null) or hit an invalid state transition are skipped — no healer for workspace prep or daemon infra failures |
 | Cap | At most **3** heal runs per project per hour |
 
 ## Lifecycle sketch
 
 ```text
-Task fails (after maxAttemptsPerRun exhausted)
+Agent fails (after maxAttemptsPerRun exhausted)
   → failure.json written
   → if selfHeal configured and guards pass → enqueue healer (trigger=heal)
   → healer opens PR (pull-request mode)
   → human reviews + merges
   → next run: syncBeforeRun fetch/ff + manifest sync
-  → task runs with the fix
+  → agent runs with the fix
 ```
 
 ## Related

@@ -53,7 +53,7 @@ describe("DashboardView live refresh", () => {
     mocks.live.length = 0;
     mocks.dashboard.mockResolvedValue({
       projects: 1,
-      tasks: 2,
+      agents: 2,
       schedules: 3,
       runs: 4,
       activeRuns: 1,
@@ -70,7 +70,7 @@ describe("DashboardView live refresh", () => {
         { path: "/queue", name: "queue", component: { template: "<div />" } },
         { path: "/projects", name: "projects", component: { template: "<div />" } },
         { path: "/projects/:id", name: "project-detail", component: { template: "<div />" } },
-        { path: "/tasks", name: "tasks", component: { template: "<div />" } },
+        { path: "/agents", name: "agents", component: { template: "<div />" } },
         { path: "/schedules", name: "schedules", component: { template: "<div />" } },
         { path: "/runs", name: "runs", component: { template: "<div />" } },
         { path: "/integrations", name: "integrations", component: { template: "<div />" } },
@@ -85,7 +85,7 @@ describe("DashboardView live refresh", () => {
 
     mocks.dashboard.mockResolvedValue({
       projects: 1,
-      tasks: 2,
+      agents: 2,
       schedules: 3,
       runs: 5,
       activeRuns: 5,

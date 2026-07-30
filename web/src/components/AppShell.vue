@@ -20,9 +20,9 @@ const nav = [
     icon: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z",
   },
   {
-    to: "/tasks",
-    label: "Tasks",
-    name: "tasks",
+    to: "/agents",
+    label: "Agents",
+    name: "agents",
     icon: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4",
   },
   {
@@ -56,9 +56,9 @@ const nav = [
     icon: "M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
   },
   {
-    to: "/agents",
-    label: "Agents",
-    name: "agents",
+    to: "/adapters",
+    label: "Adapters",
+    name: "adapters",
     icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z",
   },
   {
@@ -85,6 +85,9 @@ const eventStatusLabel = computed(() => {
 const activeName = computed(() => {
   if (route.name === "run-detail") {
     return "runs";
+  }
+  if (route.name === "agent-detail") {
+    return "agents";
   }
   if (route.name === "dashboard") {
     return "dashboard";

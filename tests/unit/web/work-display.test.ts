@@ -7,7 +7,7 @@ import {
   workPrimaryLabel,
   workResultLabel,
   workSecondaryLabel,
-  workTaskAgentLabel,
+  workAgentProfileLabel,
 } from "../../../web/src/lib/work-display";
 import type { WorkItem } from "../../../web/src/types";
 
@@ -26,7 +26,7 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     attention: "none",
     provenance: "gojo-agent",
     actorName: "cursor",
-    agentProfileId: "profile-1",
+    profileId: "profile-1",
     labels: [],
     nativeState: "succeeded",
     webUrl: null,
@@ -42,24 +42,24 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     updatedAt: "2026-07-27T16:00:00.000Z",
     startedAt: null,
     completedAt: "2026-07-27T16:05:00.000Z",
-    taskName: "activity-digest",
+    agentName: "activity-digest",
     agentLabel: "cursor",
     ...overrides,
   };
 }
 
 describe("web/work-display", () => {
-  test("labels run rows with durable task identity and focus subtitle", () => {
+  test("labels run rows with durable agent identity and focus subtitle", () => {
     const run = item();
     expect(workKindLabel(run)).toBe("Run");
     expect(workPrimaryLabel(run)).toBe("activity-digest");
     expect(workSecondaryLabel(run)).toBe("Done");
-    expect(workTaskAgentLabel(run)).toBe("activity-digest · cursor");
+    expect(workAgentProfileLabel(run)).toBe("activity-digest · cursor");
     expect(workResultLabel(run)).toBe("Succeeded");
     expect(workHistoryHref(run)).toEqual({ type: "run", id: "run-1" });
   });
 
-  test("labels delivered PR rows with via task attribution", () => {
+  test("labels delivered PR rows with via agent attribution", () => {
     const pr = item({
       kind: "pull-request",
       nativeKey: "12",
@@ -71,13 +71,13 @@ describe("web/work-display", () => {
       actorName: null,
       sourceId: "source-1",
       webUrl: "https://github.com/acme/app/pull/12",
-      taskName: "maintain-merge",
+      agentName: "maintain-merge",
       agentLabel: "cursor",
     });
     expect(workKindLabel(pr)).toBe("PR");
     expect(workPrimaryLabel(pr)).toBe("Fix scheduler storage");
     expect(workSecondaryLabel(pr)).toBeNull();
-    expect(workTaskAgentLabel(pr)).toBe("via maintain-merge");
+    expect(workAgentProfileLabel(pr)).toBe("via maintain-merge");
     expect(workResultLabel(pr)).toBe("Merged");
     expect(workHistoryHref(pr)).toEqual({
       type: "external",
@@ -85,7 +85,7 @@ describe("web/work-display", () => {
     });
   });
 
-  test("humanizes operator resolution and falls back without task/agent", () => {
+  test("humanizes operator resolution and falls back without agent/profile", () => {
     const resolved = item({
       kind: "issue",
       title: "Ghost issue",
@@ -95,13 +95,13 @@ describe("web/work-display", () => {
       resolution: "operator",
       provenance: "human",
       actorName: "alice",
-      taskName: null,
+      agentName: null,
       agentLabel: "alice",
       nativeKey: null,
       webUrl: null,
     });
     expect(workKindLabel(resolved)).toBe("Issue");
-    expect(workTaskAgentLabel(resolved)).toBe("alice");
+    expect(workAgentProfileLabel(resolved)).toBe("alice");
     expect(workResultLabel(resolved)).toBe("Resolved by operator");
     expect(workHistoryHref(resolved)).toBeNull();
   });
@@ -113,7 +113,7 @@ describe("web/work-display", () => {
       title: "Fix scheduler storage",
       summary: "",
       delivery: "merged",
-      taskName: "maintain-merge",
+      agentName: "maintain-merge",
       agentLabel: "cursor",
       nativeKey: "12",
       webUrl: "https://github.com/acme/app/pull/12",
@@ -121,7 +121,7 @@ describe("web/work-display", () => {
     const run = item({
       id: "run-1",
       title: "maintain-merge",
-      taskName: "maintain-merge",
+      agentName: "maintain-merge",
       deliveredWork: [pr],
     });
     const orphan = item({
@@ -130,7 +130,7 @@ describe("web/work-display", () => {
       title: "Human hotfix",
       summary: "",
       delivery: "merged",
-      taskName: null,
+      agentName: null,
       agentLabel: "human",
       provenance: "human",
       nativeKey: "99",

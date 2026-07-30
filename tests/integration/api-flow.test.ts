@@ -24,7 +24,7 @@ describe("integration/api-flow", () => {
     }
   });
 
-  test("setup -> project -> task -> run succeeds", async () => {
+  test("setup -> project -> agent -> run succeeds", async () => {
     tempDir = mkdtempSync(`${tmpdir()}/gojo-api-flow-`);
     const repoPath = join(tempDir, "repo");
     const { mkdirSync } = await import("node:fs");
@@ -78,7 +78,7 @@ describe("integration/api-flow", () => {
       data: { project: { id: string } };
     };
 
-    const taskResponse = await fetch(`${baseUrl}/api/v1/tasks`, {
+    const agentResponse = await fetch(`${baseUrl}/api/v1/agents`, {
       method: "POST",
       headers: { ...auth, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -95,10 +95,10 @@ describe("integration/api-flow", () => {
         }),
       }),
     });
-    expect(taskResponse.status).toBe(201);
-    const { data: taskData } = (await taskResponse.json()) as { data: { task: { id: string } } };
+    expect(agentResponse.status).toBe(201);
+    const { data: agentData } = (await agentResponse.json()) as { data: { agent: { id: string } } };
 
-    const runResponse = await fetch(`${baseUrl}/api/v1/tasks/${taskData.task.id}/run`, {
+    const runResponse = await fetch(`${baseUrl}/api/v1/agents/${agentData.agent.id}/run`, {
       method: "POST",
       headers: auth,
     });

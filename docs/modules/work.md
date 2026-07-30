@@ -18,18 +18,19 @@ without pretending that gojo owns those systems' native state.
   terminal delivery
 
 An item also records provenance, source identity, native state/JSON, observation
-time, next sync, and freshness. For gojo runs, `title` is the durable task name;
-agent progress updates `summary` (and focus fields in `nativeJson`) without
-renaming the work item. List responses enrich each row with `taskName` (run task
-or delivering task via a `delivers` link), `agentLabel` (actor / profile /
-adapter / provenance), and `deliveredWork` (outbound `delivers` targets on run
-rows so History can nest a PR under its run). Source sync may upgrade provenance to `gojo-agent` (for
-example `gojo/` PR branches) but never downgrades an existing `gojo-agent` row
-when a forge author looks human. Verified-open counts include only current
-observations. A last-known-open stale item is shown under attention and never
-counted as verified open. Operator-resolved items leave Needs attention, stay
-visible in History, and are excluded from `needsAttention` / `staleOpen` until a
-later source observation reports them active again.
+time, next sync, and freshness. For gojo runs, `title` is the durable agent name
+(work-unit); adapter progress updates `summary` (and focus fields in
+`nativeJson`) without renaming the work item. List responses enrich each row
+with `agentName` (run agent or delivering agent via a `delivers` link),
+`profileLabel` (actor / profile / adapter / provenance), and `deliveredWork`
+(outbound `delivers` targets on run rows so History can nest a PR under its
+run). Source sync may upgrade provenance to `gojo-agent` (for example `gojo/`
+PR branches) but never downgrades an existing `gojo-agent` row when a forge
+author looks human. Verified-open counts include only current observations. A
+last-known-open stale item is shown under attention and never counted as
+verified open. Operator-resolved items leave Needs attention, stay visible in
+History, and are excluded from `needsAttention` / `staleOpen` until a later
+source observation reports them active again.
 
 `work_links` records causality such as run → delivered PR and healer → failed
 run. `work_events` is append-only and supplies durable lifecycle replay after a
@@ -70,6 +71,8 @@ written by any code path.
 - `POST /api/v1/work/:id/resolve`
 - `gojo project work|status <id>`
 - `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale] [--history]` (first page only; API adds paging and more filters)
+
+Kind vocabulary is unchanged: `run` still denotes a gojo agent execution row; the durable identity name on that row is the agent (work-unit) name.
 - `gojo project recheck-work <id> <workItemId>`
 - `gojo project resolve-work <id> <workItemId> [--by <actor>] [--note <text>]`
 

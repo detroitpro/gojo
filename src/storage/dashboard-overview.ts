@@ -10,7 +10,7 @@ export type DashboardOverviewRun = {
   finishedAt: string | null;
 };
 
-export type DashboardOverviewTask = {
+export type DashboardOverviewAgent = {
   id: string;
   name: string;
   description: string;
@@ -20,7 +20,7 @@ export type DashboardOverviewTask = {
 export type DashboardOverviewProject = {
   id: string;
   name: string;
-  tasks: DashboardOverviewTask[];
+  agents: DashboardOverviewAgent[];
 };
 
 export type DashboardOverview = {
@@ -28,7 +28,7 @@ export type DashboardOverview = {
 };
 
 type ProjectRow = { id: string; name: string };
-type TaskRow = {
+type AgentRow = {
   id: string;
   project_id: string;
   name: string;
@@ -36,7 +36,7 @@ type TaskRow = {
 };
 type RunRow = {
   id: string;
-  task_id: string;
+  agent_id: string;
   state: string;
   trigger: string;
   created_at: string;
@@ -45,7 +45,7 @@ type RunRow = {
 };
 
 /**
- * Projects (name order) with enabled tasks and up to 5 recent runs each.
+ * Projects (name order) with enabled agents and up to 5 recent runs each.
  * `recentRuns` is oldest → newest (newest last) for left-to-right UI strips.
  */
 export function getDashboardOverview(db: Database): DashboardOverview {
@@ -59,10 +59,10 @@ export function getDashboardOverview(db: Database): DashboardOverview {
     return { projects: [] };
   }
 
-  const tasks = sqlite
-    .query<TaskRow, []>(
+  const agents = sqlite
+    .query<AgentRow, []>(
       `SELECT id, project_id, name, description
-       FROM tasks
+       FROM agents
        WHERE enabled = 1
        ORDER BY name COLLATE NOCASE`,
     )
@@ -70,22 +70,22 @@ export function getDashboardOverview(db: Database): DashboardOverview {
 
   const runs = sqlite
     .query<RunRow, []>(
-      `SELECT id, task_id, state, trigger, created_at, finished_at, rn
+      `SELECT id, agent_id, state, trigger, created_at, finished_at, rn
        FROM (
-         SELECT id, task_id, state, trigger, created_at, finished_at,
+         SELECT id, agent_id, state, trigger, created_at, finished_at,
                 ROW_NUMBER() OVER (
-                  PARTITION BY task_id ORDER BY created_at DESC
+                  PARTITION BY agent_id ORDER BY created_at DESC
                 ) AS rn
          FROM runs
        )
        WHERE rn <= 5
-       ORDER BY task_id, rn DESC`,
+       ORDER BY agent_id, rn DESC`,
     )
     .all();
 
-  const runsByTask = new Map<string, DashboardOverviewRun[]>();
+  const runsByAgent = new Map<string, DashboardOverviewRun[]>();
   for (const row of runs) {
-    const list = runsByTask.get(row.task_id) ?? [];
+    const list = runsByAgent.get(row.agent_id) ?? [];
     list.push({
       id: row.id,
       state: row.state as RunState,
@@ -93,26 +93,26 @@ export function getDashboardOverview(db: Database): DashboardOverview {
       createdAt: row.created_at,
       finishedAt: row.finished_at,
     });
-    runsByTask.set(row.task_id, list);
+    runsByAgent.set(row.agent_id, list);
   }
 
-  const tasksByProject = new Map<string, DashboardOverviewTask[]>();
-  for (const task of tasks) {
-    const list = tasksByProject.get(task.project_id) ?? [];
+  const agentsByProject = new Map<string, DashboardOverviewAgent[]>();
+  for (const agent of agents) {
+    const list = agentsByProject.get(agent.project_id) ?? [];
     list.push({
-      id: task.id,
-      name: task.name,
-      description: task.description ?? "",
-      recentRuns: runsByTask.get(task.id) ?? [],
+      id: agent.id,
+      name: agent.name,
+      description: agent.description ?? "",
+      recentRuns: runsByAgent.get(agent.id) ?? [],
     });
-    tasksByProject.set(task.project_id, list);
+    agentsByProject.set(agent.project_id, list);
   }
 
   return {
     projects: projects.map((project) => ({
       id: project.id,
       name: project.name,
-      tasks: tasksByProject.get(project.id) ?? [],
+      agents: agentsByProject.get(project.id) ?? [],
     })),
   };
 }

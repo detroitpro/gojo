@@ -109,7 +109,7 @@ describe('workspace/manager', () => {
       baseBranch: 'main',
       runId,
       projectName: 'demo',
-      taskName: 'lint-fix',
+      agentName: 'lint-fix',
     });
 
     const today = new Date().toISOString().slice(0, 10);
@@ -137,7 +137,7 @@ describe('workspace/manager', () => {
       baseBranch: 'main',
       runId,
       projectName: 'demo',
-      taskName: 'lint-fix',
+      agentName: 'lint-fix',
     });
 
     expect(attempt.worktreePath).toBe(orphanPath);
@@ -153,7 +153,7 @@ describe('workspace/manager', () => {
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
       projectName: 'demo',
-      taskName: 'task one',
+      agentName: 'agent one',
     });
 
     writeFileSync(join(attempt.worktreePath, 'agent.txt'), 'done');
@@ -175,7 +175,7 @@ describe('workspace/manager', () => {
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
       projectName: 'demo',
-      taskName: 'keep-branch',
+      agentName: 'keep-branch',
     });
 
     await manager.cleanup(attempt.worktreePath, attempt.branchName, {
@@ -196,7 +196,7 @@ describe('workspace/manager', () => {
       baseBranch: 'main',
       runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
       projectName: 'demo',
-      taskName: 'deps-python',
+      agentName: 'deps-python',
       syncBeforeRun: true,
     });
 

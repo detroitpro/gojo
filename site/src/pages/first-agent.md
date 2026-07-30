@@ -1,10 +1,16 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Your first agent
-description: Define a shell task in gojo.yaml, sync the project, and watch a successful run end-to-end.
+description: Define a shell agent in gojo.yaml, sync the project, and watch a successful run end-to-end.
 ---
 
-The fastest way to learn gojo is a **shell** agent: a small script that edits the repo, then a validation command that proves it worked. No Cursor or Claude license required.
+The fastest way to learn gojo is a **shell** adapter: a small script that edits the repo, then a validation command that proves it worked. No Cursor or Claude license required.
+
+The vocabulary you'll see in `gojo.yaml`:
+
+- **`profiles:`** — reusable adapter configuration (shell / cursor / claude-code, timeout, model).
+- **`agents:`** — the work units. Each agent picks a `profile` and points at a `promptFile`.
+- **Adapters** (`gojo adapter detect` / UI tab) — the installed CLIs that back a profile.
 
 ## 1. Manifest in the repository
 
@@ -24,7 +30,7 @@ repository:
   submodules: false
   gitLfs: false
 
-agents:
+profiles:
   shell:
     adapter: shell
     timeout: 5m
@@ -36,11 +42,11 @@ validationProfiles:
         command: test -f NOTES.md
         timeout: 30s
 
-tasks:
+agents:
   touch-note:
     description: Create a NOTES.md file
-    agent: shell
-    promptFile: .gojo/tasks/touch-note.sh
+    profile: shell
+    promptFile: .gojo/agents/touch-note.sh
     validationProfile: quick
     integration:
       mode: commit-only
@@ -51,13 +57,13 @@ schedules: {}
 notifications: {}
 ```
 
-## 2. Task script (the “agent”)
+## 2. Agent script (the shell work unit)
 
 ```bash
-mkdir -p .gojo/tasks
+mkdir -p .gojo/agents
 ```
 
-Create `.gojo/tasks/touch-note.sh`:
+Create `.gojo/agents/touch-note.sh`:
 
 ```bash
 #!/bin/sh
@@ -89,44 +95,44 @@ Commit the manifest and script to the repo.
 
 ## 3. Sync and run
 
-In the UI: **Projects → Sync**, then run the **touch-note** task.
+In the UI: **Projects → Sync**, then run the **touch-note** agent.
 
-From the CLI (after `project list` / `task list --project <id>`):
+From the CLI (after `project list` / `agent list --project <id>`):
 
 ```bash
 bun run gojo project sync <project-id>
-bun run gojo task run <task-id>
+bun run gojo agent run <agent-id>
 bun run gojo run list
 ```
 
 Expect the run to move through Preparing → Running → Validating → Integrating → Succeeded. With `commit-only`, changes land on a `gojo/...` branch in the worktree/repo history without merging to `main`.
 
-## 4. What “success” means here
+## 4. What "success" means here
 
 1. The shell script exited successfully.
 2. Validation `test -f NOTES.md` passed **in the worktree**.
 3. gojo created a commit on the run branch (`commit-only`).
 
-The agent claiming success is not enough — validation and integration policy decide the run outcome. See [Concepts](/concepts).
+The adapter claiming success is not enough — validation and integration policy decide the run outcome. See [Concepts](/concepts).
 
 ## Next: Cursor and Claude Code
 
 Once the shell path works:
 
 1. Install the **Cursor Agent** or **Claude Code** CLI and authenticate it on the host.
-2. Check **Agents** in the UI (or `gojo agent detect`).
-3. Add an agent profile in `gojo.yaml`:
+2. Check **Adapters** in the UI (or `gojo adapter detect`).
+3. Add a profile in `gojo.yaml`:
 
 ```yaml
-agents:
+profiles:
   maintenance:
     adapter: claude-code   # or: cursor
     model: default
     timeout: 45m
 ```
 
-4. Point a task at that agent and put the natural-language instructions in `promptFile` (Markdown is fine).
-5. Prefer **pull-request** integration on shared repositories until you trust the task (`await-approval` exists at runtime but is not valid in `gojo.yaml` yet).
+4. Point an agent at that profile and put the natural-language instructions in `promptFile` (Markdown is fine).
+5. Prefer **pull-request** integration on shared repositories until you trust the agent (`await-approval` exists at runtime but is not valid in `gojo.yaml` yet).
 
 Adapters invoke the installed CLIs non-interactively and capture structured output when available. Unsupported or missing CLIs fail detection clearly instead of half-running.
 
@@ -135,13 +141,13 @@ Adapters invoke the installed CLIs non-interactively and capture structured outp
 ```yaml
 schedules:
   touch-note:
-    task: touch-note
+    agent: touch-note
     cron: "0 3 * * *"
     timezone: America/Detroit
 ```
 
 Sync again, then confirm the next fire time under **Schedules**. Overlap, retries, and auto-disable are covered in [Settings](/settings).
 
-## Ready for a real AI task?
+## Ready for a real AI agent?
 
 When the shell path is green, move on to [Advanced agent](/advanced-agent): Claude Code or Cursor doing weekly dependency maintenance with full validation, pull requests, and handoffs. Broader patterns live in [Advanced usage](/advanced-usage).

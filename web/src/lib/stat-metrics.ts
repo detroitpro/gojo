@@ -275,9 +275,9 @@ export const METRICS: Record<string, MetricSpec> = {
     "none",
     "neutral",
   ),
-  "dashboard.tasks": spec(
-    "dashboard.tasks",
-    "Tasks",
+  "dashboard.agents": spec(
+    "dashboard.agents",
+    "Agents",
     ListChecks,
     "neutral",
     "inventory",

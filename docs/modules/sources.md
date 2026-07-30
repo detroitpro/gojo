@@ -6,7 +6,8 @@
 
 Sources connect a project to authoritative external systems. A project may have
 multiple repository, tracker, deployment, incident, or generic sources.
-Storage, API, and UI depend on `SourceAdapter`, not provider names.
+Storage, API, and UI depend on `SourceAdapter`, not provider names. (Source
+adapters are unrelated to agent adapters — same word, different domain.)
 
 The initial adapters are:
 

@@ -7,10 +7,21 @@ Works with **shell** scripts, **Cursor Agent**, and **Claude Code**. Ships a CLI
 ## Why gojo
 
 - **Schedule with intent** — cron and one-offs, time zones, overlap policies, retries, auto-disable after repeated failures
-- **Isolated Git worktrees** — every attempt gets its own branch so concurrent agents don’t collide
-- **Validation you define** — install / lint / test / build run outside the agent conversation
+- **Isolated Git worktrees** — every attempt gets its own branch so concurrent agents don't collide
+- **Validation you define** — install / lint / test / build run outside the adapter conversation
 - **Platform-owned integration** — commit-only, pull request, await approval, or auto-merge via a per-project merge queue
 - **Operate locally** — SQLite on disk, encrypted secrets, backups, Slack/webhook notifications, systemd/launchd service
+
+## Vocabulary at a glance
+
+`gojo.yaml` has two related maps:
+
+| Map | What it is |
+| --- | --- |
+| `profiles:` | Reusable adapter configuration (shell / cursor / claude-code + model + timeout) |
+| `agents:` | Work-unit definitions — each picks a `profile` and points at a `promptFile` |
+
+**Adapters** (`gojo adapter …`) is the top-level UI/CLI tab for detecting installed coding-agent CLIs on the host. **Agents** (`gojo agent …`) is the top-level tab for the work units defined by projects.
 
 ## Requirements
 
@@ -65,9 +76,9 @@ gojo project add demo /path/to/repo --branch main
 gojo project list
 ```
 
-Registering a path is not enough — the repo needs a `gojo.yaml` (or `.gojo/project.yaml`). Sync loads tasks, agents, and schedules from that manifest.
+Registering a path is not enough — the repo needs a `gojo.yaml` (or `.gojo/project.yaml`). Sync loads profiles, agents, and schedules from that manifest.
 
-### First task (shell)
+### First agent (shell)
 
 In the **target repository** (not the gojo clone), add `gojo.yaml`:
 
@@ -85,7 +96,7 @@ repository:
   submodules: false
   gitLfs: false
 
-agents:
+profiles:
   shell:
     adapter: shell
     timeout: 5m
@@ -97,11 +108,11 @@ validationProfiles:
         command: test -f NOTES.md
         timeout: 30s
 
-tasks:
+agents:
   touch-note:
     description: Create a NOTES.md file
-    agent: shell
-    promptFile: .gojo/tasks/touch-note.sh
+    profile: shell
+    promptFile: .gojo/agents/touch-note.sh
     validationProfile: quick
     integration:
       mode: commit-only
@@ -112,7 +123,7 @@ schedules: {}
 notifications: {}
 ```
 
-And `.gojo/tasks/touch-note.sh`:
+And `.gojo/agents/touch-note.sh`:
 
 ```bash
 #!/bin/sh
@@ -139,31 +150,31 @@ JSON
 ```
 
 ```bash
-chmod +x .gojo/tasks/touch-note.sh
+chmod +x .gojo/agents/touch-note.sh
 # commit gojo.yaml + the script in the target repo
 
 gojo project sync <project-id>
-gojo task run <task-id>
+gojo agent run <agent-id>
 gojo run list
 ```
 
-Expect Preparing → Running → Validating → Integrating → **Succeeded**. With `commit-only`, changes land on a run branch without merging to `main`. The agent claiming success is not enough — validation and integration policy decide the outcome.
+Expect Preparing → Running → Validating → Integrating → **Succeeded**. With `commit-only`, changes land on a run branch without merging to `main`. The adapter claiming success is not enough — validation and integration policy decide the outcome.
 
-Prefer an agent to do the install? The docs landing page (`site/`, `#ask-your-agent`) has a copy-paste prompt that installs gojo, registers the current repo, and runs a first task.
+Prefer an agent to do the install? The docs landing page (`site/`, `#ask-your-agent`) has a copy-paste prompt that installs gojo, registers the current repo, and runs a first agent.
 
 ## Self-healing
 
-Healing **logic** belongs in each project repo (a `self-heal` task that edits `gojo.yaml` / prompts and opens a PR). Healing **plumbing** belongs in gojo (retries, API env injection, `failure.json`, heal trigger, `syncBeforeRun` propagation).
+Healing **logic** belongs in each project repo (a `self-heal` agent that edits `gojo.yaml` / prompts and opens a PR). Healing **plumbing** belongs in gojo (retries, API env injection, `failure.json`, heal trigger, `syncBeforeRun` propagation).
 
 Full guide: **[Self-healing](https://detroitpro.github.io/gojo/self-healing)** (source: [`site/src/pages/self-healing.md`](./site/src/pages/self-healing.md)).
 
 This repo dogfoods the pattern via [`gojo.yaml`](./gojo.yaml) — register the gojo checkout as a project and `gojo project sync <id>`.
 
-## Task prompt limits
+## Agent prompt limits
 
-Start every scheduled AI task with **numeric Hard rules** (max tests, files, deps, PRs). Timeouts stop the process; limits keep the diff reviewable. Guide: **[Task prompt best practices](https://detroitpro.github.io/gojo/task-prompts)** (source: [`site/src/pages/task-prompts.md`](./site/src/pages/task-prompts.md); engineering note: [`docs/task-prompts.md`](./docs/task-prompts.md)).
+Start every scheduled AI agent with **numeric Hard rules** (max tests, files, deps, PRs). Timeouts stop the process; limits keep the diff reviewable. Guide: **[Agent prompt best practices](https://detroitpro.github.io/gojo/agent-prompts)** (source: [`site/src/pages/agent-prompts.md`](./site/src/pages/agent-prompts.md); engineering note: [`docs/agent-prompts.md`](./docs/agent-prompts.md)).
 
-For `pull-request` tasks, gojo builds the PR title/body from `.gojo/handoff.json` and opens the PR with `integration.prTool` (`gh` or `tea`; default `gh`). Prefer a short `summary` (title material) plus optional `assets` with `role: "pr-body"` pointing at a verbose markdown file (e.g. `.gojo/assets/pr-body.md`), and/or `role: "pr-title"`. Without assets, gojo synthesizes the body from `summary` / `decisions` / lists. For Forgejo/Gitea, set `prTool: tea` (optional `prLogin` / `prRemote`).
+For `pull-request` agents, gojo builds the PR title/body from `.gojo/handoff.json` and opens the PR with `integration.prTool` (`gh` or `tea`; default `gh`). Prefer a short `summary` (title material) plus optional `assets` with `role: "pr-body"` pointing at a verbose markdown file (e.g. `.gojo/assets/pr-body.md`), and/or `role: "pr-title"`. Without assets, gojo synthesizes the body from `summary` / `decisions` / lists. For Forgejo/Gitea, set `prTool: tea` (optional `prLogin` / `prRemote`).
 
 ## Background service
 
@@ -184,11 +195,11 @@ gojo server doctor
 
 gojo project add demo /path/to/repo --branch main
 gojo project sync <project-id>
-gojo task run <task-id>
+gojo agent run <agent-id>
 
 gojo run list
 gojo schedule list
-gojo agent detect
+gojo adapter detect
 ```
 
 Use `gojo --help` for the full command tree. From a source checkout without installing: `bun run gojo …`.

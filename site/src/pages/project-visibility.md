@@ -11,7 +11,7 @@ A project page is organized around four questions:
 - **Now:** What is running or queued, who owns it, and what is the current focus?
 - **Needs attention:** What is blocked, awaiting approval, stale, or failing to sync — and what should you do next?
 - **Delivery:** What pull requests, issues, tickets, incidents, or deployments are active?
-- **History:** What completed, was verified terminal, or was marked resolved by an operator? Rows use icon badges for type and result (with accessible labels), keep the durable task name for runs (with progress as a subtitle), show which task/agent produced the work separately from the platform/repo source, and nest a delivered PR under its run when a `delivers` link exists.
+- **History:** What completed, was verified terminal, or was marked resolved by an operator? Rows use icon badges for type and result (with accessible labels), keep the durable agent name for runs (with progress as a subtitle), show which agent/profile produced the work separately from the platform/repo source, and nest a delivered PR under its run when a `delivers` link exists.
 
 Command-center actions use shared icon buttons (`AppButton`) with consistent primary / secondary / danger variants and a loading state while long-running work is in flight.
 
@@ -24,7 +24,7 @@ updates, …) use the same tile pattern with outcome labels and icons; each coun
 is the number of distinct runs that produced that category of impact, not a
 breakdown by verification level.
 
-The dashboard is a gateway: inventory tiles open Projects / Tasks / Schedules /
+The dashboard is a gateway: inventory tiles open Projects / Agents / Schedules /
 Runs, delivery tiles open Integrations (Open / Merged / Commits), and category
 tiles open the Impact items list for that category — so you can dig into the
 non-summarized records behind each number.
@@ -86,16 +86,16 @@ Each body has a durable delivery `id`, ISO `occurredAt`, and an `item` with at
 least `kind`, `nativeKey`, `title`, and `nativeState`. Duplicate deliveries are
 safe and an older event cannot overwrite a newer observation.
 
-## Agent focus
+## Adapter focus
 
 AI runs receive a short-lived token restricted to their own progress endpoint.
-Agents can report a title, summary, blocker, and references while running. The
-project page uses this structured update; it does not scrape console output to
-guess what an agent is doing.
+Adapter subprocesses can report a title, summary, blocker, and references while
+running. The project page uses this structured update; it does not scrape
+console output to guess what an agent is doing.
 
 ## Live updates
 
-Dashboard, queue, runs, tasks, schedules, projects, impact, and project work
+Dashboard, queue, runs, agents, schedules, projects, impact, and project work
 refresh as durable changes arrive. The application shell shows **Live** while
 the event stream is connected and **Reconnecting** when it is using its
 degraded fallback. Reopening the page or restarting the daemon does not create

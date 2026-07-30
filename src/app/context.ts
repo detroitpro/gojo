@@ -185,12 +185,12 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         return;
       }
 
-      const task = repos.tasks.findById(schedule.taskId);
-      if (!task || !task.enabled) {
+      const agent = repos.agents.findById(schedule.agentId);
+      if (!agent || !agent.enabled) {
         return;
       }
 
-      const project = repos.projects.findById(task.projectId);
+      const project = repos.projects.findById(agent.projectId);
       if (!project) {
         return;
       }
@@ -200,7 +200,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
 
       await coordinator.enqueueRun({
         projectId: project.id,
-        taskId: task.id,
+        agentId: agent.id,
         scheduleId: schedule.id,
         trigger: "schedule",
         idempotencyKey: `${schedule.id}:${fireAt.toISOString()}`,

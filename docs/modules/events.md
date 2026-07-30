@@ -21,15 +21,15 @@ replayed in order after daemon restarts.
   - **platform** subscriptions (topic / project filters, `after` sequence cursor)
   - **run** subscriptions (namespaced `{ durable, live }` cursors)
   - **RPC** `req`/`res` frames that synthesize HTTP requests into `handleApiRequest`
-- Agents, signed source webhooks, CLI health, OpenAPI, and pre-auth
+- Adapter subprocesses, signed source webhooks, CLI health, OpenAPI, and pre-auth
   (`/setup`, `/auth/login`, `/auth/logout`) stay on HTTP.
-- Scoped agent tokens (`run:progress:{runId}`) are rejected at WebSocket upgrade.
+- Scoped run-progress tokens (`run:progress:{runId}`) are rejected at WebSocket upgrade.
 - In-process subscribers wake the hub immediately; a single five-second database
   repair loop (shared across all sockets) catches changes written by another
   CLI process.
 
 Topics are read-model boundaries: `dashboard`, `overview`, `impact`, `queue`,
-`runs`, `tasks`, `schedules`, `projects`, `work`, and `sources`.
+`runs`, `agents`, `schedules`, `projects`, `work`, and `sources`.
 
 Wire types live in `src/shared/ws.ts`. Inbound frames are validated with Zod in
 `src/api/ws/schema.ts`.
@@ -37,7 +37,7 @@ Wire types live in `src/shared/ws.ts`. Inbound frames are validated with Zod in
 ## Producers
 
 Run lifecycle, dispatcher-visible state, integration reconciliation, source
-sync/webhooks, project/task/schedule mutations, and instance scheduling changes
+sync/webhooks, project/agent/schedule mutations, and instance scheduling changes
 append targeted invalidations after their durable mutation.
 
 ## Browser behavior

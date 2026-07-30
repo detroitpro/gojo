@@ -526,7 +526,7 @@ onUnmounted(() => {
   <div>
     <header class="page-header">
       <div>
-        <h1>{{ run?.taskName || `Run ${runId.slice(0, 14)}…` }}</h1>
+        <h1>{{ run?.agentName || `Run ${runId.slice(0, 14)}…` }}</h1>
         <div v-if="run" class="subtitle run-meta">
           <StateBadge :state="run.state" />
           <span class="muted">{{ run.projectName || "Unknown project" }}</span>

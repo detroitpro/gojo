@@ -46,7 +46,7 @@ describe('maxAttemptsPerRun', () => {
     // Fail twice then succeed on attempt 3 via a counter file outside the worktree.
     const counterPath = join(tempDir, 'counter');
     writeFileSync(counterPath, '0');
-    const task = repos.tasks.create({
+    const task = repos.agents.create({
       projectId: project.id,
       name: 'flaky',
       prompt: [
@@ -76,7 +76,7 @@ describe('maxAttemptsPerRun', () => {
 
     const run = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'manual',
     });
     const finished = await coordinator.executeRun(run.id);

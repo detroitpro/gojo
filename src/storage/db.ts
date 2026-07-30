@@ -69,8 +69,13 @@ export class Database {
         this.sqlite.exec(`${statement};`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        // Idempotent for re-runs / partial upgrades.
-        if (!/duplicate column name/i.test(message)) {
+        // Idempotent for re-runs / partial upgrades: ADD COLUMN and RENAME
+        // COLUMN/TABLE both no-op when the target state is already present.
+        if (
+          !/duplicate column name/i.test(message) &&
+          !/no such column/i.test(message) &&
+          !/no such table/i.test(message)
+        ) {
           throw error;
         }
       }
@@ -105,12 +110,12 @@ export class Database {
           `INSERT OR IGNORE INTO work_items (
             id, project_id, source_id, kind, native_key, title, summary,
             execution, delivery, outcome, attention, provenance, actor_name,
-            agent_profile_id, labels_json, native_state, native_json, web_url,
+            profile_id, labels_json, native_state, native_json, web_url,
             observed_at, next_sync_at, sync_state, last_error, created_at,
             updated_at, started_at, completed_at
           )
           SELECT
-            'run:' || r.id, r.project_id, NULL, 'run', r.id, t.name, t.description,
+            'run:' || r.id, r.project_id, NULL, 'run', r.id, a.name, a.description,
             CASE r.state
               WHEN 'Scheduled' THEN 'queued'
               WHEN 'Queued' THEN 'queued'
@@ -134,12 +139,12 @@ export class Database {
               WHEN r.state IN ('Blocked', 'Conflict') THEN 'blocked'
               ELSE 'none'
             END,
-            'gojo-agent', NULL, t.agent_profile_id, '[]', r.state, '{}', NULL,
+            'gojo-agent', NULL, a.profile_id, '[]', r.state, '{}', NULL,
             COALESCE(r.finished_at, r.started_at, r.created_at), NULL, 'current',
             r.error_message, r.created_at,
             COALESCE(r.finished_at, r.started_at, r.created_at), r.started_at, r.finished_at
           FROM runs r
-          JOIN tasks t ON t.id = r.task_id`,
+          JOIN agents a ON a.id = r.agent_id`,
         )
         .run();
 
@@ -154,18 +159,18 @@ export class Database {
       this.sqlite
         .query(
           `INSERT OR IGNORE INTO run_context (
-            run_id, work_item_id, task_name, task_description, prompt,
-            manifest_hash, instructions, agent_profile_json, adapter, model,
+            run_id, work_item_id, agent_name, agent_description, prompt,
+            manifest_hash, instructions, profile_json, adapter, model,
             validation_json, integration_json, failure_policy_json, base_branch,
             schedule_json, created_at
           )
           SELECT
-            r.id, r.work_item_id, t.name, t.description, t.prompt,
-            NULL, '{}', COALESCE(ap.config_json, '{}'), ap.adapter,
-            (SELECT a.model FROM attempts a
-              WHERE a.run_id = r.id AND a.model IS NOT NULL
-              ORDER BY a.attempt_number DESC LIMIT 1),
-            t.validation_profile_json, t.integration_json, t.failure_policy_json,
+            r.id, r.work_item_id, a.name, a.description, a.prompt,
+            NULL, '{}', COALESCE(pr.config_json, '{}'), pr.adapter,
+            (SELECT att.model FROM attempts att
+              WHERE att.run_id = r.id AND att.model IS NOT NULL
+              ORDER BY att.attempt_number DESC LIMIT 1),
+            a.validation_profile_json, a.integration_json, a.failure_policy_json,
             p.default_branch,
             CASE WHEN s.id IS NULL THEN NULL ELSE json_object(
               'id', s.id, 'name', s.name, 'cronExpr', s.cron_expr,
@@ -173,9 +178,9 @@ export class Database {
             ) END,
             r.created_at
           FROM runs r
-          JOIN tasks t ON t.id = r.task_id
+          JOIN agents a ON a.id = r.agent_id
           JOIN projects p ON p.id = r.project_id
-          LEFT JOIN agent_profiles ap ON ap.id = t.agent_profile_id
+          LEFT JOIN profiles pr ON pr.id = a.profile_id
           LEFT JOIN schedules s ON s.id = r.schedule_id
           WHERE r.work_item_id IS NOT NULL`,
         )
@@ -186,7 +191,7 @@ export class Database {
           `INSERT OR IGNORE INTO work_items (
             id, project_id, source_id, kind, native_key, title, summary,
             execution, delivery, outcome, attention, provenance, actor_name,
-            agent_profile_id, labels_json, native_state, native_json, web_url,
+            profile_id, labels_json, native_state, native_json, web_url,
             observed_at, next_sync_at, sync_state, last_error, created_at,
             updated_at, started_at, completed_at
           )

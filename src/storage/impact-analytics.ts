@@ -50,8 +50,8 @@ export interface DashboardImpactRecentItem {
   runId: string;
   projectId: string;
   projectName: string;
-  taskId: string;
-  taskName: string;
+  agentId: string;
+  agentName: string;
   category: string;
   subject: string;
   summary: string;
@@ -261,8 +261,8 @@ function computeRecentItems(
         run_id: string;
         project_id: string;
         project_name: string;
-        task_id: string;
-        task_name: string;
+        agent_id: string;
+        agent_name: string;
         category: string;
         subject: string;
         summary: string;
@@ -274,13 +274,13 @@ function computeRecentItems(
       string[]
     >(
       `SELECT ii.id, ii.run_id, r.project_id, p.name AS project_name,
-              r.task_id, t.name AS task_name,
+              r.agent_id, a.name AS agent_name,
               ii.category, ii.subject, ii.summary, ii.source, ii.verification,
               ii.confidence, ii.created_at
        FROM run_impact_items ii
        JOIN runs r ON r.id = ii.run_id
        JOIN projects p ON p.id = r.project_id
-       JOIN tasks t ON t.id = r.task_id
+       JOIN agents a ON a.id = r.agent_id
        WHERE 1 = 1${clause}
        ORDER BY ii.created_at DESC, ii.id DESC
        LIMIT ${RECENT_ITEMS_LIMIT}`,
@@ -292,8 +292,8 @@ function computeRecentItems(
     runId: row.run_id,
     projectId: row.project_id,
     projectName: row.project_name,
-    taskId: row.task_id,
-    taskName: row.task_name,
+    agentId: row.agent_id,
+    agentName: row.agent_name,
     category: row.category,
     subject: row.subject,
     summary: row.summary,

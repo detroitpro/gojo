@@ -4,18 +4,18 @@ title: Advanced agent
 description: A production-shaped AI coding agent — dependency maintenance with Claude Code or Cursor, real validation, pull requests, schedules, and handoffs.
 ---
 
-The [first agent](/first-agent) proves the pipeline with a shell script. This page shows a **real AI coding task**: review outdated dependencies, apply safe upgrades, run your test suite, and open a pull request — on a weekly schedule.
+The [first agent](/first-agent) proves the pipeline with a shell script. This page shows a **real AI coding agent**: review outdated dependencies, apply safe upgrades, run your test suite, and open a pull request — on a weekly schedule.
 
-You need the **Claude Code** or **Cursor Agent** CLI installed and authenticated on the gojo host (`gojo agent detect`).
+You need the **Claude Code** or **Cursor Agent** CLI installed and authenticated on the gojo host (`gojo adapter detect`).
 
 ## What this agent does
 
 1. Starts from an isolated worktree and branch.
 2. Receives a detailed prompt (repo context, safety rules, handoff requirements).
-3. Uses the coding agent to inspect and upgrade dependencies.
-4. gojo runs **your** lint/test/build validation — not the agent’s self-report.
+3. Uses the coding-agent adapter to inspect and upgrade dependencies.
+4. gojo runs **your** lint/test/build validation — not the adapter's self-report.
 5. Opens a **pull request** (or waits for approval) instead of merging to `main`.
-6. Writes a structured handoff so next week’s run (or a human) knows what was deferred.
+6. Writes a structured handoff so next week's run (or a human) knows what was deferred.
 
 ## Manifest sketch
 
@@ -40,11 +40,11 @@ instructions:
     - AGENTS.md
     - docs/architecture.md
   scheduledRunNotice: |
-    You are executing an unattended scheduled task.
+    You are executing an unattended scheduled agent.
     A future agent may inspect and continue this work.
     Produce a complete structured handoff report at .gojo/handoff.json.
 
-agents:
+profiles:
   maintenance:
     adapter: claude-code   # or: cursor
     model: default
@@ -70,11 +70,11 @@ validationProfiles:
         command: pnpm build
         timeout: 20m
 
-tasks:
+agents:
   dependency-maintenance:
     description: Review and safely update outdated dependencies.
-    agent: maintenance
-    promptFile: .gojo/tasks/dependency-maintenance.md
+    profile: maintenance
+    promptFile: .gojo/agents/dependency-maintenance.md
     validationProfile: standard
     concurrency:
       projectLimit: 1
@@ -90,7 +90,7 @@ tasks:
 
 schedules:
   dependency-maintenance:
-    task: dependency-maintenance
+    agent: dependency-maintenance
     cron: "0 3 * * 1"
     timezone: America/Detroit
 
@@ -107,7 +107,7 @@ Wire `engineering-slack` as a webhook/Slack channel on the instance (see [Notifi
 
 ## Prompt file (the AI brief)
 
-Create `.gojo/tasks/dependency-maintenance.md`:
+Create `.gojo/agents/dependency-maintenance.md`:
 
 ```markdown
 # Dependency maintenance
@@ -126,7 +126,7 @@ You are maintaining dependencies for this repository in an unattended gojo run.
 - Do **not** upgrade packages that require a multi-day migration; record them as deferred.
 - **Limit:** bump at most **8** direct dependencies and at most **2** majors per run.
 - Prefer the smallest change set that keeps the app healthy.
-- Stay inside this worktree. Do not modify other projects or gojo’s own config.
+- Stay inside this worktree. Do not modify other projects or gojo's own config.
 - If more packages need upgrades, stop at the limit once CI is green and list them in `recommendedNextActions`.
 
 ## Process
@@ -158,13 +158,13 @@ manifest/lockfile). Never report totals; unverifiable claims are shown as
 
 Adjust package manager commands in `validationProfiles` to match the repo (`npm`, `yarn`, `cargo test`, `go test`, etc.).
 
-**Start every new task with constrained limits** in Hard rules (tests, files, packages, PRs). Widen later once the schedule is trusted — see [Task prompt best practices](/task-prompts). That guide also covers **handoff → PR description**.
+**Start every new agent with constrained limits** in Hard rules (tests, files, packages, PRs). Widen later once the schedule is trusted — see [Agent prompt best practices](/agent-prompts). That guide also covers **handoff → PR description**.
 
-## Why this is “advanced”
+## Why this is "advanced"
 
 | Piece | vs first agent |
 | --- | --- |
-| Adapter | Claude Code / Cursor, not shell |
+| Profile | Claude Code / Cursor, not shell |
 | Prompt | Multi-step safety brief + handoff contract |
 | Validation | Full install → lint → test → build |
 | Integration | `pull-request` on a shared branch |
@@ -178,21 +178,21 @@ Adjust package manager commands in `validationProfiles` to match the repo (`npm`
 
 1. Commit `gojo.yaml` and the prompt file.
 2. **Sync** the project in gojo.
-3. Confirm the agent shows installed under **Agents**.
-4. Trigger once manually: `gojo task run <task-id>` (or Run in the UI).
-5. Inspect the run: agent output, validation steps, PR link, handoff JSON.
+3. Confirm the adapter shows installed under **Adapters**.
+4. Trigger once manually: `gojo agent run <agent-id>` (or Run in the UI).
+5. Inspect the run: adapter output, validation steps, PR link, handoff JSON.
 6. Leave the schedule enabled once a manual run looks right.
 
 ## Failure modes to expect
 
-- **Validation failed** — agent upgraded something that breaks tests; read the validation log, tighten the prompt, or pin the package.
+- **Validation failed** — adapter upgraded something that breaks tests; read the validation log, tighten the prompt, or pin the package.
 - **Conflict** — `main` moved during the run; merge queue refuses unsafe auto-integration; retry or open a conflicted PR per policy.
 - **Schedule disabled** — three consecutive failures; fix root cause, then re-enable explicitly.
-- **Agent unavailable** — CLI missing/unauthenticated; `gojo agent detect` / `gojo server doctor`.
+- **Adapter unavailable** — CLI missing/unauthenticated; `gojo adapter detect` / `gojo server doctor`.
 
 ## Next
 
-- [Task prompt best practices](/task-prompts) — constrained limits, hard rules, handoffs
-- [Advanced usage](/advanced-usage) — multi-agent roles, approval gates, secrets, budgets
+- [Agent prompt best practices](/agent-prompts) — constrained limits, hard rules, handoffs
+- [Advanced usage](/advanced-usage) — multi-profile roles, approval gates, secrets, budgets
 - [Settings](/settings) — every knob used above
 - [Concepts](/concepts) — why the platform owns merge and success

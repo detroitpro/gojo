@@ -3,7 +3,7 @@ import type { NotificationChannel } from "@/notifications/dispatcher";
 import { resolveRunHandoffSummary } from "@/runs/inspect";
 import { recordRunOutcome } from "@/storage/schedule-outcomes";
 import { getInstanceSetting } from "@/storage/instance-settings";
-import type { Task } from "@/storage/types";
+import type { Agent } from "@/storage/types";
 import { isTerminal, RunState } from "@shared/run-states";
 import {
   safeParseNotificationsConfig,
@@ -76,18 +76,18 @@ function hasRoutes(config: NotificationsConfig | undefined): boolean {
   );
 }
 
-/** Task-level routing replaces project-level routing so one task can notify alone. */
+/** Agent-level routing replaces project-level routing so one agent can notify alone. */
 function resolveRouting(
-  task: Task | null,
+  agent: Agent | null,
   projectRouting: NotificationsConfig | undefined,
 ): NotificationsConfig | undefined {
-  if (!task?.notificationsJson) {
+  if (!agent?.notificationsJson) {
     return projectRouting;
   }
 
   let raw: unknown;
   try {
-    raw = JSON.parse(task.notificationsJson);
+    raw = JSON.parse(agent.notificationsJson);
   } catch {
     return projectRouting;
   }
@@ -133,9 +133,9 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
       }
 
       const parsed = safeParseProjectManifest(manifestRaw);
-      const task = ctx.repos.tasks.findById(run.taskId);
+      const agent = ctx.repos.agents.findById(run.agentId);
       const notifications = resolveRouting(
-        task,
+        agent,
         parsed.success ? parsed.data.notifications : undefined,
       );
       if (!notifications) {
@@ -146,7 +146,7 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
       const handoff = resolveRunHandoffSummary(ctx, run.id);
       const basePayload = {
         project: project.name,
-        task: task?.name ?? run.taskId,
+        agent: agent?.name ?? run.agentId,
         runId: run.id,
         state: run.state,
         error: run.errorMessage,

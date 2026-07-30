@@ -1,6 +1,7 @@
 import type {
-  AgentInfo,
-  AgentTestResult,
+  AdapterInfo,
+  AdapterTestResult,
+  Agent,
   ApiTokenInfo,
   Attempt,
   BackupInfo,
@@ -31,7 +32,6 @@ import type {
   Schedule,
   SchedulesUpcomingResult,
   SchedulingPolicy,
-  Task,
   User,
   WorkItem,
   WorkRecheckResult,
@@ -486,39 +486,39 @@ export async function getProjectDoctor(id: string): Promise<ProjectDoctorResult>
   return data;
 }
 
-export async function listTasks(query: ListQuery = {}): Promise<PaginatedResult<Task>> {
+export async function listAgents(query: ListQuery = {}): Promise<PaginatedResult<Agent>> {
   const { data } = await request<{
-    tasks: Task[];
+    agents: Agent[];
     total: number;
     limit: number;
     offset: number;
-  }>(`/tasks${buildListQuery(query)}`);
+  }>(`/agents${buildListQuery(query)}`);
   return {
-    items: data.tasks,
+    items: data.agents,
     total: data.total,
     limit: data.limit,
     offset: data.offset,
   };
 }
 
-export async function getTask(id: string): Promise<Task> {
-  const { data } = await request<{ task: Task }>(`/tasks/${id}`);
-  return data.task;
+export async function getAgent(id: string): Promise<Agent> {
+  const { data } = await request<{ agent: Agent }>(`/agents/${id}`);
+  return data.agent;
 }
 
-export async function runTask(id: string): Promise<Run> {
-  const { data } = await request<{ run: Run }>(`/tasks/${id}/run`, { method: "POST" });
+export async function runAgent(id: string): Promise<Run> {
+  const { data } = await request<{ run: Run }>(`/agents/${id}/run`, { method: "POST" });
   return data.run;
 }
 
-export async function enableTask(id: string): Promise<Task> {
-  const { data } = await request<{ task: Task }>(`/tasks/${id}/enable`, { method: "POST" });
-  return data.task;
+export async function enableAgent(id: string): Promise<Agent> {
+  const { data } = await request<{ agent: Agent }>(`/agents/${id}/enable`, { method: "POST" });
+  return data.agent;
 }
 
-export async function disableTask(id: string): Promise<Task> {
-  const { data } = await request<{ task: Task }>(`/tasks/${id}/disable`, { method: "POST" });
-  return data.task;
+export async function disableAgent(id: string): Promise<Agent> {
+  const { data } = await request<{ agent: Agent }>(`/agents/${id}/disable`, { method: "POST" });
+  return data.agent;
 }
 
 export async function listRuns(query: ListQuery = {}): Promise<PaginatedResult<Run>> {
@@ -672,14 +672,14 @@ export async function disableSchedule(id: string): Promise<Schedule> {
   return data.schedule;
 }
 
-export async function listAgents(): Promise<AgentInfo[]> {
-  const { data } = await request<{ agents: AgentInfo[] }>("/agents");
-  return data.agents;
+export async function listAdapters(): Promise<AdapterInfo[]> {
+  const { data } = await request<{ adapters: AdapterInfo[] }>("/adapters");
+  return data.adapters;
 }
 
-export async function testAgent(name: string): Promise<AgentTestResult> {
-  const { data } = await request<{ result: AgentTestResult }>(
-    `/agents/${encodeURIComponent(name)}/test`,
+export async function testAdapter(name: string): Promise<AdapterTestResult> {
+  const { data } = await request<{ result: AdapterTestResult }>(
+    `/adapters/${encodeURIComponent(name)}/test`,
     { method: "POST" },
   );
   return data.result;

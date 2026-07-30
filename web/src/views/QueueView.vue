@@ -106,7 +106,7 @@ useLiveRefresh({
         <table class="data">
           <thead>
             <tr>
-              <th>Task</th>
+              <th>Agent</th>
               <th>Project</th>
               <th>State</th>
               <th>Admitted</th>
@@ -116,7 +116,7 @@ useLiveRefresh({
             <tr v-for="item in running" :key="item.runId">
               <td>
                 <RouterLink :to="{ name: 'run-detail', params: { id: item.runId } }">
-                  {{ item.taskName || "—" }}
+                  {{ item.agentName || "—" }}
                 </RouterLink>
               </td>
               <td>{{ item.projectName || "—" }}</td>
@@ -148,8 +148,8 @@ useLiveRefresh({
                   @sort="setSort"
                 />
                 <SortableTh
-                  column="taskName"
-                  label="Task"
+                  column="agentName"
+                  label="Agent"
                   :sort="sort"
                   :order="order"
                   @sort="setSort"
@@ -189,7 +189,7 @@ useLiveRefresh({
                 <td class="mono">{{ item.position }}</td>
                 <td>
                   <RouterLink :to="{ name: 'run-detail', params: { id: item.runId } }">
-                    {{ item.taskName || "—" }}
+                    {{ item.agentName || "—" }}
                   </RouterLink>
                   <div class="mono muted text-sm">{{ item.trigger }}</div>
                 </td>

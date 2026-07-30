@@ -26,16 +26,16 @@ export function workKindLabel(item: Pick<WorkItem, "kind">): string {
 }
 
 export function workPrimaryLabel(
-  item: Pick<WorkItem, "kind" | "title" | "taskName">,
+  item: Pick<WorkItem, "kind" | "title" | "agentName">,
 ): string {
   if (item.kind === "run") {
-    return item.taskName?.trim() || item.title;
+    return item.agentName?.trim() || item.title;
   }
   return item.title;
 }
 
 export function workSecondaryLabel(
-  item: Pick<WorkItem, "kind" | "title" | "summary" | "taskName">,
+  item: Pick<WorkItem, "kind" | "title" | "summary" | "agentName">,
 ): string | null {
   const summary = item.summary?.trim();
   if (!summary) return null;
@@ -44,22 +44,22 @@ export function workSecondaryLabel(
   return summary;
 }
 
-export function workTaskAgentLabel(
-  item: Pick<WorkItem, "kind" | "taskName" | "agentLabel" | "actorName" | "provenance">,
+export function workAgentProfileLabel(
+  item: Pick<WorkItem, "kind" | "agentName" | "agentLabel" | "actorName" | "provenance">,
 ): string {
-  const taskName = item.taskName?.trim() || null;
-  const agent =
+  const agentName = item.agentName?.trim() || null;
+  const profile =
     item.agentLabel?.trim() ||
     item.actorName?.trim() ||
     item.provenance;
 
   if (item.kind === "run") {
-    if (taskName && agent) return `${taskName} · ${agent}`;
-    return taskName ?? agent;
+    if (agentName && profile) return `${agentName} · ${profile}`;
+    return agentName ?? profile;
   }
 
-  if (taskName) return `via ${taskName}`;
-  return agent;
+  if (agentName) return `via ${agentName}`;
+  return profile;
 }
 
 export function workResultLabel(

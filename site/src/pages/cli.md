@@ -12,6 +12,11 @@ gojo --home <path> --output text|json|yaml <command>
 
 Install the CLI onto your `PATH` from a source checkout with `bun run install:cli` (copies to `~/.local/bin/gojo`; use `-- --system` for `/usr/local/bin`). Until then, from the checkout you can prefix with `bun run` (for example `bun run gojo server start`).
 
+Two related concepts you'll see across commands:
+
+- **Adapter** — the installed CLI (shell / cursor / claude-code). Managed by `gojo adapter …`.
+- **Agent** — a work unit defined in `gojo.yaml`'s `agents:` map. Managed by `gojo agent …`.
+
 ## Setup & server
 
 | Command | Purpose |
@@ -21,7 +26,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo server start --daemon` | Same, but return immediately (process keeps running) |
 | `gojo server status` | PID / health |
 | `gojo server stop` | Stop via PID file |
-| `gojo server doctor` | Git, disk, DB, agent detection, daemon PATH tools |
+| `gojo server doctor` | Git, disk, DB, adapter detection, daemon PATH tools |
 
 ## Service
 
@@ -44,17 +49,17 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo project recheck-work <id> <workItemId>` | Verify one work item against its provider |
 | `gojo project resolve-work <id> <workItemId> [--by …] [--note …]` | Operator-resolve attention without inventing delivery |
 
-## Agents
+## Adapters (detection)
 
 | Command | Purpose |
 | --- | --- |
-| `gojo agent detect\|list\|inspect\|test` | Discover and probe adapters |
+| `gojo adapter detect\|list\|inspect\|test` | Discover and probe installed agent CLIs |
 
-## Tasks & schedules
+## Agents & schedules
 
 | Command | Purpose |
 | --- | --- |
-| `gojo task list --project <id>\|inspect\|run\|enable\|disable\|cancel\|retry` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
+| `gojo agent list --project <id>\|inspect\|run\|enable\|disable\|cancel\|retry` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs
@@ -65,7 +70,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve\|reject [--reason]` | Approve or reject runs in `await-approval` integration |
 
-Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
+Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 
 ## Work status
 

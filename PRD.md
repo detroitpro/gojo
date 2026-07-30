@@ -265,17 +265,24 @@ A project contains:
 
 * Repository configuration
 * Default target branch
-* Agent profiles
-* Task definitions
+* Profiles (adapter + model + permissions bindings)
+* Agent (work unit) definitions
 * Validation profiles
 * Integration policies
 * Notification routing
 * Resource limits
 * Project-level instructions
 
-### 7.3 Agent profile
+> **Vocabulary note.** Since the Tasks→Agents rebrand, the top-level YAML map for
+> reusable adapter configuration is `profiles:` and the top-level map for
+> work-unit definitions is `agents:`. The word "agent" in this document means
+> the *work-unit* definition; the installed CLI implementation (Cursor, Claude,
+> shell) is an **adapter** and the top-level UI/CLI tab for detection is
+> **Adapters** (`gojo adapter …`).
 
-A reusable execution configuration for a particular agent implementation.
+### 7.3 Profile (adapter binding)
+
+A reusable execution configuration that binds an adapter implementation to a model, timeout, and permissions. Referenced from an agent definition (§7.4) by name.
 
 Example attributes:
 
@@ -293,21 +300,21 @@ Example attributes:
 * Allowed network access
 * Output-format parser
 
-### 7.4 Task definition
+### 7.4 Agent (work-unit) definition
 
-Describes what work must be performed.
+Describes what work must be performed. Lives under `agents:` in the manifest; picks a `profile` (§7.3) and points at a prompt file.
 
-A task is separate from its schedule. This allows the same task to be:
+An agent is separate from its schedule. This allows the same agent to be:
 
 * Run manually
 * Scheduled multiple ways
 * Invoked through an API
-* Triggered after another task
+* Triggered after another agent
 * Retried without altering its definition
 
 ### 7.5 Schedule
 
-Defines when a task should run.
+Defines when an agent should run.
 
 A schedule contains:
 
@@ -323,13 +330,13 @@ A schedule contains:
 
 ### 7.6 Run
 
-A logical execution of a task.
+A logical execution of an agent (work unit).
 
 A run may contain multiple attempts.
 
 ### 7.7 Attempt
 
-A single invocation of an agent for a run.
+A single invocation of an adapter for a run.
 
 Retries create additional attempts under the same run rather than overwriting history.
 
@@ -460,11 +467,11 @@ instructions:
     - AGENTS.md
     - docs/architecture.md
   scheduledRunNotice: |
-    You are executing an unattended scheduled task.
-    A future agent may inspect and continue this work.
+    You are executing an unattended scheduled agent.
+    A future run may inspect and continue this work.
     Produce a complete structured handoff report.
 
-agents:
+profiles:
   maintenance:
     adapter: claude-code
     model: default
@@ -498,11 +505,11 @@ validationProfiles:
         command: pnpm build
         timeout: 20m
 
-tasks:
+agents:
   dependency-maintenance:
     description: Review and safely update outdated dependencies.
-    agent: maintenance
-    promptFile: .gojo/tasks/dependency-maintenance.md
+    profile: maintenance
+    promptFile: .gojo/agents/dependency-maintenance.md
     validationProfile: standard
 
     concurrency:
@@ -521,7 +528,7 @@ tasks:
 
 schedules:
   dependency-maintenance:
-    task: dependency-maintenance
+    agent: dependency-maintenance
     cron: "0 3 * * 1"
     timezone: America/Detroit
 
@@ -534,6 +541,11 @@ notifications:
   onDisabled:
     - operations-teams
 ```
+
+> **Vocabulary reminder.** `profiles:` (formerly `agents:` in the pre-rebrand
+> manifest) binds an adapter to a model/timeout/permissions. `agents:`
+> (formerly `tasks:`) is the map of work-unit definitions. A schedule's `agent`
+> field (formerly `task`) references an entry in `agents:`.
 
 The platform database remains authoritative for runtime state. The repository manifest defines desired project behavior and may be synchronized into the database.
 
@@ -1338,23 +1350,23 @@ gojo project doctor <project>
 gojo project remove <project>
 ```
 
-### 17.4 Agent commands
+### 17.4 Adapter commands (installed CLI detection)
 
 ```text
-gojo agent detect
-gojo agent list
-gojo agent inspect <agent>
-gojo agent test <agent>
-gojo agent authenticate <agent>
+gojo adapter detect
+gojo adapter list
+gojo adapter inspect <adapter>
+gojo adapter test <adapter>
+gojo adapter authenticate <adapter>
 ```
 
-### 17.5 Task and schedule commands
+### 17.5 Agent (work unit) and schedule commands
 
 ```text
-gojo task list
-gojo task run <project>/<task>
-gojo task cancel <run-id>
-gojo task retry <run-id>
+gojo agent list
+gojo agent run <project>/<agent>
+gojo agent cancel <run-id>
+gojo agent retry <run-id>
 
 gojo schedule list
 gojo schedule enable <schedule>

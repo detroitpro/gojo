@@ -12,7 +12,8 @@ import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
 import { ensureProjectRepositorySource } from "@/sources";
-import { getTaskDetail, listIntegrationsPage } from "@/storage/paged-lists";
+import { getAgentDetail, listIntegrationsPage } from "@/storage/paged-lists";
+import { migrateProjectVocab, type MigrateVocabResult } from "@/app/migrate-vocab";
 import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
 import {
   installService,
@@ -208,7 +209,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
             "dashboard",
             "overview",
             "projects",
-            "tasks",
+            "agents",
             "schedules",
             "work",
             "sources",
@@ -326,19 +327,57 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         printOutput(format, { removed });
         break;
       }
+      case "migrate-vocab": {
+        const pathArg =
+          getFlagString(parsed, "path") ??
+          parsed.positional[0] ??
+          null;
+        let repoPath: string;
+        let projectId: string | null = null;
+        if (pathArg) {
+          repoPath = pathArg;
+        } else {
+          const id = parsed.positional[0];
+          if (!id) {
+            die(
+              "usage: gojo project migrate-vocab (--path <repoPath> | <projectId>)",
+              format,
+            );
+          }
+          const project = ctx.repos.projects.findById(id);
+          if (!project) {
+            die("project not found", format);
+          }
+          repoPath = project.repoPath;
+          projectId = project.id;
+        }
+        const result: MigrateVocabResult = migrateProjectVocab(repoPath);
+        if (projectId && (result.manifestChanged || result.tasksDirMoved)) {
+          ctx.platformEvents.append({
+            projectId,
+            type: "project.vocab_migrated",
+            entityKind: "project",
+            entityId: projectId,
+            topics: ["projects", "agents"],
+            data: result,
+          });
+        }
+        printOutput(format, { migration: result });
+        break;
+      }
       default:
         die(`unknown project command: ${sub ?? ""}`, format);
     }
   });
 }
 
-async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
+async function runAdapterCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
   const sub = parsed.command[1];
   const adapters = listAdapters();
 
   switch (sub) {
     case "list": {
-      printOutput(format, { agents: adapters.map((adapter) => adapter.name) });
+      printOutput(format, { adapters: adapters.map((adapter) => adapter.name) });
       break;
     }
     case "detect": {
@@ -348,14 +387,14 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
           ...(await adapter.detect()),
         })),
       );
-      printOutput(format, { agents: detected });
+      printOutput(format, { adapters: detected });
       break;
     }
     case "inspect": {
       const name = parsed.positional[0];
       const adapter = adapters.find((item) => item.name === name);
       if (!adapter) {
-        die("agent not found", format);
+        die("adapter not found", format);
       }
       printOutput(format, { name: adapter.name, ...(await adapter.detect()) });
       break;
@@ -364,7 +403,7 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
       const name = parsed.positional[0] ?? "shell";
       const adapter = adapters.find((item) => item.name === name);
       if (!adapter) {
-        die("agent not found", format);
+        die("adapter not found", format);
       }
       const result = await adapter.execute({
         workspacePath: process.cwd(),
@@ -377,46 +416,46 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
       break;
     }
     default:
-      die(`unknown agent command: ${sub ?? ""}`, format);
+      die(`unknown adapter command: ${sub ?? ""}`, format);
   }
 }
 
-async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
+async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
   const sub = parsed.command[1];
   await withContext(getHome(parsed), async (ctx) => {
     switch (sub) {
       case "list": {
         const projectId = getFlagString(parsed, "project") ?? parsed.positional[0];
         if (!projectId) {
-          die("usage: gojo task list --project <id>", format);
+          die("usage: gojo agent list --project <id>", format);
         }
-        printOutput(format, { tasks: ctx.repos.tasks.listByProject(projectId) });
+        printOutput(format, { agents: ctx.repos.agents.listByProject(projectId) });
         break;
       }
       case "inspect": {
-        const taskId = parsed.positional[0];
-        if (!taskId) {
-          die("usage: gojo task inspect <taskId>", format);
+        const agentId = parsed.positional[0];
+        if (!agentId) {
+          die("usage: gojo agent inspect <agentId>", format);
         }
-        const task = getTaskDetail(ctx.db, taskId);
-        if (!task) {
-          die("task not found", format);
+        const agent = getAgentDetail(ctx.db, agentId);
+        if (!agent) {
+          die("agent not found", format);
         }
-        printOutput(format, { task });
+        printOutput(format, { agent });
         break;
       }
       case "run": {
-        const taskId = parsed.positional[0];
-        if (!taskId) {
-          die("usage: gojo task run <taskId>", format);
+        const agentId = parsed.positional[0];
+        if (!agentId) {
+          die("usage: gojo agent run <agentId>", format);
         }
-        const task = ctx.repos.tasks.findById(taskId);
-        if (!task) {
-          die("task not found", format);
+        const agent = ctx.repos.agents.findById(agentId);
+        if (!agent) {
+          die("agent not found", format);
         }
         const run = await ctx.coordinator.enqueueRun({
-          projectId: task.projectId,
-          taskId: task.id,
+          projectId: agent.projectId,
+          agentId: agent.id,
           trigger: "manual",
         });
         if (format === "text") {
@@ -428,31 +467,31 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         break;
       }
       case "enable": {
-        const taskId = parsed.positional[0];
-        if (!taskId) {
-          die("usage: gojo task enable <taskId>", format);
+        const agentId = parsed.positional[0];
+        if (!agentId) {
+          die("usage: gojo agent enable <agentId>", format);
         }
-        if (!ctx.repos.tasks.findById(taskId)) {
-          die("task not found", format);
+        if (!ctx.repos.agents.findById(agentId)) {
+          die("agent not found", format);
         }
-        printOutput(format, { task: ctx.repos.tasks.update(taskId, { enabled: true }) });
+        printOutput(format, { agent: ctx.repos.agents.update(agentId, { enabled: true }) });
         break;
       }
       case "disable": {
-        const taskId = parsed.positional[0];
-        if (!taskId) {
-          die("usage: gojo task disable <taskId>", format);
+        const agentId = parsed.positional[0];
+        if (!agentId) {
+          die("usage: gojo agent disable <agentId>", format);
         }
-        if (!ctx.repos.tasks.findById(taskId)) {
-          die("task not found", format);
+        if (!ctx.repos.agents.findById(agentId)) {
+          die("agent not found", format);
         }
-        printOutput(format, { task: ctx.repos.tasks.update(taskId, { enabled: false }) });
+        printOutput(format, { agent: ctx.repos.agents.update(agentId, { enabled: false }) });
         break;
       }
       case "cancel": {
         const runId = parsed.positional[0];
         if (!runId) {
-          die("usage: gojo task cancel <runId>", format);
+          die("usage: gojo agent cancel <runId>", format);
         }
         await ctx.coordinator.cancelRun(runId);
         printOutput(format, { run: ctx.repos.runs.findById(runId) });
@@ -461,7 +500,7 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
       case "retry": {
         const runId = parsed.positional[0];
         if (!runId) {
-          die("usage: gojo task retry <runId>", format);
+          die("usage: gojo agent retry <runId>", format);
         }
         const existing = ctx.repos.runs.findById(runId);
         if (!existing) {
@@ -469,7 +508,7 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         }
         const run = await ctx.coordinator.enqueueRun({
           projectId: existing.projectId,
-          taskId: existing.taskId,
+          agentId: existing.agentId,
           trigger: "manual",
         });
         if (format === "text") {
@@ -481,7 +520,7 @@ async function runTaskCommand(parsed: ParsedArgv, format: ReturnType<typeof getO
         break;
       }
       default:
-        die(`unknown task command: ${sub ?? ""}`, format);
+        die(`unknown agent command: ${sub ?? ""}`, format);
     }
   });
 }
@@ -705,9 +744,9 @@ Commands:
   setup                         Create admin user
   server start|status|stop|doctor
   service install|uninstall|start|stop|restart|status|logs
-  project add|list|inspect|sync|doctor|work|status|sources|refresh-source|remove
-  agent detect|list|inspect|test
-  task list|inspect|run|enable|disable|cancel|retry
+  project add|list|inspect|sync|doctor|work|status|sources|refresh-source|migrate-vocab|remove
+  adapter detect|list|inspect|test
+  agent list|inspect|run|enable|disable|cancel|retry
   schedule list|enable|disable|pause|next
   run list|inspect|logs|diff|approve|reject|artifacts
   integration list --open|--merged|--committed [--project <id>]
@@ -805,13 +844,13 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
-    if (group === "agent") {
-      await runAgentCommand(parsed, format);
+    if (group === "adapter") {
+      await runAdapterCommand(parsed, format);
       return;
     }
 
-    if (group === "task") {
-      await runTaskCommand(parsed, format);
+    if (group === "agent") {
+      await runAgentCommand(parsed, format);
       return;
     }
 

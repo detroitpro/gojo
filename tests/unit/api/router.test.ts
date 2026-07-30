@@ -132,7 +132,7 @@ describe("api/router", () => {
       name: "visibility",
       repoPath: tempDir ?? "/tmp/visibility",
     });
-    const task = ctx!.repos.tasks.create({
+    const task = ctx!.repos.agents.create({
       projectId: project.id,
       name: "maintain-work",
       description: "Maintain the work ledger",
@@ -140,7 +140,7 @@ describe("api/router", () => {
     });
     const run = await ctx!.coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: "manual",
     });
     const connection = ctx!.work.connections.create({
@@ -393,16 +393,16 @@ describe("api/router", () => {
     expect(projectDoctorBody.data.baseCheckout).toBeTruthy();
     expect(Array.isArray(projectDoctorBody.data.validationTools)).toBe(true);
 
-    const agentTest = await fetch(`${baseUrl}/api/v1/agents/shell/test`, {
+    const adapterTest = await fetch(`${baseUrl}/api/v1/adapters/shell/test`, {
       method: "POST",
       headers: auth,
     });
-    expect(agentTest.status).toBe(200);
-    const agentBody = (await agentTest.json()) as {
+    expect(adapterTest.status).toBe(200);
+    const adapterBody = (await adapterTest.json()) as {
       data: { result: { exitCode: number; stdout: string } };
     };
-    expect(agentBody.data.result.exitCode).toBe(0);
-    expect(agentBody.data.result.stdout).toContain("gojo-agent-test");
+    expect(adapterBody.data.result.exitCode).toBe(0);
+    expect(adapterBody.data.result.stdout).toContain("gojo-agent-test");
 
     const backupCreate = await fetch(`${baseUrl}/api/v1/backups`, {
       method: "POST",
@@ -533,7 +533,7 @@ describe("api/router", () => {
     }
   });
 
-  test("lists all tasks without projectId and scopes when provided", async () => {
+  test("lists all agents without projectId and scopes when provided", async () => {
     const { baseUrl, token } = await boot();
     const auth = {
       Authorization: `Bearer ${token}`,
@@ -557,10 +557,10 @@ describe("api/router", () => {
     const { data: dataB } = (await projectB.json()) as { data: { project: { id: string } } };
 
     for (const [projectId, name] of [
-      [dataA.project.id, "task-a"],
-      [dataB.project.id, "task-b"],
+      [dataA.project.id, "agent-a"],
+      [dataB.project.id, "agent-b"],
     ] as const) {
-      const created = await fetch(`${baseUrl}/api/v1/tasks`, {
+      const created = await fetch(`${baseUrl}/api/v1/agents`, {
         method: "POST",
         headers: auth,
         body: JSON.stringify({
@@ -572,40 +572,40 @@ describe("api/router", () => {
       expect(created.status).toBe(201);
     }
 
-    const allResponse = await fetch(`${baseUrl}/api/v1/tasks`, { headers: auth });
+    const allResponse = await fetch(`${baseUrl}/api/v1/agents`, { headers: auth });
     expect(allResponse.status).toBe(200);
     const allBody = (await allResponse.json()) as {
       data: {
-        tasks: Array<{ name: string; projectId: string; projectName: string | null }>;
+        agents: Array<{ name: string; projectId: string; projectName: string | null }>;
         total: number;
         limit: number;
         offset: number;
       };
     };
-    expect(allBody.data.tasks.map((t) => t.name).sort()).toEqual(["task-a", "task-b"]);
-    expect(allBody.data.tasks.every((t) => t.projectName)).toBe(true);
+    expect(allBody.data.agents.map((t) => t.name).sort()).toEqual(["agent-a", "agent-b"]);
+    expect(allBody.data.agents.every((t) => t.projectName)).toBe(true);
     expect(allBody.data.total).toBe(2);
     expect(allBody.data.limit).toBe(25);
     expect(allBody.data.offset).toBe(0);
 
     const scoped = await fetch(
-      `${baseUrl}/api/v1/tasks?projectId=${encodeURIComponent(dataA.project.id)}`,
+      `${baseUrl}/api/v1/agents?projectId=${encodeURIComponent(dataA.project.id)}`,
       { headers: auth },
     );
     expect(scoped.status).toBe(200);
     const scopedBody = (await scoped.json()) as {
-      data: { tasks: Array<{ name: string; projectId: string }>; total: number };
+      data: { agents: Array<{ name: string; projectId: string }>; total: number };
     };
-    expect(scopedBody.data.tasks).toHaveLength(1);
+    expect(scopedBody.data.agents).toHaveLength(1);
     expect(scopedBody.data.total).toBe(1);
-    expect(scopedBody.data.tasks[0]?.name).toBe("task-a");
-    expect(scopedBody.data.tasks[0]?.projectId).toBe(dataA.project.id);
+    expect(scopedBody.data.agents[0]?.name).toBe("agent-a");
+    expect(scopedBody.data.agents[0]?.projectId).toBe(dataA.project.id);
 
-    const paged = await fetch(`${baseUrl}/api/v1/tasks?limit=1&offset=1`, { headers: auth });
+    const paged = await fetch(`${baseUrl}/api/v1/agents?limit=1&offset=1`, { headers: auth });
     expect(paged.status).toBe(200);
     const pagedBody = (await paged.json()) as {
       data: {
-        tasks: Array<{
+        agents: Array<{
           name: string;
           lastRunId: string | null;
           lastRunState: string | null;
@@ -616,16 +616,16 @@ describe("api/router", () => {
         offset: number;
       };
     };
-    expect(pagedBody.data.tasks).toHaveLength(1);
+    expect(pagedBody.data.agents).toHaveLength(1);
     expect(pagedBody.data.total).toBe(2);
     expect(pagedBody.data.limit).toBe(1);
     expect(pagedBody.data.offset).toBe(1);
-    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunId");
-    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunState");
-    expect(pagedBody.data.tasks[0]).toHaveProperty("lastRunCreatedAt");
+    expect(pagedBody.data.agents[0]).toHaveProperty("lastRunId");
+    expect(pagedBody.data.agents[0]).toHaveProperty("lastRunState");
+    expect(pagedBody.data.agents[0]).toHaveProperty("lastRunCreatedAt");
   });
 
-  test("GET task by id returns enriched task with source and 404", async () => {
+  test("GET agent by id returns enriched agent with source and 404", async () => {
     const { baseUrl, token } = await boot();
     const auth = {
       Authorization: `Bearer ${token}`,
@@ -645,12 +645,12 @@ describe("api/router", () => {
         version: 1,
         project: { name: "detail-demo" },
         repository: { defaultBranch: "main" },
-        agents: { shell: { adapter: "shell", command: "bash" } },
+        profiles: { shell: { adapter: "shell", command: "bash" } },
         validationProfiles: { none: { steps: [] } },
-        tasks: {
-          "detail-task": {
-            description: "A task",
-            agent: "shell",
+        agents: {
+          "detail-agent": {
+            description: "An agent",
+            profile: "shell",
             promptFile: ".gojo/prompts/detail.md",
             validationProfile: "none",
           },
@@ -658,25 +658,25 @@ describe("api/router", () => {
       }),
     });
 
-    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+    const agentRes = await fetch(`${baseUrl}/api/v1/agents`, {
       method: "POST",
       headers: auth,
       body: JSON.stringify({
         projectId: projectBody.data.project.id,
-        name: "detail-task",
+        name: "detail-agent",
         prompt: "do work",
-        description: "A task",
+        description: "An agent",
       }),
     });
-    expect(taskRes.status).toBe(201);
-    const taskBody = (await taskRes.json()) as { data: { task: { id: string } } };
-    const taskId = taskBody.data.task.id;
+    expect(agentRes.status).toBe(201);
+    const agentBody = (await agentRes.json()) as { data: { agent: { id: string } } };
+    const agentId = agentBody.data.agent.id;
 
-    const got = await fetch(`${baseUrl}/api/v1/tasks/${taskId}`, { headers: auth });
+    const got = await fetch(`${baseUrl}/api/v1/agents/${agentId}`, { headers: auth });
     expect(got.status).toBe(200);
     const body = (await got.json()) as {
       data: {
-        task: {
+        agent: {
           id: string;
           name: string;
           projectName: string | null;
@@ -690,18 +690,18 @@ describe("api/router", () => {
         };
       };
     };
-    expect(body.data.task.id).toBe(taskId);
-    expect(body.data.task.name).toBe("detail-task");
-    expect(body.data.task.projectName).toBe("detail-demo");
-    expect(Array.isArray(body.data.task.recentRuns)).toBe(true);
-    expect(body.data.task.source.promptFile).toBe(".gojo/prompts/detail.md");
-    expect(body.data.task.source.promptAbsolutePath).toContain(".gojo/prompts/detail.md");
+    expect(body.data.agent.id).toBe(agentId);
+    expect(body.data.agent.name).toBe("detail-agent");
+    expect(body.data.agent.projectName).toBe("detail-demo");
+    expect(Array.isArray(body.data.agent.recentRuns)).toBe(true);
+    expect(body.data.agent.source.promptFile).toBe(".gojo/prompts/detail.md");
+    expect(body.data.agent.source.promptAbsolutePath).toContain(".gojo/prompts/detail.md");
 
-    const missing = await fetch(`${baseUrl}/api/v1/tasks/does-not-exist`, { headers: auth });
+    const missing = await fetch(`${baseUrl}/api/v1/agents/does-not-exist`, { headers: auth });
     expect(missing.status).toBe(404);
   });
 
-  test("schedules list filters by taskId", async () => {
+  test("schedules list filters by agentId", async () => {
     const { baseUrl, token } = await boot();
     const auth = {
       Authorization: `Bearer ${token}`,
@@ -715,8 +715,8 @@ describe("api/router", () => {
     });
     const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
 
-    const createTask = async (name: string) => {
-      const res = await fetch(`${baseUrl}/api/v1/tasks`, {
+    const createAgent = async (name: string) => {
+      const res = await fetch(`${baseUrl}/api/v1/agents`, {
         method: "POST",
         headers: auth,
         body: JSON.stringify({
@@ -725,40 +725,40 @@ describe("api/router", () => {
           prompt: "run",
         }),
       });
-      const body = (await res.json()) as { data: { task: { id: string } } };
-      return body.data.task.id;
+      const body = (await res.json()) as { data: { agent: { id: string } } };
+      return body.data.agent.id;
     };
 
-    const taskA = await createTask("task-a");
-    const taskB = await createTask("task-b");
+    const agentA = await createAgent("agent-a");
+    const agentB = await createAgent("agent-b");
     ctx!.repos.schedules.create({
-      taskId: taskA,
+      agentId: agentA,
       name: "for-a",
       cronExpr: "0 * * * *",
       timezone: "UTC",
     });
     ctx!.repos.schedules.create({
-      taskId: taskB,
+      agentId: agentB,
       name: "for-b",
       cronExpr: "0 0 * * *",
       timezone: "UTC",
     });
 
     const list = await fetch(
-      `${baseUrl}/api/v1/schedules?taskId=${encodeURIComponent(taskA)}`,
+      `${baseUrl}/api/v1/schedules?agentId=${encodeURIComponent(agentA)}`,
       { headers: auth },
     );
     expect(list.status).toBe(200);
     const listBody = (await list.json()) as {
-      data: { schedules: Array<{ name: string; taskId: string }>; total: number };
+      data: { schedules: Array<{ name: string; agentId: string }>; total: number };
     };
     expect(listBody.data.total).toBe(1);
     expect(listBody.data.schedules).toHaveLength(1);
     expect(listBody.data.schedules[0]?.name).toBe("for-a");
-    expect(listBody.data.schedules[0]?.taskId).toBe(taskA);
+    expect(listBody.data.schedules[0]?.agentId).toBe(agentA);
   });
 
-  test("task enable and disable toggle enabled flag", async () => {
+  test("agent enable and disable toggle enabled flag", async () => {
     const { baseUrl, token } = await boot();
     const auth = {
       Authorization: `Bearer ${token}`,
@@ -773,7 +773,7 @@ describe("api/router", () => {
     expect(projectRes.status).toBe(201);
     const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
 
-    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+    const agentRes = await fetch(`${baseUrl}/api/v1/agents`, {
       method: "POST",
       headers: auth,
       body: JSON.stringify({
@@ -782,35 +782,35 @@ describe("api/router", () => {
         prompt: "echo ok",
       }),
     });
-    expect(taskRes.status).toBe(201);
-    const taskBody = (await taskRes.json()) as {
-      data: { task: { id: string; enabled: boolean } };
+    expect(agentRes.status).toBe(201);
+    const agentBody = (await agentRes.json()) as {
+      data: { agent: { id: string; enabled: boolean } };
     };
-    expect(taskBody.data.task.enabled).toBe(true);
-    const taskId = taskBody.data.task.id;
+    expect(agentBody.data.agent.enabled).toBe(true);
+    const agentId = agentBody.data.agent.id;
 
-    const disabled = await fetch(`${baseUrl}/api/v1/tasks/${taskId}/disable`, {
+    const disabled = await fetch(`${baseUrl}/api/v1/agents/${agentId}/disable`, {
       method: "POST",
       headers: auth,
     });
     expect(disabled.status).toBe(200);
     const disabledBody = (await disabled.json()) as {
-      data: { task: { id: string; enabled: boolean } };
+      data: { agent: { id: string; enabled: boolean } };
     };
-    expect(disabledBody.data.task.id).toBe(taskId);
-    expect(disabledBody.data.task.enabled).toBe(false);
+    expect(disabledBody.data.agent.id).toBe(agentId);
+    expect(disabledBody.data.agent.enabled).toBe(false);
 
-    const enabled = await fetch(`${baseUrl}/api/v1/tasks/${taskId}/enable`, {
+    const enabled = await fetch(`${baseUrl}/api/v1/agents/${agentId}/enable`, {
       method: "POST",
       headers: auth,
     });
     expect(enabled.status).toBe(200);
     const enabledBody = (await enabled.json()) as {
-      data: { task: { id: string; enabled: boolean } };
+      data: { agent: { id: string; enabled: boolean } };
     };
-    expect(enabledBody.data.task.enabled).toBe(true);
+    expect(enabledBody.data.agent.enabled).toBe(true);
 
-    const missing = await fetch(`${baseUrl}/api/v1/tasks/does-not-exist/disable`, {
+    const missing = await fetch(`${baseUrl}/api/v1/agents/does-not-exist/disable`, {
       method: "POST",
       headers: auth,
     });
@@ -832,7 +832,7 @@ describe("api/router", () => {
     expect(projectRes.status).toBe(201);
     const projectBody = (await projectRes.json()) as { data: { project: { id: string } } };
 
-    const taskRes = await fetch(`${baseUrl}/api/v1/tasks`, {
+    const agentRes = await fetch(`${baseUrl}/api/v1/agents`, {
       method: "POST",
       headers: auth,
       body: JSON.stringify({
@@ -841,11 +841,11 @@ describe("api/router", () => {
         prompt: "run",
       }),
     });
-    expect(taskRes.status).toBe(201);
-    const taskBody = (await taskRes.json()) as { data: { task: { id: string } } };
+    expect(agentRes.status).toBe(201);
+    const agentBody = (await agentRes.json()) as { data: { agent: { id: string } } };
 
     ctx!.repos.schedules.create({
-      taskId: taskBody.data.task.id,
+      agentId: agentBody.data.agent.id,
       name: "hourly",
       cronExpr: "0 * * * *",
       timezone: "UTC",
@@ -883,14 +883,14 @@ describe("api/router", () => {
       name: "impact-demo",
       repoPath: tempDir ?? "/tmp/demo",
     });
-    const task = ctx!.repos.tasks.create({
+    const task = ctx!.repos.agents.create({
       projectId: project.id,
       name: "deps",
       prompt: "run",
     });
     const run = ctx!.repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: "impact-key",
       trigger: "manual",
     });
@@ -971,14 +971,14 @@ describe("api/router", () => {
       name: "no-prs",
       repoPath: `${tempDir ?? "/tmp"}/no-prs`,
     });
-    const task = ctx!.repos.tasks.create({
+    const task = ctx!.repos.agents.create({
       projectId: project.id,
       name: "maintain-quality",
       prompt: "run",
     });
     const run = ctx!.repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: "open-pr-key",
       trigger: "manual",
     });
@@ -1025,7 +1025,7 @@ describe("api/router", () => {
 
     const mergedRun = ctx!.repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: "merged-pr-key",
       trigger: "manual",
     });

@@ -23,10 +23,10 @@ function seedOpenIntegration(
   overrides: { nextCheckAt?: string } = {},
 ): RunIntegration {
   const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
-  const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+  const task = repos.agents.create({ projectId: project.id, name: 't', prompt: 'x' });
   const run = repos.runs.create({
     projectId: project.id,
-    taskId: task.id,
+    agentId: task.id,
     idempotencyKey: `k-${Math.random()}`,
     trigger: 'manual',
   });
@@ -262,10 +262,10 @@ describe('IntegrationStatusReconciler', () => {
   test('default fetch rejects incomplete Forgejo integration metadata', async () => {
     const { db, repos } = openDb();
     const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
-    const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+    const task = repos.agents.create({ projectId: project.id, name: 't', prompt: 'x' });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: 'forgejo-missing-meta',
       trigger: 'manual',
     });
@@ -290,10 +290,10 @@ describe('IntegrationStatusReconciler', () => {
   test('default fetch rejects unknown integration providers', async () => {
     const { db, repos } = openDb();
     const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
-    const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+    const task = repos.agents.create({ projectId: project.id, name: 't', prompt: 'x' });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: 'unknown-provider',
       trigger: 'manual',
     });

@@ -20,7 +20,7 @@ export type ListQuery = {
   offset?: number;
   q?: string;
   projectId?: string;
-  taskId?: string;
+  agentId?: string;
   state?: string;
   status?: string;
   trigger?: string;
@@ -64,8 +64,8 @@ export function buildListQuery(params: ListQuery): string {
   if (params.projectId) {
     sp.set("projectId", params.projectId);
   }
-  if (params.taskId) {
-    sp.set("taskId", params.taskId);
+  if (params.agentId) {
+    sp.set("agentId", params.agentId);
   }
   if (params.state) {
     sp.set("state", params.state);

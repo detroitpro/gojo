@@ -104,7 +104,7 @@ export function formatTelegramText(payload: unknown): string {
   const record = payload as Record<string, unknown>;
   const state = typeof record["state"] === "string" ? record["state"] : "notification";
   const project = typeof record["project"] === "string" ? record["project"] : null;
-  const task = typeof record["task"] === "string" ? record["task"] : null;
+  const agent = typeof record["agent"] === "string" ? record["agent"] : null;
   const runId = typeof record["runId"] === "string" ? record["runId"] : null;
   const error = typeof record["error"] === "string" ? record["error"] : null;
   const summary = typeof record["summary"] === "string" ? record["summary"].trim() : "";
@@ -112,12 +112,12 @@ export function formatTelegramText(payload: unknown): string {
 
   const lines: string[] = [];
   lines.push(test ? `gojo test: ${state}` : `gojo: ${state}`);
-  if (project && task) {
-    lines.push(`${project} / ${task}`);
+  if (project && agent) {
+    lines.push(`${project} / ${agent}`);
   } else if (project) {
     lines.push(project);
-  } else if (task) {
-    lines.push(task);
+  } else if (agent) {
+    lines.push(agent);
   }
   if (runId && runId !== "test") {
     lines.push(`run ${runId}`);

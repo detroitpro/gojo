@@ -136,10 +136,10 @@ function onPicked(path: string) {
 }
 
 function configSummary(project: Project): string {
-  if (!project.hasManifest && project.taskCount === 0) {
+  if (!project.hasManifest && project.agentCount === 0) {
     return "Not synced";
   }
-  return `${project.enabledTaskCount}/${project.taskCount} tasks · ${project.enabledScheduleCount}/${project.scheduleCount} schedules`;
+  return `${project.enabledAgentCount}/${project.agentCount} agents · ${project.enabledScheduleCount}/${project.scheduleCount} schedules`;
 }
 
 function healthFor(project: Project): ProjectHealthSummary {
@@ -241,7 +241,7 @@ async function sync(project: Project) {
     const leaf = result.sync.manifestPath
       ? result.sync.manifestPath.split(/[/\\]/).slice(-1)[0]
       : "no manifest";
-    notice.value = `${project.name}: synced from ${leaf} — ${result.sync.agentProfiles} agents, ${result.sync.tasks} tasks, ${result.sync.schedules} schedules`;
+    notice.value = `${project.name}: synced from ${leaf} — ${result.sync.profiles} profiles, ${result.sync.agents} agents, ${result.sync.schedules} schedules`;
     await load();
     const doctor = await getProjectDoctor(project.id);
     const refreshed = projects.value.find((row) => row.id === project.id) ?? result.project;

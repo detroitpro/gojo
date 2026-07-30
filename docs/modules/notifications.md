@@ -13,34 +13,34 @@ Two layers stay separate:
 | Layer | Where | Contents |
 |-------|-------|----------|
 | Channels (**where**) | `instance_settings.notification_channels` | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token and chat id |
-| Routing (**when**) | Project manifest, per project or per task | Channel names for `onSuccess`, `onFailure`, `onDisabled` |
+| Routing (**when**) | Project manifest, per project or per agent | Channel names for `onSuccess`, `onFailure`, `onDisabled` |
 
 Channels are instance state so secrets never enter a repository. Routing lives with the project so it
 travels with the manifest.
 
 ## Routing precedence
 
-`run.finished` resolves routing task-first:
+`run.finished` resolves routing agent-first:
 
-1. `tasks.<name>.notifications` in the manifest, persisted to `tasks.notifications_json`
+1. `agents.<name>.notifications` in the manifest, persisted to `agents.notifications_json`
 2. Otherwise top-level `notifications`
 
-A task block replaces project routing for that task rather than merging with it, so a single reporting
-task can be the only thing that messages an operator while every other task stays silent under an
-empty project-level `notifications: {}`. A task block with no channel names in it is treated as absent
-and falls back to the project.
+An agent block replaces project routing for that agent rather than merging with it, so a single
+reporting agent can be the only thing that messages an operator while every other agent stays silent
+under an empty project-level `notifications: {}`. An agent block with no channel names in it is
+treated as absent and falls back to the project.
 
 ## Payload
 
 ```json
 {
   "project": "gojo",
-  "task": "activity-digest",
+  "agent": "activity-digest",
   "runId": "01J…",
   "state": "Succeeded",
   "error": null,
   "finishedAt": "2026-07-28T12:00:00.000Z",
-  "summary": "<agent-authored report text>",
+  "summary": "<adapter-authored report text>",
   "handoffStatus": "no-change"
 }
 ```
@@ -50,8 +50,8 @@ and falls back to the project.
 that failed before the artifact was written still carry text. The coordinator writes the artifact
 before emitting `run.finished`, so the hook always sees a completed handoff.
 
-The agent owns this text. The platform delivers it verbatim and only prepends routing context
-(project, task, run id). Auto-disable payloads add `reason`, `scheduleId`, and `consecutiveFailures`;
+The adapter/agent owns this text. The platform delivers it verbatim and only prepends routing context
+(project, agent, run id). Auto-disable payloads add `reason`, `scheduleId`, and `consecutiveFailures`;
 test sends add `test: true`.
 
 ## Delivery
@@ -66,4 +66,4 @@ URLs and bot tokens are redacted from error logs.
 - Notifications own routing resolution, payload assembly, and delivery.
 - Runs own the handoff and emit `run.finished`; notifications only read.
 - Scheduler owns auto-disable; notifications only report it.
-- Agents own report text. The platform must not rewrite or summarize it.
+- Adapters (agent implementations) own report text. The platform must not rewrite or summarize it.

@@ -1,7 +1,7 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Getting started
-description: Install gojo, create an admin account, add your first Git project, and run a task.
+description: Install gojo, create an admin account, add your first Git project, and run an agent.
 ---
 
 Prefer an agent? Use the install prompt on the [home page](/#ask-your-agent). Source: [github.com/detroitpro/gojo](https://github.com/detroitpro/gojo).
@@ -65,7 +65,7 @@ gojo server status
 gojo server doctor
 ```
 
-`doctor` verifies Git, disk, the database, agent adapters, and whether tools like `bun` / `gh` resolve under the daemon's PATH. Project doctor also reports a dirty primary checkout and missing validation binaries.
+`doctor` verifies Git, disk, the database, adapter detection, and whether tools like `bun` / `gh` resolve under the daemon's PATH. Project doctor also reports a dirty primary checkout and missing validation binaries.
 
 ## Add a project
 
@@ -88,14 +88,14 @@ gojo project list
 
 Adding a project only registers the repo path. Next:
 
-1. **Add a `gojo.yaml`** (or `.gojo/project.yaml`) in the repository if you don’t have one yet — see [Your first agent](/first-agent).
-2. Click **Sync** on the list or project detail (or `gojo project sync <project-id>`). Sync reads the manifest and upserts agents, tasks, and schedules by name; removed entries are soft-disabled. It does not change git.
+1. **Add a `gojo.yaml`** (or `.gojo/project.yaml`) in the repository if you don't have one yet — see [Your first agent](/first-agent).
+2. Click **Sync** on the list or project detail (or `gojo project sync <project-id>`). Sync reads the manifest and upserts profiles, agents, and schedules by name; removed entries are soft-disabled. It does not change git.
 3. **Open** the project to see health (path, manifest, dirty checkout, validation tools) and a structured config view.
-4. Open **Agents** and confirm at least **shell** is installed (always available).
-5. Run a task from **Tasks** / CLI, or wait for a schedule to fire.
+4. Open **Adapters** and confirm at least **shell** is installed (always available).
+5. Run an agent from **Agents** / CLI, or wait for a schedule to fire.
 6. Watch the run under **Runs** — live state, logs, and handoff when it finishes.
 
-If Sync finds no manifest, you’ll have zero tasks until you create one in the repo or via the API/CLI. **Remove** only unregisters the project from gojo; your git checkout stays on disk.
+If Sync finds no manifest, you'll have zero agents until you create one in the repo or via the API/CLI. **Remove** only unregisters the project from gojo; your git checkout stays on disk.
 
 ## Run as a background service
 
@@ -120,7 +120,7 @@ By default everything is under `~/.gojo` (override with `GOJO_HOME`):
 
 ## Next steps
 
-- [Your first agent](/first-agent) — a complete shell task example
+- [Your first agent](/first-agent) — a complete shell agent example
 - [Advanced agent](/advanced-agent) — AI coding agent with PRs and schedules
 - [Advanced usage](/advanced-usage) — multi-role agents, approvals, secrets
 - [Documentation](/docs) — settings, concepts, CLI, FAQ

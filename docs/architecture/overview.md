@@ -9,10 +9,10 @@ This page tracks the **live `src/` layout** as implemented.
 ```text
 CLI / HTTP API / scheduler tick (one process)
         │
-        ├─ storage (SQLite)
+        ├─ storage (SQLite: profiles, agents, schedules, runs, work, …)
         ├─ runs: enqueue → dispatcher admits → coordinator executes
         ├─ workspace + git (isolated worktrees)
-        ├─ agents (shell / cursor / claude-code adapters)
+        ├─ agents (shell / cursor / claude-code adapters — UI/CLI: Adapters)
         ├─ validation
         ├─ integration (commit / PR / merge queue)
         ├─ sources (GitHub / GitLab / Forgejo / generic work sync)
@@ -36,7 +36,7 @@ Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) —
 | `cli/` | Command entry and output formatting |
 | `api/` | HTTP router, WebSocket hub/RPC, server lifecycle, web static |
 | `app/` | Composition / context wiring, `project-sync` |
-| `agents/` | Adapter registry and implementations |
+| `agents/` | Agent adapter registry and implementations (top-level UI/CLI: **Adapters**) |
 | `scheduler/` | Cron, overlap/missed-run, auto-disable; enqueue only (dispatcher admits) |
 | `runs/` | Coordinator, dispatcher/admission, heal, impact, prompt assembly, inspect |
 | `workspace/` | Worktree paths and attempt prep/cleanup (prefers `origin/<base>` when syncing) |

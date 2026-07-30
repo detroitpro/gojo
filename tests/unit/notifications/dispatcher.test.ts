@@ -20,10 +20,10 @@ describe("notifications/dispatcher", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const task = repos.tasks.create({ projectId: project.id, name: "task", prompt: "go" });
+    const task = repos.agents.create({ projectId: project.id, name: "task", prompt: "go" });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: "run-1",
       trigger: "manual",
     });
@@ -132,7 +132,7 @@ describe("notifications/dispatcher", () => {
       },
       {
         project: "demo",
-        task: "nightly",
+        agent: "nightly",
         runId: "01ABC",
         state: "Failed",
         error: "boom",
@@ -169,7 +169,7 @@ describe("notifications/dispatcher", () => {
     expect(
       formatTelegramText({
         project: "gojo",
-        task: "maintain-tests",
+        agent: "maintain-tests",
         runId: "01X",
         state: "Succeeded",
       }),
@@ -180,7 +180,7 @@ describe("notifications/dispatcher", () => {
     expect(
       formatTelegramText({
         project: "gojo",
-        task: "activity-digest",
+        agent: "activity-digest",
         runId: "01X",
         state: "Succeeded",
         summary: "gojo — last 24h\n\nMerged (1)\n- #21 fix",
@@ -193,7 +193,7 @@ describe("notifications/dispatcher", () => {
   test("formatTelegramText truncates past the Telegram limit", () => {
     const text = formatTelegramText({
       project: "gojo",
-      task: "activity-digest",
+      agent: "activity-digest",
       runId: "01X",
       state: "Succeeded",
       summary: "x".repeat(5000),

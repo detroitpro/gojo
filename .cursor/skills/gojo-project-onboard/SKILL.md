@@ -1,9 +1,9 @@
 ---
 name: gojo-project-onboard
 description: >-
-  Analyzes a target repository and generates a gojo task/schedule catalog, then
+  Analyzes a target repository and generates a gojo agent/schedule catalog, then
   scaffolds gojo.yaml and .gojo/ prompt files after confirmation. Use when
-  onboarding a project to gojo, registering a repo, generating tasks, creating
+  onboarding a project to gojo, registering a repo, generating agents, creating
   gojo.yaml, or when the user asks to analyze a project for gojo schedules
   (e.g. quotient-ecosystem, omni-actions).
 ---
@@ -12,7 +12,14 @@ description: >-
 
 Turn an external repo into a syncable gojo project: analyze → propose → confirm → scaffold. Register/sync with the daemon only when the user asks.
 
-Manifest contract and prompt skeletons: [reference.md](reference.md). Dogfood examples live in this repo’s `gojo.yaml` and `.gojo/`.
+Manifest contract and prompt skeletons: [reference.md](reference.md). Dogfood examples live in this repo's `gojo.yaml` and `.gojo/`.
+
+## Vocabulary (post-rebrand)
+
+- **`profiles:`** — reusable adapter configuration (shell / cursor / claude-code + timeout + model).
+- **`agents:`** — the work-unit definitions (previously `tasks:`). Each agent picks a profile and points at a `promptFile`.
+- **`.gojo/agents/`** — prompt files for the work units (previously `.gojo/tasks/`).
+- **CLI:** `gojo agent …` for work units; `gojo adapter …` for detecting installed coding-agent CLIs.
 
 ## Preconditions
 
@@ -47,7 +54,7 @@ Inspect the target repo:
 
 ### 2. Propose (no writes)
 
-Present a short catalog (typically **3–7** tasks). Prefer evidence-backed rows over a full palette dump.
+Present a short catalog (typically **3–7** agents). Prefer evidence-backed rows over a full palette dump.
 
 | key | kind | description | cadence | validation | integration | why |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -64,12 +71,12 @@ Columns:
 Palette to consider (pick only what fits):
 
 - AI `maintain-*` (quality / tests / deps / docs) when a clear check gate exists
-- `self-heal` when AI PR tasks exist
-- `activity-digest` when a notification channel exists — AI, report-only, `validationProfile: handoff`, task-level `notifications`, no `integration`. Copy the executive-brief prompt from [`.gojo/tasks/activity-digest.md`](../../../.gojo/tasks/activity-digest.md); every fleet repo uses the same shape with its own repo slug and forge CLI.
+- `self-heal` when AI PR agents exist
+- `activity-digest` when a notification channel exists — AI, report-only, `validationProfile: handoff`, agent-level `notifications`, no `integration`. Copy the executive-brief prompt from [`.gojo/agents/activity-digest.md`](../../../.gojo/agents/activity-digest.md); every fleet repo uses the same shape with its own repo slug and forge CLI.
 - Shell ops for smoke and hygiene — **not** auto-deploy / auto-promote
-- Prefer **schedule key = task key**
+- Prefer **schedule key = agent key**
 
-Ask which rows to keep and any edits (cadence, agent, target branch).
+Ask which rows to keep and any edits (cadence, profile, target branch).
 
 ### 3. Scaffold (on confirm)
 
@@ -77,18 +84,19 @@ Write into the **target** repo (not gojo unless gojo is the target):
 
 | Path | Purpose |
 | --- | --- |
-| `gojo.yaml` | Manifest: project, agents, profiles, tasks, schedules |
+| `gojo.yaml` | Manifest: project, profiles, agents (work units), schedules |
 | `.gojo/instructions.md` | Shared AI qualities + handoff judgment |
-| `.gojo/tasks/<key>.md` | Per-task prompt (AI markdown or shell script body) |
+| `.gojo/agents/<key>.md` | Per-agent prompt (AI markdown or shell script body) |
 
 Rules:
 
-- Required task fields: `description`, `agent`, `promptFile`, `validationProfile`
-- Required schedule fields: `task`, `cron`, `timezone`
+- Required agent fields: `description`, `profile`, `promptFile`, `validationProfile`
+- Required schedule fields: `agent`, `cron`, `timezone`
+- Required profile fields: `adapter` (`shell` / `cursor` / `claude-code`)
 - AI prompts: Role / Goals / Scope / Hard rules (**numeric limits**) / Process / Required handoff
 - Shell prompts: executable script body (shell adapter runs `sh` on the inlined prompt)
 - Defaults: `concurrency.projectLimit: 1`, `overlapPolicy: skip`, failurePolicy with disable-after-N, timezone `America/Detroit` unless the repo signals otherwise
-- If `gojo.yaml` / `.gojo/` already exist: **merge**; never drop unknown tasks/schedules without asking
+- If `gojo.yaml` / `.gojo/` already exist: **merge**; never drop unknown agents/schedules without asking
 
 Field tables and templates: [reference.md](reference.md).
 
@@ -101,7 +109,7 @@ gojo project add <name> <abs-repo-path>
 gojo project sync <id>
 ```
 
-Report project id and synced task/schedule names. Do not enable/disable schedules or fire runs unless asked.
+Report project id and synced agent/schedule names. Do not enable/disable schedules or fire runs unless asked.
 
 ## Example anchors
 
@@ -112,7 +120,7 @@ Report project id and synced task/schedule names. Do not enable/disable schedule
 ## Do not
 
 - Scaffold before confirmation
-- Encode cadence in task/schedule keys
+- Encode cadence in agent/schedule keys
 - Duplicate existing automation
 - Auto-deploy, auto-promote, or other destructive schedules without explicit user request
 - Push, open PRs, or start runs as part of onboarding

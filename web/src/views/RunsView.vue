@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { getQueue, listProjects, listRuns, listTasks, runTask } from "@/api";
+import { getQueue, listAgents, listProjects, listRuns, runAgent } from "@/api";
 import AppButton from "@/components/AppButton.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
@@ -11,14 +11,14 @@ import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useServerTable } from "@/composables/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/lib/pagination";
 import { Play } from "lucide-vue-next";
-import type { Project, Task } from "@/types";
+import type { Agent, Project } from "@/types";
 
 const RUN_SORT_ALLOWED = [
   "createdAt",
   "finishedAt",
   "state",
   "trigger",
-  "taskName",
+  "agentName",
   "projectName",
 ] as const;
 
@@ -64,9 +64,9 @@ function initialOrder(): SortOrder {
 }
 
 const projects = ref<Project[]>([]);
-const tasks = ref<Task[]>([]);
+const agents = ref<Agent[]>([]);
 const projectFilter = ref(queryParam("projectId"));
-const taskFilter = ref(queryParam("taskId"));
+const agentFilter = ref(queryParam("agentId"));
 const stateFilter = ref(queryParam("state"));
 const triggerFilter = ref(queryParam("trigger"));
 const fromFilter = ref(queryParam("from"));
@@ -92,7 +92,7 @@ const {
   defaultOrder: initialOrder(),
   watchSources: [
     projectFilter,
-    taskFilter,
+    agentFilter,
     stateFilter,
     triggerFilter,
     fromFilter,
@@ -106,7 +106,7 @@ const {
       sort: sortBy,
       order: sortOrder,
       projectId: projectFilter.value || undefined,
-      taskId: taskFilter.value || undefined,
+      agentId: agentFilter.value || undefined,
       state: stateFilter.value || undefined,
       trigger: triggerFilter.value || undefined,
       from: fromFilter.value || undefined,
@@ -115,21 +115,21 @@ const {
     }),
 });
 
-const selectedTask = computed(() => {
-  if (!taskFilter.value) {
+const selectedAgent = computed(() => {
+  if (!agentFilter.value) {
     return null;
   }
-  return tasks.value.find((task) => task.id === taskFilter.value) ?? null;
+  return agents.value.find((agent) => agent.id === agentFilter.value) ?? null;
 });
 
 const canEnqueue = computed(() => {
-  if (!taskFilter.value) {
+  if (!agentFilter.value) {
     return false;
   }
-  if (selectedTask.value) {
-    return selectedTask.value.enabled;
+  if (selectedAgent.value) {
+    return selectedAgent.value.enabled;
   }
-  // Deep-linked task id still present even if options failed to resolve.
+  // Deep-linked agent id still present even if options failed to resolve.
   return true;
 });
 
@@ -145,31 +145,31 @@ async function loadProjects() {
   projects.value = result.items;
 }
 
-async function loadTaskOptions() {
-  const result = await listTasks({
+async function loadAgentOptions() {
+  const result = await listAgents({
     limit: MAX_PAGE_LIMIT,
     offset: 0,
     projectId: projectFilter.value || undefined,
   });
-  tasks.value = result.items;
-  if (taskFilter.value && !result.items.some((task) => task.id === taskFilter.value)) {
-    // Keep deep-linked task visible even if outside current project page.
-    const orphan = await listTasks({ limit: 1, offset: 0, q: taskFilter.value });
-    const match = orphan.items.find((task) => task.id === taskFilter.value);
+  agents.value = result.items;
+  if (agentFilter.value && !result.items.some((agent) => agent.id === agentFilter.value)) {
+    // Keep deep-linked agent visible even if outside current project page.
+    const orphan = await listAgents({ limit: 1, offset: 0, q: agentFilter.value });
+    const match = orphan.items.find((agent) => agent.id === agentFilter.value);
     if (match) {
-      tasks.value = [match, ...result.items];
+      agents.value = [match, ...result.items];
     }
   }
 }
 
-async function enqueueSelectedTask() {
-  if (!taskFilter.value || !canEnqueue.value) {
+async function enqueueSelectedAgent() {
+  if (!agentFilter.value || !canEnqueue.value) {
     return;
   }
   enqueueBusy.value = true;
   error.value = "";
   try {
-    const run = await runTask(taskFilter.value);
+    const run = await runAgent(agentFilter.value);
     await router.push({ name: "run-detail", params: { id: run.id } });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to enqueue run";
@@ -182,23 +182,23 @@ watch(
   () =>
     [
       route.query.projectId,
-      route.query.taskId,
+      route.query.agentId,
       route.query.state,
       route.query.trigger,
       route.query.from,
       route.query.to,
       route.query.q,
     ] as const,
-  ([projectId, taskId, state, trigger, from, to, q]) => {
+  ([projectId, agentId, state, trigger, from, to, q]) => {
     const nextProject = typeof projectId === "string" ? projectId : "";
-    const nextTask = typeof taskId === "string" ? taskId : "";
+    const nextAgent = typeof agentId === "string" ? agentId : "";
     const nextState = typeof state === "string" ? state : "";
     const nextTrigger = typeof trigger === "string" ? trigger : "";
     const nextFrom = typeof from === "string" ? from : "";
     const nextTo = typeof to === "string" ? to : "";
     const nextQ = typeof q === "string" ? q : "";
     if (projectFilter.value !== nextProject) projectFilter.value = nextProject;
-    if (taskFilter.value !== nextTask) taskFilter.value = nextTask;
+    if (agentFilter.value !== nextAgent) agentFilter.value = nextAgent;
     if (stateFilter.value !== nextState) stateFilter.value = nextState;
     if (triggerFilter.value !== nextTrigger) triggerFilter.value = nextTrigger;
     if (fromFilter.value !== nextFrom) fromFilter.value = nextFrom;
@@ -208,13 +208,13 @@ watch(
 );
 
 watch(
-  [projectFilter, taskFilter, stateFilter, triggerFilter, fromFilter, toFilter, query, sort, order],
+  [projectFilter, agentFilter, stateFilter, triggerFilter, fromFilter, toFilter, query, sort, order],
   () => {
     const nextQuery = { ...route.query } as Record<string, string>;
     if (projectFilter.value) nextQuery.projectId = projectFilter.value;
     else delete nextQuery.projectId;
-    if (taskFilter.value) nextQuery.taskId = taskFilter.value;
-    else delete nextQuery.taskId;
+    if (agentFilter.value) nextQuery.agentId = agentFilter.value;
+    else delete nextQuery.agentId;
     if (stateFilter.value) nextQuery.state = stateFilter.value;
     else delete nextQuery.state;
     if (triggerFilter.value) nextQuery.trigger = triggerFilter.value;
@@ -234,7 +234,7 @@ watch(
     }
     const same =
       (nextQuery.projectId ?? "") === queryParam("projectId") &&
-      (nextQuery.taskId ?? "") === queryParam("taskId") &&
+      (nextQuery.agentId ?? "") === queryParam("agentId") &&
       (nextQuery.state ?? "") === queryParam("state") &&
       (nextQuery.trigger ?? "") === queryParam("trigger") &&
       (nextQuery.from ?? "") === queryParam("from") &&
@@ -249,7 +249,7 @@ watch(
 );
 
 watch(projectFilter, () => {
-  void loadTaskOptions();
+  void loadAgentOptions();
 });
 
 async function loadQueuePositions() {
@@ -272,9 +272,9 @@ useLiveRefresh({
   },
 });
 useLiveRefresh({
-  topics: ["projects", "tasks"],
+  topics: ["projects", "agents"],
   refresh: async () => {
-    await Promise.all([loadProjects(), loadTaskOptions()]);
+    await Promise.all([loadProjects(), loadAgentOptions()]);
   },
 });
 </script>
@@ -285,14 +285,14 @@ useLiveRefresh({
       <div>
         <h1>Runs</h1>
         <div class="subtitle">
-          <template v-if="selectedTask">
-            {{ selectedTask.name
-            }}<span v-if="selectedTask.projectName"> · {{ selectedTask.projectName }}</span>
+          <template v-if="selectedAgent">
+            {{ selectedAgent.name
+            }}<span v-if="selectedAgent.projectName"> · {{ selectedAgent.projectName }}</span>
           </template>
           <template v-else>Execution history</template>
         </div>
       </div>
-      <div v-if="taskFilter" class="toolbar">
+      <div v-if="agentFilter" class="toolbar">
         <AppButton
           variant="primary"
           size="sm"
@@ -300,8 +300,8 @@ useLiveRefresh({
           :loading="enqueueBusy"
           loading-label="Enqueueing…"
           :disabled="!canEnqueue"
-          :title="selectedTask && !selectedTask.enabled ? 'Task is disabled' : undefined"
-          @click="enqueueSelectedTask"
+          :title="selectedAgent && !selectedAgent.enabled ? 'Agent is disabled' : undefined"
+          @click="enqueueSelectedAgent"
         >
           Enqueue run
         </AppButton>
@@ -321,11 +321,11 @@ useLiveRefresh({
         </select>
       </div>
       <div class="field">
-        <label for="run-task-filter">Task</label>
-        <select id="run-task-filter" v-model="taskFilter">
-          <option value="">All tasks</option>
-          <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name }}{{ task.projectName ? ` (${task.projectName})` : "" }}
+        <label for="run-agent-filter">Agent</label>
+        <select id="run-agent-filter" v-model="agentFilter">
+          <option value="">All agents</option>
+          <option v-for="agent in agents" :key="agent.id" :value="agent.id">
+            {{ agent.name }}{{ agent.projectName ? ` (${agent.projectName})` : "" }}
           </option>
         </select>
       </div>
@@ -350,7 +350,7 @@ useLiveRefresh({
           v-model="query"
           class="input"
           type="search"
-          placeholder="Task, project, run id…"
+          placeholder="Agent, project, run id…"
         />
       </div>
       <div class="field task-filter-count">
@@ -362,9 +362,9 @@ useLiveRefresh({
     <div v-if="loading && runs.length === 0" class="empty">Loading runs…</div>
     <div v-else-if="total === 0" class="empty">
       {{
-        query || projectFilter || taskFilter || stateFilter || triggerFilter
+        query || projectFilter || agentFilter || stateFilter || triggerFilter
           ? "No runs match these filters"
-          : "No runs yet — trigger a task or wait for the next schedule"
+          : "No runs yet — trigger an agent or wait for the next schedule"
       }}
     </div>
     <template v-else>
@@ -373,8 +373,8 @@ useLiveRefresh({
           <thead>
             <tr>
               <SortableTh
-                column="taskName"
-                label="Task"
+                column="agentName"
+                label="Agent"
                 :sort="sort"
                 :order="order"
                 @sort="setSort"
@@ -423,16 +423,16 @@ useLiveRefresh({
               <td>
                 <RouterLink
                   :to="{
-                    name: 'tasks',
+                    name: 'agents',
                     query: {
                       projectId: run.projectId,
-                      q: run.taskId,
+                      q: run.agentId,
                       enabled: 'all',
                     },
                   }"
                   class="entity-name"
                 >
-                  {{ run.taskName || "Unknown task" }}
+                  {{ run.agentName || "Unknown agent" }}
                 </RouterLink>
               </td>
               <td>{{ run.projectName || "Unknown project" }}</td>

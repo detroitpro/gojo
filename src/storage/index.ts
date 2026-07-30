@@ -1,9 +1,10 @@
 export { Database } from "./db";
 export { createRepositories } from "./repositories";
 export type {
+  AgentRepository,
   AttemptRepository,
   AuditRepository,
-  AgentProfileRepository,
+  ProfileRepository,
   ProjectRepository,
   Repositories,
   RunImpactItemRepository,
@@ -11,7 +12,6 @@ export type {
   RunRepository,
   ScheduleRepository,
   SecretRepository,
-  TaskRepository,
 } from "./repositories";
 export { EXPECTED_TABLES, SCHEMA_DDL, SCHEMA_VERSION } from "./schema";
 export { createPlatformChangeEventRepository } from "./platform-events";
@@ -59,17 +59,18 @@ export {
 export { recordRunOutcome, shouldDisableSchedule } from "./schedule-outcomes";
 export type { RunState } from "@shared/run-states";
 export type {
-  AgentProfile,
+  Agent,
   Attempt,
   AttemptState,
   AuditEvent,
-  CreateAgentProfileInput,
+  CreateAgentInput,
   CreateAttemptInput,
   CreateAuditEventInput,
+  CreateProfileInput,
   CreateProjectInput,
   CreateRunInput,
   CreateScheduleInput,
-  CreateTaskInput,
+  Profile,
   Project,
   Run,
   RunImpactItem,
@@ -81,14 +82,13 @@ export type {
   RunTrigger,
   Schedule,
   SecretRecord,
-  Task,
-  UpsertRunIntegrationInput,
-  UpsertSecretInput,
+  UpdateAgentInput,
   UpdateAttemptInput,
   UpdateProjectInput,
   UpdateRunInput,
   UpdateRunIntegrationInput,
   UpdateScheduleInput,
-  UpdateTaskInput,
+  UpsertRunIntegrationInput,
+  UpsertSecretInput,
   UserRole,
 } from "./types";

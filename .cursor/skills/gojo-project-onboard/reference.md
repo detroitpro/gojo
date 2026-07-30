@@ -1,6 +1,12 @@
 # gojo-project-onboard reference
 
-Condensed contract for scaffolding. Source of truth: `src/shared/manifest.ts`, dogfood `gojo.yaml`, and `docs/task-prompts.md` / site task-prompts page.
+Condensed contract for scaffolding. Source of truth: `src/shared/manifest.ts`, dogfood `gojo.yaml`, and `docs/agent-prompts.md` / site agent-prompts page.
+
+## Vocabulary
+
+- **Adapter** — installed CLI (shell / cursor / claude-code). Detected via `gojo adapter …`.
+- **Profile** — entry under `profiles:` in the manifest; binds an adapter to a model/timeout/permissions.
+- **Agent** — entry under `agents:` in the manifest; the durable work-unit definition. Picks a `profile` and points at a `promptFile` under `.gojo/agents/`.
 
 ## Manifest shape
 
@@ -24,7 +30,7 @@ instructions:
   scheduledRunNotice: |
     Unattended scheduled gojo run. Prefer small diffs. Write .gojo/handoff.json before exiting.
 
-agents:
+profiles:
   shell:
     adapter: shell
     timeout: 5m
@@ -41,7 +47,7 @@ validationProfiles:
         timeout: 30s
   # add repo-specific profiles (check, smoke, typecheck, …)
 
-tasks: {}
+agents: {}
 schedules: {}
 notifications: {}
 ```
@@ -52,12 +58,12 @@ Sync path: `gojo.yaml` then `.gojo/project.yaml`. Keys are durable identities; r
 
 | Object | Required |
 | --- | --- |
-| Task | `description`, `agent`, `promptFile`, `validationProfile` |
-| Schedule | `task`, `cron`, `timezone` |
-| Agent | `adapter` (`shell` / `cursor` / `claude`) |
+| Agent (work unit) | `description`, `profile`, `promptFile`, `validationProfile` |
+| Schedule | `agent`, `cron`, `timezone` |
+| Profile | `adapter` (`shell` / `cursor` / `claude-code`) |
 | Validation profile | `steps[]` with `name` + `command` |
 
-## Recommended task defaults
+## Recommended agent defaults
 
 ```yaml
 concurrency:
@@ -69,7 +75,7 @@ failurePolicy:
   backoff: exponential
 ```
 
-AI PR tasks:
+AI PR agents:
 
 ```yaml
 integration:
@@ -78,43 +84,43 @@ integration:
   prTool: gh
   requireAllValidations: true
 selfHeal:
-  task: self-heal
+  agent: self-heal
   afterConsecutiveFailedRuns: 1
 ```
 
 Shell ops / digests (no Git integration):
 
 ```yaml
-# omit integration, or commit-only only when the task truly owns commits
+# omit integration, or commit-only only when the agent truly owns commits
 validationProfile: noop   # or a light smoke profile
 ```
 
 ## Naming
 
-- Task/schedule keys: work identity only (`maintain-deps`, `fleet-digest`)
+- Agent/schedule keys: work identity only (`maintain-deps`, `fleet-digest`)
 - Cadence only in `cron` / `timezone`
-- One schedule per task → **same key** for both
+- One schedule per agent → **same key** for both
 
 ```yaml
-tasks:
+agents:
   maintain-deps:
     description: Update dependencies; keep check green
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-deps.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-deps.md
     validationProfile: full-check
 schedules:
   maintain-deps:
-    task: maintain-deps
+    agent: maintain-deps
     cron: "0 2 * * 0"
     timezone: America/Detroit
 ```
 
 ## AI prompt skeleton
 
-Write `.gojo/tasks/<key>.md`:
+Write `.gojo/agents/<key>.md`:
 
 ```markdown
-# <Task title>
+# <Agent title>
 
 ## Goals
 1. …
@@ -145,7 +151,7 @@ Write `.gojo/handoff.json` (schemaVersion 2). Include `summary` (what / why / va
 
 Starting limits (tighten for riskier repos):
 
-| Task type | Start limit |
+| Agent type | Start limit |
 | --- | --- |
 | Tests / coverage | ≤5 new test cases |
 | Refactors / quality | one theme; ≤8 source files |
@@ -159,7 +165,7 @@ Write `.gojo/instructions.md` for AI agents (shell skips this layer):
 
 - Code qualities (minimal, boundary-honest, reviewable)
 - Operating defaults (no features for niceness, no secrets, stay in worktree)
-- Git ownership (gojo opens PRs from handoff; agent does not run `gh pr create` / `tea pulls create`)
+- Git ownership (gojo opens PRs from handoff; adapter does not run `gh pr create` / `tea pulls create`)
 - Handoff judgment (what / why / value; `recommendedNextActions` at limit)
 
 ## Shell prompt skeleton
@@ -173,7 +179,7 @@ make prs
 make actions
 ```
 
-Prefer existing Make/scripts over inventing new automation. Use a `noop` or light validation profile; set a short agent `timeout`.
+Prefer existing Make/scripts over inventing new automation. Use a `noop` or light validation profile; set a short profile `timeout`.
 
 ## Register / sync
 
@@ -181,7 +187,7 @@ Prefer existing Make/scripts over inventing new automation. Use a `noop` or ligh
 gojo project add <name> <abs-repo-path>
 gojo project list
 gojo project sync <id>
-gojo task list
+gojo agent list --project <id>
 gojo schedule list
 ```
 
@@ -191,10 +197,10 @@ Manifest sync upserts by name and soft-disables missing keys. Schedules are crea
 
 | Adapter | Prompt use |
 | --- | --- |
-| `cursor` / `claude` | Markdown prompt; gets `scheduledRunNotice` + `instructions.files` + `promptFile` |
+| `cursor` / `claude-code` | Markdown prompt; gets `scheduledRunNotice` + `instructions.files` + `promptFile` |
 | `shell` | Script body only; no instructions layer |
 
-## Example task ideas (evidence-driven)
+## Example agent ideas (evidence-driven)
 
 **quotient-ecosystem:** `fleet-digest` (`make prs`/`actions`), fetch/state, monitor health, Crashlytics check — shell; no auto-promote.
 

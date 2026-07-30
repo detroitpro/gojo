@@ -19,10 +19,11 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(10);
+    expect(SCHEMA_VERSION).toBe(11);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 10)).toBe(true);
+    expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 11)).toBe(true);
     expect(db.tableNames()).toEqual(
       expect.arrayContaining([
         "source_connections",
@@ -43,14 +44,14 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const { repos, project } = seedProject(db);
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
       name: "ship-feature",
       prompt: "Ship the feature",
     });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "legacy-run",
       trigger: "manual",
     });
@@ -81,6 +82,12 @@ describe("storage/work-ledger", () => {
     }
     sqlite.exec("DROP INDEX IF EXISTS idx_runs_work_item;");
     sqlite.exec("ALTER TABLE runs DROP COLUMN work_item_id;");
+    // Reverse the v11 rename so v6+ migrations replay cleanly on this v5 snapshot.
+    sqlite.exec("ALTER TABLE agents RENAME TO tasks;");
+    sqlite.exec("ALTER TABLE profiles RENAME TO agent_profiles;");
+    sqlite.exec("ALTER TABLE tasks RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE schedules RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE runs RENAME COLUMN agent_id TO task_id;");
     sqlite.query("DELETE FROM schema_migrations").run();
     sqlite
       .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
@@ -256,20 +263,20 @@ describe("storage/work-ledger", () => {
     db.migrate();
     const { repos, project } = seedProject(db);
     const work = createWorkRepositories(db);
-    const profile = repos.agentProfiles.create({
+    const profile = repos.profiles.create({
       projectId: project.id,
       name: "cursor-local",
       adapter: "cursor",
     });
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
       name: "activity-digest",
       prompt: "digest",
-      agentProfileId: profile.id,
+      profileId: profile.id,
     });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "history-run-1",
       trigger: "manual",
     });
@@ -282,19 +289,19 @@ describe("storage/work-ledger", () => {
       execution: "terminal",
       outcome: "succeeded",
       provenance: "gojo-agent",
-      agentProfileId: profile.id,
+      profileId: profile.id,
       actorName: "cursor-local",
       completedAt: "2026-07-28T12:00:00.000Z",
     });
     work.runContexts.create({
       runId: run.id,
       workItemId: runWork.id,
-      taskName: "activity-digest",
-      taskDescription: "Digest activity",
+      agentName: "activity-digest",
+      agentDescription: "Digest activity",
       prompt: "digest",
       manifestHash: null,
       instructions: "{}",
-      agentProfileJson: "{}",
+      profileJson: "{}",
       adapter: "cursor",
       model: null,
       validationJson: "{}",
@@ -333,12 +340,12 @@ describe("storage/work-ledger", () => {
     expect(history.items.map((item) => item.id)).toEqual([pr.id, runWork.id]);
     expect(history.items[0]).toMatchObject({
       id: pr.id,
-      taskName: "activity-digest",
+      agentName: "activity-digest",
       agentLabel: "gojo-agent",
     });
     expect(history.items[1]).toMatchObject({
       id: runWork.id,
-      taskName: "activity-digest",
+      agentName: "activity-digest",
       agentLabel: "cursor-local",
       deliveredWork: [expect.objectContaining({ id: pr.id, title: "Fix scheduler storage" })],
     });

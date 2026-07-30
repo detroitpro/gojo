@@ -11,7 +11,7 @@ import { RunState } from '@shared/run-states';
 import { RunCoordinator } from '@/runs/coordinator';
 import { RunDispatcher } from '@/runs/dispatcher';
 import { Database, createRepositories, createWorkRepositories } from '@/storage';
-import type { Project, Task } from '@/storage/types';
+import type { Agent, Project } from '@/storage/types';
 import { WorkspaceManager } from '@/workspace/manager';
 
 describe('integration/run-coordinator', () => {
@@ -34,7 +34,7 @@ describe('integration/run-coordinator', () => {
     repoPath: string;
     paths: ReturnType<typeof resolvePaths>;
     project: Project;
-    task: Task;
+    task: Agent;
     platformEvents: PlatformChangeFeed;
   }> {
     tempDir = mkdtempSync(join(tmpdir(), 'gojo-run-coordinator-test-'));
@@ -60,7 +60,7 @@ describe('integration/run-coordinator', () => {
       defaultBranch: 'main',
     });
 
-    const task = repos.tasks.create({
+    const task = repos.agents.create({
       projectId: project.id,
       name: 'create-file',
       prompt: [
@@ -95,7 +95,7 @@ describe('integration/run-coordinator', () => {
 
     const run = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'manual',
     });
 
@@ -104,7 +104,7 @@ describe('integration/run-coordinator', () => {
     const work = createWorkRepositories(database);
     expect(work.runContexts.findByRun(run.id)).toMatchObject({
       workItemId: run.workItemId,
-      taskName: "create-file",
+      agentName: "create-file",
       prompt: task.prompt,
       baseBranch: "main",
     });
@@ -168,7 +168,7 @@ describe('integration/run-coordinator', () => {
   test('validation failure writes artifact and rich errorMessage', async () => {
     const { coordinator, repos, paths, project } = await setup();
 
-    const task = repos.tasks.create({
+    const task = repos.agents.create({
       projectId: project.id,
       name: 'always-fail-validation',
       prompt: [
@@ -189,7 +189,7 @@ describe('integration/run-coordinator', () => {
 
     const run = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'manual',
     });
 
@@ -216,7 +216,7 @@ describe('integration/run-coordinator', () => {
 
     const run = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'schedule',
       idempotencyKey: 'sched:fire-1',
     });
@@ -237,14 +237,14 @@ describe('integration/run-coordinator', () => {
 
     const first = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'manual',
       idempotencyKey: 'same-key',
     });
 
     const second = await coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: 'manual',
       idempotencyKey: 'same-key',
     });
@@ -257,7 +257,7 @@ describe('integration/run-coordinator', () => {
 
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: 'stuck-run',
       trigger: 'manual',
       state: RunState.Running,
@@ -310,14 +310,14 @@ describe('integration/run-coordinator', () => {
         name: `proj-${i}`,
         repoPath: `/tmp/proj-${i}`,
       });
-      const task = repos.tasks.create({
+      const task = repos.agents.create({
         projectId: project.id,
         name: `task-${i}`,
         prompt: 'go',
       });
       const run = repos.runs.create({
         projectId: project.id,
-        taskId: task.id,
+        agentId: task.id,
         idempotencyKey: `sched-${i}`,
         trigger: 'schedule',
         priority: 30 - i, // lower number = higher priority; drain high-priority first

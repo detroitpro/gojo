@@ -61,7 +61,7 @@ function initialEnabled(): "all" | "enabled" | "disabled" {
 
 const projects = ref<Project[]>([]);
 const projectFilter = ref(queryParam("projectId"));
-const taskFilter = ref(queryParam("taskId"));
+const agentFilter = ref(queryParam("agentId"));
 const enabledFilter = ref<"all" | "enabled" | "disabled">(initialEnabled());
 const query = ref(queryParam("q"));
 const busyId = ref<string | null>(null);
@@ -88,7 +88,7 @@ const {
 } = useServerTable({
   defaultSort: initialSort(),
   defaultOrder: initialOrder(),
-  watchSources: [projectFilter, taskFilter, enabledFilter, query],
+  watchSources: [projectFilter, agentFilter, enabledFilter, query],
   fetchPage: ({ limit, offset, sort: sortBy, order: sortOrder }) =>
     listSchedules({
       limit,
@@ -96,7 +96,7 @@ const {
       sort: sortBy,
       order: sortOrder,
       projectId: projectFilter.value || undefined,
-      taskId: taskFilter.value || undefined,
+      agentId: agentFilter.value || undefined,
       enabled: enabledFilter.value,
       q: query.value || undefined,
     }),
@@ -151,10 +151,10 @@ watch([projectFilter, enabledFilter, query, horizonHours], () => {
 
 watch(
   () =>
-    [route.query.projectId, route.query.taskId, route.query.q, route.query.enabled] as const,
-  ([projectId, taskId, q, enabled]) => {
+    [route.query.projectId, route.query.agentId, route.query.q, route.query.enabled] as const,
+  ([projectId, agentId, q, enabled]) => {
     const nextProject = typeof projectId === "string" ? projectId : "";
-    const nextTask = typeof taskId === "string" ? taskId : "";
+    const nextAgent = typeof agentId === "string" ? agentId : "";
     const nextQ = typeof q === "string" ? q : "";
     const nextEnabled =
       enabled === "all" || enabled === "disabled" || enabled === "enabled"
@@ -163,8 +163,8 @@ watch(
     if (projectFilter.value !== nextProject) {
       projectFilter.value = nextProject;
     }
-    if (taskFilter.value !== nextTask) {
-      taskFilter.value = nextTask;
+    if (agentFilter.value !== nextAgent) {
+      agentFilter.value = nextAgent;
     }
     if (query.value !== nextQ) {
       query.value = nextQ;
@@ -175,17 +175,17 @@ watch(
   },
 );
 
-watch([projectFilter, taskFilter, enabledFilter, query, sort, order], () => {
+watch([projectFilter, agentFilter, enabledFilter, query, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
   if (projectFilter.value) {
     nextQuery.projectId = projectFilter.value;
   } else {
     delete nextQuery.projectId;
   }
-  if (taskFilter.value) {
-    nextQuery.taskId = taskFilter.value;
+  if (agentFilter.value) {
+    nextQuery.agentId = agentFilter.value;
   } else {
-    delete nextQuery.taskId;
+    delete nextQuery.agentId;
   }
   if (query.value) {
     nextQuery.q = query.value;
@@ -206,7 +206,7 @@ watch([projectFilter, taskFilter, enabledFilter, query, sort, order], () => {
   }
   const same =
     (nextQuery.projectId ?? "") === queryParam("projectId") &&
-    (nextQuery.taskId ?? "") === queryParam("taskId") &&
+    (nextQuery.agentId ?? "") === queryParam("agentId") &&
     (nextQuery.q ?? "") === queryParam("q") &&
     (nextQuery.enabled ?? "") === queryParam("enabled") &&
     (nextQuery.sort ?? "") === queryParam("sort") &&
@@ -271,7 +271,7 @@ useLiveRefresh({
             v-model="query"
             class="input filter-bar-search"
             type="search"
-            placeholder="Name, task, cron…"
+            placeholder="Name, agent, cron…"
             aria-label="Search"
           />
           <select
@@ -328,7 +328,7 @@ useLiveRefresh({
         v-model="query"
         class="input filter-bar-search"
         type="search"
-        placeholder="Name, task, cron…"
+        placeholder="Name, agent, cron…"
         aria-label="Search"
       />
     </div>
@@ -336,7 +336,7 @@ useLiveRefresh({
     <div v-if="loading && schedules.length === 0" class="empty">Loading schedules…</div>
     <div v-else-if="total === 0" class="empty">
       {{
-        query || projectFilter || taskFilter || enabledFilter !== "all"
+        query || projectFilter || agentFilter || enabledFilter !== "all"
           ? "No schedules match these filters"
           : "No schedules yet — define them in gojo.yaml and Sync the project"
       }}
@@ -347,7 +347,7 @@ useLiveRefresh({
           <thead>
             <tr>
               <SortableTh column="name" label="Name" :sort="sort" :order="order" @sort="setSort" />
-              <th>Task</th>
+              <th>Agent</th>
               <SortableTh
                 column="projectName"
                 label="Project"
@@ -389,8 +389,8 @@ useLiveRefresh({
                 <div class="mono muted text-sm">{{ schedule.id.slice(0, 10) }}…</div>
               </td>
               <td>
-                <div>{{ schedule.taskName || "—" }}</div>
-                <div class="mono muted text-sm">{{ schedule.taskId.slice(0, 10) }}…</div>
+                <div>{{ schedule.agentName || "—" }}</div>
+                <div class="mono muted text-sm">{{ schedule.agentId.slice(0, 10) }}…</div>
               </td>
               <td>{{ schedule.projectName || "—" }}</td>
               <td>

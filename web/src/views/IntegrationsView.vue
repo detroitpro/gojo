@@ -18,7 +18,7 @@ const INTEGRATION_SORT_ALLOWED = [
   "mergedAt",
   "createdAt",
   "projectName",
-  "taskName",
+  "agentName",
   "prNumber",
 ] as const;
 
@@ -234,8 +234,8 @@ void loadProjects();
                 @sort="setSort"
               />
               <SortableTh
-                column="taskName"
-                label="Task"
+                column="agentName"
+                label="Agent"
                 :sort="sort"
                 :order="order"
                 @sort="setSort"
@@ -272,7 +272,7 @@ void loadProjects();
           <tbody>
             <tr v-for="row in integrations" :key="row.runId">
               <td>{{ row.projectName ?? row.projectId }}</td>
-              <td>{{ row.taskName ?? row.taskId }}</td>
+              <td>{{ row.agentName ?? row.agentId }}</td>
               <td>
                 <template v-if="statusFilter === 'committed'">
                   <span class="mono">{{ shortSha(row.commitSha) }}</span>

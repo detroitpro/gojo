@@ -113,7 +113,7 @@ export const openApiDocument = {
       get: {
         summary: "List project work",
         description:
-          "Paged source-agnostic work ledger with execution, delivery, provenance, attention, freshness, and history filters. Rows include taskName/agentLabel attribution. history=1 returns completed, verified-terminal, and operator-resolved items ordered by completion time.",
+          "Paged source-agnostic work ledger with execution, delivery, provenance, attention, freshness, and history filters. Rows include agentName/agentLabel attribution. history=1 returns completed, verified-terminal, and operator-resolved items ordered by completion time.",
       },
     },
     "/api/v1/projects/{id}/work/status": {
@@ -150,15 +150,15 @@ export const openApiDocument = {
     "/api/v1/sources/{sourceId}/events": {
       post: { summary: "Ingest a signed generic source work event" },
     },
+    "/api/v1/adapters": {
+      get: { summary: "List and detect available agent adapters" },
+    },
+    "/api/v1/adapters/{name}/test": {
+      post: { summary: "Smoke-test an agent adapter" },
+    },
     "/api/v1/agents": {
-      get: { summary: "List and detect agents" },
-    },
-    "/api/v1/agents/{name}/test": {
-      post: { summary: "Smoke-test agent adapter" },
-    },
-    "/api/v1/tasks": {
       get: {
-        summary: "List tasks",
+        summary: "List agents",
         parameters: [
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
@@ -167,19 +167,19 @@ export const openApiDocument = {
           { name: "q", in: "query", schema: { type: "string" } },
         ],
       },
-      post: { summary: "Create task" },
+      post: { summary: "Create agent" },
     },
-    "/api/v1/tasks/{id}": {
-      get: { summary: "Get task detail (ops inspect + source paths)" },
+    "/api/v1/agents/{id}": {
+      get: { summary: "Get agent detail (ops inspect + source paths)" },
     },
-    "/api/v1/tasks/{id}/run": {
-      post: { summary: "Queue task run" },
+    "/api/v1/agents/{id}/run": {
+      post: { summary: "Queue agent run" },
     },
-    "/api/v1/tasks/{id}/enable": {
-      post: { summary: "Enable task" },
+    "/api/v1/agents/{id}/enable": {
+      post: { summary: "Enable agent" },
     },
-    "/api/v1/tasks/{id}/disable": {
-      post: { summary: "Disable task" },
+    "/api/v1/agents/{id}/disable": {
+      post: { summary: "Disable agent" },
     },
     "/api/v1/schedules": {
       get: {
@@ -188,7 +188,7 @@ export const openApiDocument = {
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "projectId", in: "query", schema: { type: "string" } },
-          { name: "taskId", in: "query", schema: { type: "string" } },
+          { name: "agentId", in: "query", schema: { type: "string" } },
           { name: "enabled", in: "query", schema: { type: "string" } },
           { name: "q", in: "query", schema: { type: "string" } },
         ],
@@ -221,7 +221,7 @@ export const openApiDocument = {
           { name: "limit", in: "query", schema: { type: "integer" } },
           { name: "offset", in: "query", schema: { type: "integer" } },
           { name: "projectId", in: "query", schema: { type: "string" } },
-          { name: "taskId", in: "query", schema: { type: "string" } },
+          { name: "agentId", in: "query", schema: { type: "string" } },
           { name: "state", in: "query", schema: { type: "string" } },
           { name: "trigger", in: "query", schema: { type: "string" } },
           { name: "q", in: "query", schema: { type: "string" } },
@@ -266,9 +266,9 @@ export const openApiDocument = {
     },
     "/api/v1/dashboard/overview": {
       get: {
-        summary: "Dashboard per-project task overview",
+        summary: "Dashboard per-project agent overview",
         description:
-          "Projects with enabled tasks and up to five recent runs each (oldest to newest).",
+          "Projects with enabled agents and up to five recent runs each (oldest to newest).",
       },
     },
     "/api/v1/dashboard/impact": {

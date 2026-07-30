@@ -41,12 +41,12 @@ export interface UpdateProjectInput {
   manifestJson?: string;
 }
 
-export interface Task {
+export interface Agent {
   id: string;
   projectId: string;
   name: string;
   description: string;
-  agentProfileId: string | null;
+  profileId: string | null;
   prompt: string;
   validationProfileJson: string;
   integrationJson: string;
@@ -57,11 +57,11 @@ export interface Task {
   createdAt: string;
 }
 
-export interface CreateTaskInput {
+export interface CreateAgentInput {
   projectId: string;
   name: string;
   description?: string;
-  agentProfileId?: string | null;
+  profileId?: string | null;
   prompt: string;
   validationProfileJson?: string;
   integrationJson?: string;
@@ -71,10 +71,10 @@ export interface CreateTaskInput {
   enabled?: boolean;
 }
 
-export interface UpdateTaskInput {
+export interface UpdateAgentInput {
   name?: string;
   description?: string;
-  agentProfileId?: string | null;
+  profileId?: string | null;
   prompt?: string;
   validationProfileJson?: string;
   integrationJson?: string;
@@ -86,7 +86,7 @@ export interface UpdateTaskInput {
 
 export interface Schedule {
   id: string;
-  taskId: string;
+  agentId: string;
   name: string;
   cronExpr: string;
   timezone: string;
@@ -102,7 +102,7 @@ export interface Schedule {
 }
 
 export interface CreateScheduleInput {
-  taskId: string;
+  agentId: string;
   name: string;
   cronExpr: string;
   timezone?: string;
@@ -131,7 +131,7 @@ export interface UpdateScheduleInput {
 export interface Run {
   id: string;
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId: string | null;
   state: RunState;
   idempotencyKey: string;
@@ -151,7 +151,7 @@ export interface Run {
 
 export interface CreateRunInput {
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId?: string | null;
   state?: RunState;
   idempotencyKey: string;
@@ -366,7 +366,7 @@ export interface UpdateRunIntegrationInput {
   lastError?: string | null;
 }
 
-export interface AgentProfile {
+export interface Profile {
   id: string;
   projectId: string | null;
   name: string;
@@ -375,7 +375,7 @@ export interface AgentProfile {
   createdAt: string;
 }
 
-export interface CreateAgentProfileInput {
+export interface CreateProfileInput {
   projectId?: string | null;
   name: string;
   adapter: string;

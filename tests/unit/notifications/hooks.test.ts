@@ -24,12 +24,12 @@ function manifestJson(
       submodules: false,
       gitLfs: false,
     },
-    agents: { shell: { adapter: "shell" } },
+    profiles: { shell: { adapter: "shell" } },
     validationProfiles: { quick: { steps: [{ name: "ok", command: "true" }] } },
-    tasks: {
+    agents: {
       t: {
         description: "t",
-        agent: "shell",
+        profile: "shell",
         promptFile: "x.sh",
         validationProfile: "quick",
         ...(options.taskNotifications ? { notifications: options.taskNotifications } : {}),
@@ -69,8 +69,8 @@ describe("notifications/hooks", () => {
       .run("notification_channels", JSON.stringify(channels), new Date().toISOString());
   }
 
-  async function finishRun(projectId: string, taskId: string): Promise<string> {
-    const run = await ctx!.coordinator.createRun({ projectId, taskId, trigger: "manual" });
+  async function finishRun(projectId: string, agentId: string): Promise<string> {
+    const run = await ctx!.coordinator.createRun({ projectId, agentId, trigger: "manual" });
     ctx!.repos.runs.update(run.id, {
       state: RunState.Succeeded,
       finishedAt: new Date().toISOString(),
@@ -125,14 +125,14 @@ describe("notifications/hooks", () => {
           submodules: false,
           gitLfs: false,
         },
-        agents: { shell: { adapter: "shell" } },
+        profiles: { shell: { adapter: "shell" } },
         validationProfiles: {
           quick: { steps: [{ name: "ok", command: "true" }] },
         },
-        tasks: {
+        agents: {
           t: {
             description: "t",
-            agent: "shell",
+            profile: "shell",
             promptFile: "x.sh",
             validationProfile: "quick",
           },
@@ -141,7 +141,7 @@ describe("notifications/hooks", () => {
       }),
     });
 
-    const task = ctx.repos.tasks.create({
+    const task = ctx.repos.agents.create({
       projectId: project.id,
       name: "t",
       prompt: "#!/bin/sh\ntrue\n",
@@ -149,7 +149,7 @@ describe("notifications/hooks", () => {
 
     const run = await ctx.coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: "manual",
     });
 
@@ -208,14 +208,14 @@ describe("notifications/hooks", () => {
           submodules: false,
           gitLfs: false,
         },
-        agents: { shell: { adapter: "shell" } },
+        profiles: { shell: { adapter: "shell" } },
         validationProfiles: {
           quick: { steps: [{ name: "ok", command: "true" }] },
         },
-        tasks: {
+        agents: {
           t: {
             description: "t",
-            agent: "shell",
+            profile: "shell",
             promptFile: "x.sh",
             validationProfile: "quick",
           },
@@ -227,14 +227,14 @@ describe("notifications/hooks", () => {
       }),
     });
 
-    const task = ctx.repos.tasks.create({
+    const task = ctx.repos.agents.create({
       projectId: project.id,
       name: "t",
       prompt: "#!/bin/sh\ntrue\n",
     });
 
     const schedule = ctx.repos.schedules.create({
-      taskId: task.id,
+      agentId: task.id,
       name: "nightly",
       cronExpr: "0 3 * * *",
       disableAfter: 1,
@@ -243,7 +243,7 @@ describe("notifications/hooks", () => {
 
     const run = await ctx.coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       scheduleId: schedule.id,
       trigger: "schedule",
     });
@@ -296,13 +296,13 @@ describe("notifications/hooks", () => {
       }),
     });
 
-    const routed = ctx.repos.tasks.create({
+    const routed = ctx.repos.agents.create({
       projectId: project.id,
       name: "t",
       prompt: "#!/bin/sh\ntrue\n",
       notificationsJson: JSON.stringify({ onSuccess: ["digest"] }),
     });
-    const silent = ctx.repos.tasks.create({
+    const silent = ctx.repos.agents.create({
       projectId: project.id,
       name: "other",
       prompt: "#!/bin/sh\ntrue\n",
@@ -329,13 +329,13 @@ describe("notifications/hooks", () => {
       }),
     });
 
-    const overridden = ctx.repos.tasks.create({
+    const overridden = ctx.repos.agents.create({
       projectId: project.id,
       name: "t",
       prompt: "#!/bin/sh\ntrue\n",
       notificationsJson: JSON.stringify({ onSuccess: ["digest"] }),
     });
-    const inherited = ctx.repos.tasks.create({
+    const inherited = ctx.repos.agents.create({
       projectId: project.id,
       name: "other",
       prompt: "#!/bin/sh\ntrue\n",
@@ -361,7 +361,7 @@ describe("notifications/hooks", () => {
       }),
     });
 
-    const task = ctx.repos.tasks.create({
+    const task = ctx.repos.agents.create({
       projectId: project.id,
       name: "t",
       prompt: "#!/bin/sh\ntrue\n",
@@ -370,7 +370,7 @@ describe("notifications/hooks", () => {
 
     const run = await ctx.coordinator.createRun({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       trigger: "manual",
     });
 

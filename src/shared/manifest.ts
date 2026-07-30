@@ -28,23 +28,33 @@ export const InstructionsConfigSchema = z.object({
 
 export type InstructionsConfig = z.infer<typeof InstructionsConfigSchema>;
 
-export const AgentPermissionsSchema = z.object({
+/**
+ * Filesystem/shell/network permissions on a profile (formerly on the top-level
+ * agent config). Retained shape and enum values from the previous
+ * `AgentPermissions` since profiles carry adapter execution permissions.
+ */
+export const ProfilePermissionsSchema = z.object({
   filesystem: z.enum(['project', 'read-only', 'none']).optional(),
   shell: z.enum(['allowlisted', 'none', 'full']).optional(),
   network: z.enum(['restricted', 'none', 'full']).optional(),
 });
 
-export type AgentPermissions = z.infer<typeof AgentPermissionsSchema>;
+export type ProfilePermissions = z.infer<typeof ProfilePermissionsSchema>;
 
-export const AgentConfigSchema = z.object({
+/**
+ * Adapter/model/permissions for an agent runtime. Formerly `AgentConfig` before
+ * the Tasks→Agents vocabulary rebrand; the previous top-level `agents:` map is
+ * now `profiles:` and describes how an adapter is invoked.
+ */
+export const ProfileConfigSchema = z.object({
   adapter: z.string().min(1),
   model: z.string().optional(),
   timeout: z.string().optional(),
   readOnly: z.boolean().optional(),
-  permissions: AgentPermissionsSchema.optional(),
+  permissions: ProfilePermissionsSchema.optional(),
 });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type ProfileConfig = z.infer<typeof ProfileConfigSchema>;
 
 export const ValidationStepSchema = z.object({
   name: z.string().min(1),
@@ -60,18 +70,18 @@ export const ValidationProfileSchema = z.object({
 
 export type ValidationProfile = z.infer<typeof ValidationProfileSchema>;
 
-export const TaskConcurrencySchema = z.object({
+export const AgentConcurrencySchema = z.object({
   projectLimit: z.number().int().positive().optional(),
   overlapPolicy: z.enum(['skip', 'queue', 'cancel']).optional(),
 });
 
-export type TaskConcurrency = z.infer<typeof TaskConcurrencySchema>;
+export type AgentConcurrency = z.infer<typeof AgentConcurrencySchema>;
 
 export const PrToolSchema = z.enum(['gh', 'tea']);
 
 export type PrTool = z.infer<typeof PrToolSchema>;
 
-export const TaskIntegrationSchema = z.object({
+export const AgentIntegrationSchema = z.object({
   mode: z.enum(['commit-only', 'pull-request', 'auto-merge']),
   targetBranch: z.string().min(1),
   requireAllValidations: z.boolean().optional(),
@@ -98,24 +108,24 @@ export const TaskIntegrationSchema = z.object({
   prMergeStyle: z.enum(['squash', 'merge', 'rebase']).optional(),
 });
 
-export type TaskIntegration = z.infer<typeof TaskIntegrationSchema>;
+export type AgentIntegration = z.infer<typeof AgentIntegrationSchema>;
 
-export const TaskFailurePolicySchema = z.object({
+export const AgentFailurePolicySchema = z.object({
   maxAttemptsPerRun: z.number().int().positive().optional(),
   disableAfterConsecutiveFailedRuns: z.number().int().positive().optional(),
   backoff: z.enum(['exponential', 'linear', 'none']).optional(),
 });
 
-export type TaskFailurePolicy = z.infer<typeof TaskFailurePolicySchema>;
+export type AgentFailurePolicy = z.infer<typeof AgentFailurePolicySchema>;
 
-export const TaskSelfHealSchema = z.object({
-  /** Name of the in-repo healer task to enqueue on failure. */
-  task: z.string().min(1),
+export const AgentSelfHealSchema = z.object({
+  /** Name of the in-repo healer agent to enqueue on failure. */
+  agent: z.string().min(1),
   /** Fire healer after this many consecutive failed runs (default 1). */
   afterConsecutiveFailedRuns: z.number().int().positive().optional(),
 });
 
-export type TaskSelfHeal = z.infer<typeof TaskSelfHealSchema>;
+export type AgentSelfHeal = z.infer<typeof AgentSelfHealSchema>;
 
 export const NotificationsConfigSchema = z.object({
   onSuccess: z.array(z.string()).optional(),
@@ -125,43 +135,52 @@ export const NotificationsConfigSchema = z.object({
 
 export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 
-/** Safe-parse variant for routing stored outside a full manifest (e.g. a task row). */
+/** Safe-parse variant for routing stored outside a full manifest (e.g. an agent row). */
 export function safeParseNotificationsConfig(input: unknown) {
   return NotificationsConfigSchema.safeParse(input);
 }
 
-export const TaskConfigSchema = z.object({
+/**
+ * A work unit definition. Formerly `TaskConfig` before the Tasks→Agents
+ * vocabulary rebrand; `agent` here refers to the profile name (adapter+model)
+ * from the top-level `profiles:` map.
+ */
+export const AgentConfigSchema = z.object({
   description: z.string().min(1),
-  agent: z.string().min(1),
+  /** Name of the entry in `profiles:` that provides the adapter/model. */
+  profile: z.string().min(1),
   promptFile: z.string().min(1),
   validationProfile: z.string().min(1),
-  concurrency: TaskConcurrencySchema.optional(),
-  integration: TaskIntegrationSchema.optional(),
-  failurePolicy: TaskFailurePolicySchema.optional(),
-  selfHeal: TaskSelfHealSchema.optional(),
-  /** Overrides project-level routing for this task only. */
+  concurrency: AgentConcurrencySchema.optional(),
+  integration: AgentIntegrationSchema.optional(),
+  failurePolicy: AgentFailurePolicySchema.optional(),
+  selfHeal: AgentSelfHealSchema.optional(),
+  /** Overrides project-level routing for this agent only. */
   notifications: NotificationsConfigSchema.optional(),
 });
 
-export type TaskConfig = z.infer<typeof TaskConfigSchema>;
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
 export const ScheduleConfigSchema = z.object({
-  task: z.string().min(1),
+  /** Name of the entry in `agents:` this schedule fires. */
+  agent: z.string().min(1),
   cron: z.string().min(1),
   timezone: z.string().min(1),
 });
 
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
-/** Repository project YAML manifest per PRD §8. */
+/** Repository project YAML manifest per PRD §8 (Tasks→Agents vocabulary). */
 export const ProjectManifestSchema = z.object({
   version: ManifestVersionSchema,
   project: ProjectConfigSchema,
   repository: RepositoryConfigSchema,
   instructions: InstructionsConfigSchema.optional(),
-  agents: z.record(AgentConfigSchema),
+  /** Adapter+model configurations (was top-level `agents:` pre-rebrand). */
+  profiles: z.record(ProfileConfigSchema),
   validationProfiles: z.record(ValidationProfileSchema),
-  tasks: z.record(TaskConfigSchema),
+  /** Work-unit definitions (was top-level `tasks:` pre-rebrand). */
+  agents: z.record(AgentConfigSchema),
   schedules: z.record(ScheduleConfigSchema).optional(),
   notifications: NotificationsConfigSchema.optional(),
 });

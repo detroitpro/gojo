@@ -1,25 +1,25 @@
-export type ManifestAgentView = {
+export type ManifestProfileView = {
   name: string;
   adapter: string;
   timeout?: string;
   model?: string;
 };
 
-export type ManifestTaskView = {
+export type ManifestAgentView = {
   name: string;
   description: string;
-  agent: string;
+  profile: string;
   integrationMode: string;
 };
 
 export type ManifestScheduleView = {
   name: string;
-  task: string;
+  agent: string;
   cron: string;
   timezone: string;
 };
 
-export type ManifestProfileView = {
+export type ManifestValidationProfileView = {
   name: string;
   stepCount: number;
 };
@@ -30,10 +30,10 @@ export type ParsedManifestView = {
   projectName?: string;
   defaultBranch?: string;
   repository: Record<string, unknown>;
+  profiles: ManifestProfileView[];
   agents: ManifestAgentView[];
-  tasks: ManifestTaskView[];
   schedules: ManifestScheduleView[];
-  validationProfiles: ManifestProfileView[];
+  validationProfiles: ManifestValidationProfileView[];
   prettyJson: string;
 };
 
@@ -53,8 +53,8 @@ export function parseManifestView(manifestJson: string | undefined | null): Pars
       ok: false,
       error: err instanceof Error ? err.message : "Invalid JSON",
       repository: {},
+      profiles: [],
       agents: [],
-      tasks: [],
       schedules: [],
       validationProfiles: [],
       prettyJson: raw,
@@ -64,12 +64,12 @@ export function parseManifestView(manifestJson: string | undefined | null): Pars
   const root = asRecord(parsed) ?? {};
   const project = asRecord(root.project) ?? {};
   const repository = asRecord(root.repository) ?? {};
+  const profilesRaw = asRecord(root.profiles) ?? {};
   const agentsRaw = asRecord(root.agents) ?? {};
-  const tasksRaw = asRecord(root.tasks) ?? {};
   const schedulesRaw = asRecord(root.schedules) ?? {};
-  const profilesRaw = asRecord(root.validationProfiles) ?? {};
+  const validationProfilesRaw = asRecord(root.validationProfiles) ?? {};
 
-  const agents: ManifestAgentView[] = Object.entries(agentsRaw).map(([name, value]) => {
+  const profiles: ManifestProfileView[] = Object.entries(profilesRaw).map(([name, value]) => {
     const cfg = asRecord(value) ?? {};
     return {
       name,
@@ -79,13 +79,13 @@ export function parseManifestView(manifestJson: string | undefined | null): Pars
     };
   });
 
-  const tasks: ManifestTaskView[] = Object.entries(tasksRaw).map(([name, value]) => {
+  const agents: ManifestAgentView[] = Object.entries(agentsRaw).map(([name, value]) => {
     const cfg = asRecord(value) ?? {};
     const integration = asRecord(cfg.integration) ?? {};
     return {
       name,
       description: typeof cfg.description === "string" ? cfg.description : "",
-      agent: typeof cfg.agent === "string" ? cfg.agent : "—",
+      profile: typeof cfg.profile === "string" ? cfg.profile : "—",
       integrationMode:
         typeof integration.mode === "string" ? integration.mode : "—",
     };
@@ -96,20 +96,20 @@ export function parseManifestView(manifestJson: string | undefined | null): Pars
       const cfg = asRecord(value) ?? {};
       return {
         name,
-        task: typeof cfg.task === "string" ? cfg.task : "—",
+        agent: typeof cfg.agent === "string" ? cfg.agent : "—",
         cron: typeof cfg.cron === "string" ? cfg.cron : "—",
         timezone: typeof cfg.timezone === "string" ? cfg.timezone : "—",
       };
     },
   );
 
-  const validationProfiles: ManifestProfileView[] = Object.entries(profilesRaw).map(
-    ([name, value]) => {
-      const cfg = asRecord(value) ?? {};
-      const steps = Array.isArray(cfg.steps) ? cfg.steps : [];
-      return { name, stepCount: steps.length };
-    },
-  );
+  const validationProfiles: ManifestValidationProfileView[] = Object.entries(
+    validationProfilesRaw,
+  ).map(([name, value]) => {
+    const cfg = asRecord(value) ?? {};
+    const steps = Array.isArray(cfg.steps) ? cfg.steps : [];
+    return { name, stepCount: steps.length };
+  });
 
   let prettyJson = raw;
   try {
@@ -125,8 +125,8 @@ export function parseManifestView(manifestJson: string | undefined | null): Pars
       ? { defaultBranch: project.defaultBranch }
       : {}),
     repository,
+    profiles,
     agents,
-    tasks,
     schedules,
     validationProfiles,
     prettyJson,

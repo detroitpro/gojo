@@ -19,7 +19,7 @@ export interface PrepareAttemptInput {
   runId: string;
   /** Project display name — sanitized into the branch/worktree path. */
   projectName: string;
-  taskName: string;
+  agentName: string;
   /** Distinguishes multi-attempt branches under the same run. */
   attemptNumber?: number;
   /** When true, fetch + fast-forward baseBranch from origin before branching. */
@@ -71,19 +71,19 @@ export class WorkspaceManager {
   }
 
   buildBranchName(
-    taskName: string,
+    agentName: string,
     runId: string,
     projectName: string,
     date = new Date(),
     attemptNumber = 1,
   ): string {
     const safeProject = sanitizeSegment(projectName, 'project');
-    const safeTask = sanitizeSegment(taskName, 'task');
+    const safeAgent = sanitizeSegment(agentName, 'agent');
     // Flat attempt suffix — nested refs like run-xxx/a2 fail when run-xxx already exists.
     const attemptSuffix = attemptNumber > 1 ? `-a${attemptNumber}` : '';
-    // Task segment stays immediately under `gojo/` so allowlists like
+    // Agent segment stays immediately under `gojo/` so allowlists like
     // `gojo/maintain-quality` still match; project disambiguates the global worktree root.
-    return `gojo/${safeTask}/${safeProject}/${formatDate(date)}/run-${runId}${attemptSuffix}`;
+    return `gojo/${safeAgent}/${safeProject}/${formatDate(date)}/run-${runId}${attemptSuffix}`;
   }
 
   buildWorktreePath(branchName: string): string {
@@ -148,7 +148,7 @@ export class WorkspaceManager {
 
     const attemptNumber = input.attemptNumber ?? 1;
     const branchName = this.buildBranchName(
-      input.taskName,
+      input.agentName,
       input.runId,
       input.projectName,
       new Date(),

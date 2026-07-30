@@ -10,8 +10,8 @@ import type { Project } from "@/storage/types";
 
 export interface ProjectSyncResult {
   manifestPath: string | null;
-  agentProfiles: number;
-  tasks: number;
+  profiles: number;
+  agents: number;
   schedules: number;
 }
 
@@ -46,8 +46,8 @@ export function syncProjectFromManifest(
   if (!manifestPath) {
     return {
       manifestPath: null,
-      agentProfiles: 0,
-      tasks: 0,
+      profiles: 0,
+      agents: 0,
       schedules: 0,
     };
   }
@@ -61,71 +61,71 @@ export function syncProjectFromManifest(
     name: manifest.project.name,
   });
 
-  const agentProfileIds = new Map<string, string>();
-  let agentProfiles = 0;
+  const profileIds = new Map<string, string>();
+  let profiles = 0;
 
-  for (const [name, config] of Object.entries(manifest.agents)) {
-    const profile = repos.agentProfiles.create({
+  for (const [name, config] of Object.entries(manifest.profiles)) {
+    const profile = repos.profiles.create({
       projectId: project.id,
       name,
       adapter: config.adapter,
       configJson: JSON.stringify(config),
     });
-    agentProfileIds.set(name, profile.id);
-    agentProfiles += 1;
+    profileIds.set(name, profile.id);
+    profiles += 1;
   }
 
-  const taskIds = new Map<string, string>();
-  let tasks = 0;
+  const agentIds = new Map<string, string>();
+  let agents = 0;
 
-  for (const [name, taskConfig] of Object.entries(manifest.tasks)) {
-    const agentProfileId = agentProfileIds.get(taskConfig.agent) ?? null;
-    const validationProfile = manifest.validationProfiles[taskConfig.validationProfile];
-    const prompt = readPrompt(project.repoPath, taskConfig.promptFile);
+  for (const [name, agentConfig] of Object.entries(manifest.agents)) {
+    const profileId = profileIds.get(agentConfig.profile) ?? null;
+    const validationProfile = manifest.validationProfiles[agentConfig.validationProfile];
+    const prompt = readPrompt(project.repoPath, agentConfig.promptFile);
 
-    const existing = repos.tasks
+    const existing = repos.agents
       .listByProject(project.id)
-      .find((task) => task.name === name);
+      .find((agent) => agent.name === name);
 
     const failurePolicyJson = JSON.stringify({
-      ...(taskConfig.failurePolicy ?? {}),
-      ...(taskConfig.selfHeal ? { selfHeal: taskConfig.selfHeal } : {}),
+      ...(agentConfig.failurePolicy ?? {}),
+      ...(agentConfig.selfHeal ? { selfHeal: agentConfig.selfHeal } : {}),
     });
 
     if (existing) {
-      repos.tasks.update(existing.id, {
-        description: taskConfig.description,
-        agentProfileId,
+      repos.agents.update(existing.id, {
+        description: agentConfig.description,
+        profileId,
         prompt,
         validationProfileJson: JSON.stringify(validationProfile ?? { steps: [] }),
-        integrationJson: JSON.stringify(taskConfig.integration ?? {}),
+        integrationJson: JSON.stringify(agentConfig.integration ?? {}),
         failurePolicyJson,
-        concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
-        notificationsJson: JSON.stringify(taskConfig.notifications ?? {}),
+        concurrencyJson: JSON.stringify(agentConfig.concurrency ?? {}),
+        notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
       });
-      taskIds.set(name, existing.id);
+      agentIds.set(name, existing.id);
     } else {
-      const created = repos.tasks.create({
+      const created = repos.agents.create({
         projectId: project.id,
         name,
-        description: taskConfig.description,
-        agentProfileId,
+        description: agentConfig.description,
+        profileId,
         prompt,
         validationProfileJson: JSON.stringify(validationProfile ?? { steps: [] }),
-        integrationJson: JSON.stringify(taskConfig.integration ?? {}),
+        integrationJson: JSON.stringify(agentConfig.integration ?? {}),
         failurePolicyJson,
-        concurrencyJson: JSON.stringify(taskConfig.concurrency ?? {}),
-        notificationsJson: JSON.stringify(taskConfig.notifications ?? {}),
+        concurrencyJson: JSON.stringify(agentConfig.concurrency ?? {}),
+        notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
       });
-      taskIds.set(name, created.id);
+      agentIds.set(name, created.id);
     }
-    tasks += 1;
+    agents += 1;
   }
 
-  // Disable tasks removed from the manifest so they stop appearing as runnable.
-  for (const existing of repos.tasks.listByProject(project.id)) {
-    if (!taskIds.has(existing.name) && existing.enabled) {
-      repos.tasks.update(existing.id, { enabled: false });
+  // Disable agents removed from the manifest so they stop appearing as runnable.
+  for (const existing of repos.agents.listByProject(project.id)) {
+    if (!agentIds.has(existing.name) && existing.enabled) {
+      repos.agents.update(existing.id, { enabled: false });
     }
   }
 
@@ -133,17 +133,19 @@ export function syncProjectFromManifest(
   let schedules = 0;
   if (manifest.schedules) {
     for (const [name, scheduleConfig] of Object.entries(manifest.schedules)) {
-      const taskId = taskIds.get(scheduleConfig.task);
-      if (!taskId) {
+      const agentId = agentIds.get(scheduleConfig.agent);
+      if (!agentId) {
         continue;
       }
 
-      const taskConfig = manifest.tasks[scheduleConfig.task];
+      const agentConfig = manifest.agents[scheduleConfig.agent];
       const disableAfter =
-        taskConfig?.failurePolicy?.disableAfterConsecutiveFailedRuns ?? null;
+        agentConfig?.failurePolicy?.disableAfterConsecutiveFailedRuns ?? null;
 
       const nextRunAt = computeScheduleNextRun(scheduleConfig.cron, scheduleConfig.timezone);
-      const existing = repos.schedules.listByTask(taskId).find((item) => item.name === name);
+      const existing = repos.schedules
+        .listByAgent(agentId)
+        .find((item) => item.name === name);
 
       if (existing) {
         repos.schedules.update(existing.id, {
@@ -155,7 +157,7 @@ export function syncProjectFromManifest(
         });
       } else {
         repos.schedules.create({
-          taskId,
+          agentId,
           name,
           cronExpr: scheduleConfig.cron,
           timezone: scheduleConfig.timezone,
@@ -164,15 +166,15 @@ export function syncProjectFromManifest(
           disableAfter,
         });
       }
-      desiredSchedules.add(`${taskId}:${name}`);
+      desiredSchedules.add(`${agentId}:${name}`);
       schedules += 1;
     }
   }
 
-  // Soft-disable schedules removed/renamed in the manifest (mirror tasks).
-  for (const task of repos.tasks.listByProject(project.id)) {
-    for (const schedule of repos.schedules.listByTask(task.id)) {
-      if (schedule.enabled && !desiredSchedules.has(`${schedule.taskId}:${schedule.name}`)) {
+  // Soft-disable schedules removed/renamed in the manifest (mirror agents).
+  for (const agent of repos.agents.listByProject(project.id)) {
+    for (const schedule of repos.schedules.listByAgent(agent.id)) {
+      if (schedule.enabled && !desiredSchedules.has(`${schedule.agentId}:${schedule.name}`)) {
         repos.schedules.update(schedule.id, { enabled: false });
       }
     }
@@ -180,8 +182,8 @@ export function syncProjectFromManifest(
 
   return {
     manifestPath,
-    agentProfiles,
-    tasks,
+    profiles,
+    agents,
     schedules,
   };
 }

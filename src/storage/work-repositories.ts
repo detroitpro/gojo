@@ -108,7 +108,7 @@ export interface CreateWorkItemInput {
   attention?: WorkAttention;
   provenance?: WorkProvenance;
   actorName?: string | null;
-  agentProfileId?: string | null;
+  profileId?: string | null;
   labels?: string[];
   nativeState?: string | null;
   nativeJson?: string;
@@ -191,12 +191,12 @@ export type WorkStatusOptions = {
 export interface RunContextRecord {
   runId: string;
   workItemId: string;
-  taskName: string;
-  taskDescription: string;
+  agentName: string;
+  agentDescription: string;
   prompt: string;
   manifestHash: string | null;
   instructions: string;
-  agentProfileJson: string;
+  profileJson: string;
   adapter: string | null;
   model: string | null;
   validationJson: string;
@@ -221,7 +221,7 @@ interface WorkItemRow {
   attention: WorkAttention;
   provenance: WorkProvenance;
   actor_name: string | null;
-  agent_profile_id: string | null;
+  profile_id: string | null;
   labels_json: string;
   native_state: string | null;
   native_json: string;
@@ -255,7 +255,7 @@ function mapWorkItem(row: WorkItemRow): WorkItem {
     attention: row.attention,
     provenance: row.provenance,
     actorName: row.actor_name,
-    agentProfileId: row.agent_profile_id,
+    profileId: row.profile_id,
     labels: parseStringArray(row.labels_json),
     nativeState: row.native_state,
     nativeJson: row.native_json,
@@ -299,8 +299,8 @@ function enrichWorkAttribution(
   const idPlaceholders = placeholders(ids.length);
 
   const contexts = sqlite
-    .query<{ work_item_id: string; task_name: string; adapter: string | null }, string[]>(
-      `SELECT work_item_id, task_name, adapter
+    .query<{ work_item_id: string; agent_name: string; adapter: string | null }, string[]>(
+      `SELECT work_item_id, agent_name, adapter
        FROM run_context
        WHERE work_item_id IN (${idPlaceholders})`,
     )
@@ -330,8 +330,8 @@ function enrichWorkAttribution(
   ];
   if (delivererIds.length > 0) {
     const extraContexts = sqlite
-      .query<{ work_item_id: string; task_name: string; adapter: string | null }, string[]>(
-        `SELECT work_item_id, task_name, adapter
+      .query<{ work_item_id: string; agent_name: string; adapter: string | null }, string[]>(
+        `SELECT work_item_id, agent_name, adapter
          FROM run_context
          WHERE work_item_id IN (${placeholders(delivererIds.length)})`,
       )
@@ -354,20 +354,20 @@ function enrichWorkAttribution(
     }
   }
 
-  const taskNameByTarget = new Map<string, string>();
+  const agentNameByTarget = new Map<string, string>();
   for (const link of delivers) {
-    const fromContext = contextByWorkId.get(link.source_work_item_id)?.task_name;
+    const fromContext = contextByWorkId.get(link.source_work_item_id)?.agent_name;
     const fromTitle = delivererTitleById.get(link.source_work_item_id);
-    const taskName = fromContext?.trim() || fromTitle?.trim();
-    if (taskName) {
-      taskNameByTarget.set(link.target_work_item_id, taskName);
+    const agentName = fromContext?.trim() || fromTitle?.trim();
+    if (agentName) {
+      agentNameByTarget.set(link.target_work_item_id, agentName);
     }
   }
 
   const profileIds = [
     ...new Set(
       items
-        .map((item) => item.agentProfileId)
+        .map((item) => item.profileId)
         .filter((id): id is string => typeof id === "string" && id.length > 0),
     ),
   ];
@@ -375,7 +375,7 @@ function enrichWorkAttribution(
   if (profileIds.length > 0) {
     const profiles = sqlite
       .query<{ id: string; name: string; adapter: string }, string[]>(
-        `SELECT id, name, adapter FROM agent_profiles WHERE id IN (${placeholders(profileIds.length)})`,
+        `SELECT id, name, adapter FROM profiles WHERE id IN (${placeholders(profileIds.length)})`,
       )
       .all(...profileIds);
     for (const row of profiles) {
@@ -385,13 +385,13 @@ function enrichWorkAttribution(
 
   return items.map((item) => {
     const context = contextByWorkId.get(item.id);
-    const profile = item.agentProfileId
-      ? profileById.get(item.agentProfileId)
+    const profile = item.profileId
+      ? profileById.get(item.profileId)
       : undefined;
-    const taskName =
+    const agentName =
       item.kind === "run"
-        ? context?.task_name?.trim() || item.title
-        : taskNameByTarget.get(item.id) ?? null;
+        ? context?.agent_name?.trim() || item.title
+        : agentNameByTarget.get(item.id) ?? null;
     const agentLabel =
       item.actorName?.trim() ||
       profile?.name?.trim() ||
@@ -400,7 +400,7 @@ function enrichWorkAttribution(
       item.provenance;
     return {
       ...item,
-      taskName,
+      agentName,
       agentLabel,
     };
   });
@@ -1005,7 +1005,7 @@ export function createWorkRepositories(db: Database) {
           `INSERT INTO work_items (
             id, project_id, source_id, kind, native_key, title, summary,
             execution, delivery, outcome, attention, provenance, actor_name,
-            agent_profile_id, labels_json, native_state, native_json, web_url,
+            profile_id, labels_json, native_state, native_json, web_url,
             observed_at, next_sync_at, sync_state, last_error, created_at,
             updated_at, started_at, completed_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1024,7 +1024,7 @@ export function createWorkRepositories(db: Database) {
           attentionForSync(input.attention, syncState),
           input.provenance ?? "external",
           input.actorName ?? null,
-          input.agentProfileId ?? null,
+          input.profileId ?? null,
           JSON.stringify(input.labels ?? []),
           input.nativeState ?? null,
           input.nativeJson ?? "{}",
@@ -1083,7 +1083,7 @@ export function createWorkRepositories(db: Database) {
                   `UPDATE work_items SET
                     kind = ?, title = ?, summary = ?, execution = ?, delivery = ?,
                     outcome = ?, attention = ?, provenance = ?, actor_name = ?,
-                    agent_profile_id = ?, labels_json = ?, native_state = ?,
+                    profile_id = ?, labels_json = ?, native_state = ?,
                     native_json = ?, web_url = ?, observed_at = ?, next_sync_at = ?,
                     sync_state = ?, last_error = ?,
                     resolution = ?, resolved_at = ?, resolved_by = ?, resolution_note = ?,
@@ -1100,9 +1100,9 @@ export function createWorkRepositories(db: Database) {
                   attention,
                   nextProvenance,
                   input.actorName === undefined ? existing.actor_name : input.actorName,
-                  input.agentProfileId === undefined
-                    ? existing.agent_profile_id
-                    : input.agentProfileId,
+                  input.profileId === undefined
+                    ? existing.profile_id
+                    : input.profileId,
                   JSON.stringify(input.labels ?? parseStringArray(existing.labels_json)),
                   input.nativeState === undefined ? existing.native_state : input.nativeState,
                   input.nativeJson ?? existing.native_json,
@@ -1405,7 +1405,7 @@ export function createWorkRepositories(db: Database) {
         values.push(input.sourceId);
       }
       if (input.actor) {
-        clauses.push("(actor_name = ? OR agent_profile_id = ?)");
+        clauses.push("(actor_name = ? OR profile_id = ?)");
         values.push(input.actor, input.actor);
       }
       if (input.label) {
@@ -1659,8 +1659,8 @@ export function createWorkRepositories(db: Database) {
       sqlite
         .query(
           `INSERT OR IGNORE INTO run_context (
-            run_id, work_item_id, task_name, task_description, prompt,
-            manifest_hash, instructions, agent_profile_json, adapter, model,
+            run_id, work_item_id, agent_name, agent_description, prompt,
+            manifest_hash, instructions, profile_json, adapter, model,
             validation_json, integration_json, failure_policy_json, base_branch,
             schedule_json, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1668,12 +1668,12 @@ export function createWorkRepositories(db: Database) {
         .run(
           input.runId,
           input.workItemId,
-          input.taskName,
-          input.taskDescription,
+          input.agentName,
+          input.agentDescription,
           input.prompt,
           input.manifestHash,
           input.instructions,
-          input.agentProfileJson,
+          input.profileJson,
           input.adapter,
           input.model,
           input.validationJson,
@@ -1692,12 +1692,12 @@ export function createWorkRepositories(db: Database) {
           {
             run_id: string;
             work_item_id: string;
-            task_name: string;
-            task_description: string;
+            agent_name: string;
+            agent_description: string;
             prompt: string;
             manifest_hash: string | null;
             instructions: string;
-            agent_profile_json: string;
+            profile_json: string;
             adapter: string | null;
             model: string | null;
             validation_json: string;
@@ -1714,12 +1714,12 @@ export function createWorkRepositories(db: Database) {
       return {
         runId: row.run_id,
         workItemId: row.work_item_id,
-        taskName: row.task_name,
-        taskDescription: row.task_description,
+        agentName: row.agent_name,
+        agentDescription: row.agent_description,
         prompt: row.prompt,
         manifestHash: row.manifest_hash,
         instructions: row.instructions,
-        agentProfileJson: row.agent_profile_json,
+        profileJson: row.profile_json,
         adapter: row.adapter,
         model: row.model,
         validationJson: row.validation_json,

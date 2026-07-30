@@ -18,9 +18,9 @@ describe("scheduler/scheduler", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const task = repos.tasks.create({ projectId: project.id, name: "task", prompt: "go" });
+    const task = repos.agents.create({ projectId: project.id, name: "task", prompt: "go" });
     const schedule = repos.schedules.create({
-      taskId: task.id,
+      agentId: task.id,
       name: "hourly",
       cronExpr: "0 * * * *",
       timezone: "UTC",
@@ -109,10 +109,10 @@ describe("scheduler/scheduler", () => {
     repos.schedules.update(schedule.id, { overlapPolicy: "skip" });
 
     const project = repos.projects.list()[0]!;
-    const task = repos.tasks.listByProject(project.id)[0]!;
+    const task = repos.agents.listByProject(project.id)[0]!;
     repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       scheduleId: schedule.id,
       idempotencyKey: "active-run",
       trigger: "schedule",
@@ -139,10 +139,10 @@ describe("scheduler/scheduler", () => {
     repos.schedules.update(schedule.id, { overlapPolicy: "queue" });
 
     const project = repos.projects.list()[0]!;
-    const task = repos.tasks.listByProject(project.id)[0]!;
+    const task = repos.agents.listByProject(project.id)[0]!;
     repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       scheduleId: schedule.id,
       idempotencyKey: "active-run",
       trigger: "schedule",
@@ -169,10 +169,10 @@ describe("scheduler/scheduler", () => {
     repos.schedules.update(schedule.id, { overlapPolicy: "cancel_replace" });
 
     const project = repos.projects.list()[0]!;
-    const task = repos.tasks.listByProject(project.id)[0]!;
+    const task = repos.agents.listByProject(project.id)[0]!;
     repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       scheduleId: schedule.id,
       idempotencyKey: "active-run",
       trigger: "schedule",

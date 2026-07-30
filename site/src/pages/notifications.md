@@ -11,7 +11,7 @@ Gojo separates **where** notifications go (instance channels) from **when** they
 | Layer | Where | What it stores |
 |-------|-------|----------------|
 | Channels | Instance Settings (or API) | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token + chat id |
-| Routing | `gojo.yaml` → `notifications` | Which channel names fire on success, failure, or schedule auto-disable |
+| Routing | `gojo.yaml` → `notifications` (project or per-agent) | Which channel names fire on success, failure, or schedule auto-disable |
 
 1. A run finishes (`run.finished`).
 2. Gojo reads the project’s `notifications.onSuccess` / `onFailure` (and `onDisabled` if a schedule was auto-disabled).
@@ -42,7 +42,7 @@ You can also **Send test**, **Edit**, or **Delete** from the channel table after
 
 Webhook-like types POST JSON to `webhookUrl`. Slack wraps the payload as `{ "text": "<json string>" }`; other webhook types send the payload object directly.
 
-Telegram uses the Bot API: `sendMessage` with human-readable text (project, task, state, run id, error) — not a raw JSON dump. If the run wrote a handoff, its `summary` follows as the message body.
+Telegram uses the Bot API: `sendMessage` with human-readable text (project, agent, state, run id, error) — not a raw JSON dump. If the run wrote a handoff, its `summary` follows as the message body.
 
 ## Route runs (`gojo.yaml`)
 
@@ -67,17 +67,17 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 | `onFailure` | Run ended in any other terminal state (failed, canceled, timed out, …) |
 | `onDisabled` | After a scheduled run, the schedule was auto-disabled for consecutive failures |
 
-## Route a single task
+## Route a single agent
 
-Top-level `notifications` applies to every task in the project. To have **one** task notify while the
-rest stay silent, put a `notifications` block on that task and leave the project block empty:
+Top-level `notifications` applies to every agent in the project. To have **one** agent notify while
+the rest stay silent, put a `notifications` block on that agent and leave the project block empty:
 
 ```yaml
-tasks:
+agents:
   activity-digest:
     description: Daily executive brief on what shipped in the last 24h
-    agent: cursor
-    promptFile: .gojo/tasks/activity-digest.md
+    profile: cursor
+    promptFile: .gojo/agents/activity-digest.md
     validationProfile: handoff
     notifications:
       onSuccess:
@@ -88,13 +88,13 @@ tasks:
 notifications: {}
 ```
 
-A task block **replaces** project routing for that task; it does not merge with it. A task with no
-`notifications` block falls back to the project block as before.
+An agent block **replaces** project routing for that agent; it does not merge with it. An agent with
+no `notifications` block falls back to the project block as before.
 
 ## Report text in the message
 
-Whatever the agent writes as `summary` in `.gojo/handoff.json` is delivered as the message body,
-verbatim. That makes a report-only task a usable digest: the agent researches, writes the finished
+Whatever the adapter writes as `summary` in `.gojo/handoff.json` is delivered as the message body,
+verbatim. That makes a report-only agent a usable digest: it researches, writes the finished
 message, and gojo delivers it.
 
 Keep it plain text. Telegram caps messages at 4096 characters and gojo truncates past that.
@@ -108,7 +108,7 @@ Keep it plain text. Telegram caps messages at 4096 characters and gojo truncates
 ```json
 {
   "project": "demo",
-  "task": "maintain-deps",
+  "agent": "maintain-deps",
   "runId": "01J…",
   "state": "Failed",
   "error": "validation failed",
@@ -124,7 +124,7 @@ Keep it plain text. Telegram caps messages at 4096 characters and gojo truncates
 
 ## Auto-disable notifications
 
-In the task/schedule failure policy you can set `disableAfterConsecutiveFailedRuns`. When that threshold is hit:
+In the agent/schedule failure policy you can set `disableAfterConsecutiveFailedRuns`. When that threshold is hit:
 
 1. The schedule is disabled.
 2. Channels listed under `notifications.onDisabled` receive a notification.
@@ -138,7 +138,7 @@ Pair `onDisabled` with your ops channel so silent schedule death is visible.
 | **Send test** fails | Bad URL/token, non-HTTPS webhook, wrong chat id, or the provider rejected the request |
 | Real runs never notify | Channel name in `gojo.yaml` does not match Settings, or project not synced |
 | Only failures notify | `onSuccess` empty or missing |
-| Every task notifies | Routing is on the project block; move it to the one task that should notify |
+| Every agent notifies | Routing is on the project block; move it to the one agent that should notify |
 | Message has no report text | The run wrote no handoff, or its `summary` was empty |
 | Schedule died quietly | Missing `onDisabled`, or `disableAfterConsecutiveFailedRuns` not set |
 | Telegram 401/404 | Invalid bot token, or the bot has not been started / added to the chat |

@@ -1,17 +1,17 @@
 ---
 layout: ../layouts/DocLayout.astro
 title: Documentation
-description: Guides and reference for operating gojo — from first shell task to production AI agents.
+description: Guides and reference for operating gojo — from first shell agent to production AI agents.
 ---
 
 ## Guides
 
 - [Getting started](/getting-started) — install, setup, add a project, sync
-- [Your first agent](/first-agent) — shell task end-to-end (learn the pipeline)
+- [Your first agent](/first-agent) — shell agent end-to-end (learn the pipeline)
 - [Advanced agent](/advanced-agent) — Claude Code / Cursor dependency maintenance with PRs
-- [Task prompt best practices](/task-prompts) — constrained limits, hard rules, handoffs
+- [Agent prompt best practices](/agent-prompts) — constrained limits, hard rules, handoffs
 - [Advanced usage](/advanced-usage) — multi-role agents, approvals, secrets, hygiene
-- [Self-healing](/self-healing) — recover from failed tasks with in-repo healer PRs
+- [Self-healing](/self-healing) — recover from failed agents with in-repo healer PRs
 
 ## Reference
 
@@ -28,7 +28,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo dashboard](/images/ui-dashboard.png)
 
-**Dashboard** — full-width ops gateway: inventory tiles (projects, tasks, schedules, runs), an Impact strip (merged, PRs open, merge rate, commits, succeeded runs, and category totals), and per-project task lists with a last-five-runs strip. Every metric tile drills into the list behind it — Integrations, Impact items, Runs, and so on.
+**Dashboard** — full-width ops gateway: inventory tiles (projects, agents, schedules, runs), an Impact strip (merged, PRs open, merge rate, commits, succeeded runs, and category totals), and per-project agent lists with a last-five-runs strip. Every metric tile drills into the list behind it — Integrations, Impact items, Runs, and so on.
 
 **Queue** — waiting runs with admission positions, instance scheduling policy caps, and what is actively running.
 
@@ -36,7 +36,13 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 **Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, remote link, open and recently merged PR lists (with merge babysitter enqueue when `maintain-merge` exists), Impact detail, structured config, and sync manifests.
 
-**Tasks** — list synced tasks with success rate and last run. Open a task for read-only inspect: last-synced prompt, policy JSON (validation, integration, failure, concurrency), linked schedules, manifest source paths, and a recent-runs strip. Run now, enable/disable, and jump to filtered Runs or Schedules. Edit config in `gojo.yaml` + `promptFile`, then **Project Sync** — the detail page is ops inspect, not an editor.
+![gojo agents](/images/ui-agents.png)
+
+**Agents** — list synced agents with success rate and last run. Open an agent for read-only inspect: last-synced prompt, policy JSON (validation, integration, failure, concurrency), linked schedules, manifest source paths, and a recent-runs strip. Run now, enable/disable, and jump to filtered Runs or Schedules. Edit config in `gojo.yaml` + `promptFile`, then **Project Sync** — the detail page is ops inspect, not an editor.
+
+![gojo adapters](/images/ui-adapters.png)
+
+**Adapters** — detection results for shell / cursor / claude-code on the host: install status, version, and whether the CLI authenticated. `gojo adapter detect` mirrors it for scripting.
 
 ![gojo runs list](/images/ui-runs.png)
 

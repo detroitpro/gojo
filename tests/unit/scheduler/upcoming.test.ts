@@ -20,9 +20,9 @@ describe("listUpcomingSchedules", () => {
   function seed(enabled = true) {
     const repos = createRepositories(openDb());
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const task = repos.tasks.create({ projectId: project.id, name: "task", prompt: "go" });
+    const task = repos.agents.create({ projectId: project.id, name: "task", prompt: "go" });
     const schedule = repos.schedules.create({
-      taskId: task.id,
+      agentId: task.id,
       name: "hourly",
       cronExpr: "0 * * * *",
       timezone: "UTC",

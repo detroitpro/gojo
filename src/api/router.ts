@@ -47,24 +47,24 @@ import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import { getDashboardOverview } from "@/storage/dashboard-overview";
 import { getDashboardImpact } from "@/storage/impact-analytics";
 import {
+  AGENT_SORT_ALLOWED,
   BACKUP_SORT_ALLOWED,
-  getTaskDetail,
+  getAgentDetail,
   IMPACT_ITEM_SORT_ALLOWED,
   INTEGRATION_LIST_STATUSES,
   INTEGRATION_SORT_ALLOWED,
+  listAgentsPage,
   listImpactItemsPage,
   listIntegrationsPage,
   listProjectsPage,
   toProjectDetailRow,
   listRunsPage,
   listSchedulesPage,
-  listTasksPage,
   PROJECT_SORT_ALLOWED,
   type IntegrationListStatus,
   QUEUE_SORT_ALLOWED,
   RUN_SORT_ALLOWED,
   SCHEDULE_SORT_ALLOWED,
-  TASK_SORT_ALLOWED,
   TOKEN_SORT_ALLOWED,
 } from "@/storage/paged-lists";
 import {
@@ -97,7 +97,7 @@ export type UpgradeServer = {
 type RunListItem = {
   id: string;
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId: string | null;
   state: string;
   idempotencyKey: string;
@@ -107,13 +107,13 @@ type RunListItem = {
   finishedAt: string | null;
   errorMessage: string | null;
   projectName: string | null;
-  taskName: string | null;
+  agentName: string | null;
 };
 
 function enrichRun(ctx: AppContext, run: {
   id: string;
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId: string | null;
   state: string;
   idempotencyKey: string;
@@ -124,11 +124,11 @@ function enrichRun(ctx: AppContext, run: {
   errorMessage: string | null;
 }): RunListItem {
   const project = ctx.repos.projects.findById(run.projectId);
-  const task = ctx.repos.tasks.findById(run.taskId);
+  const agent = ctx.repos.agents.findById(run.agentId);
   return {
     ...run,
     projectName: project?.name ?? null,
-    taskName: task?.name ?? null,
+    agentName: agent?.name ?? null,
   };
 }
 
@@ -655,15 +655,15 @@ export async function handleApiRequest(
         type: "project.synced",
         entityKind: "project",
         entityId: projectId,
-        topics: [
-          "dashboard",
-          "overview",
-          "projects",
-          "tasks",
-          "schedules",
-          "work",
-          "sources",
-        ],
+      topics: [
+            "dashboard",
+            "overview",
+            "projects",
+            "agents",
+            "schedules",
+            "work",
+            "sources",
+          ],
         data: result,
       });
       return success({
@@ -747,7 +747,7 @@ export async function handleApiRequest(
     }
   }
 
-  if (method === "GET" && pathname === "/api/v1/agents") {
+  if (method === "GET" && pathname === "/api/v1/adapters") {
     const adapters = listAdapters();
     const detected = await Promise.all(
       adapters.map(async (adapter) => ({
@@ -755,15 +755,15 @@ export async function handleApiRequest(
         ...(await adapter.detect()),
       })),
     );
-    return success({ agents: detected });
+    return success({ adapters: detected });
   }
 
-  const agentTestMatch = pathname.match(/^\/api\/v1\/agents\/([^/]+)\/test$/);
-  if (method === "POST" && agentTestMatch) {
-    const name = decodeURIComponent(agentTestMatch[1] ?? "");
+  const adapterTestMatch = pathname.match(/^\/api\/v1\/adapters\/([^/]+)\/test$/);
+  if (method === "POST" && adapterTestMatch) {
+    const name = decodeURIComponent(adapterTestMatch[1] ?? "");
     const adapter = listAdapters().find((item) => item.name === name);
     if (!adapter) {
-      return failure("not_found", "Agent not found", 404);
+      return failure("not_found", "Adapter not found", 404);
     }
     const result = await adapter.execute({
       workspacePath: process.cwd(),
@@ -775,14 +775,14 @@ export async function handleApiRequest(
     return success({ result });
   }
 
-  if (method === "GET" && pathname === "/api/v1/tasks") {
+  if (method === "GET" && pathname === "/api/v1/agents") {
     const page = parsePageParamsFromUrl(url);
     const sort = parseSortParamsFromUrl(url, {
-      allowed: TASK_SORT_ALLOWED,
+      allowed: AGENT_SORT_ALLOWED,
       defaultSort: "name",
       defaultOrder: "asc",
     });
-    const result = listTasksPage(ctx.db, {
+    const result = listAgentsPage(ctx.db, {
       ...page,
       ...sort,
       projectId: url.searchParams.get("projectId"),
@@ -790,20 +790,20 @@ export async function handleApiRequest(
       q: url.searchParams.get("q"),
     });
     return success({
-      tasks: result.items,
+      agents: result.items,
       total: result.total,
       limit: result.limit,
       offset: result.offset,
     });
   }
 
-  if (method === "POST" && pathname === "/api/v1/tasks") {
+  if (method === "POST" && pathname === "/api/v1/agents") {
     const body = await readJsonBody<{
       projectId?: string;
       name?: string;
       prompt?: string;
       description?: string;
-      agentProfileId?: string | null;
+      profileId?: string | null;
       validationProfileJson?: string;
       integrationJson?: string;
       failurePolicyJson?: string;
@@ -820,12 +820,12 @@ export async function handleApiRequest(
       return failure("not_found", "Project not found", 404);
     }
 
-    const task = ctx.repos.tasks.create({
+    const agent = ctx.repos.agents.create({
       projectId: body.projectId,
       name: body.name,
       prompt: body.prompt,
       ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.agentProfileId !== undefined ? { agentProfileId: body.agentProfileId } : {}),
+      ...(body.profileId !== undefined ? { profileId: body.profileId } : {}),
       ...(body.validationProfileJson !== undefined
         ? { validationProfileJson: body.validationProfileJson }
         : {}),
@@ -837,37 +837,37 @@ export async function handleApiRequest(
       ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
     });
     ctx.platformEvents.append({
-      projectId: task.projectId,
-      type: "task.created",
-      entityKind: "task",
-      entityId: task.id,
-      topics: ["dashboard", "overview", "projects", "tasks"],
+      projectId: agent.projectId,
+      type: "agent.created",
+      entityKind: "agent",
+      entityId: agent.id,
+      topics: ["dashboard", "overview", "projects", "agents"],
     });
 
-    return success({ task }, 201);
+    return success({ agent }, 201);
   }
 
-  const taskGetMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)$/);
-  if (method === "GET" && taskGetMatch) {
-    const taskId = taskGetMatch[1] ?? "";
-    const task = getTaskDetail(ctx.db, taskId);
-    if (!task) {
-      return failure("not_found", "Task not found", 404);
+  const agentGetMatch = pathname.match(/^\/api\/v1\/agents\/([^/]+)$/);
+  if (method === "GET" && agentGetMatch) {
+    const agentId = agentGetMatch[1] ?? "";
+    const agent = getAgentDetail(ctx.db, agentId);
+    if (!agent) {
+      return failure("not_found", "Agent not found", 404);
     }
-    return success({ task });
+    return success({ agent });
   }
 
-  const taskRunMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)\/run$/);
-  if (method === "POST" && taskRunMatch) {
-    const taskId = taskRunMatch[1] ?? "";
-    const task = ctx.repos.tasks.findById(taskId);
-    if (!task) {
-      return failure("not_found", "Task not found", 404);
+  const agentRunMatch = pathname.match(/^\/api\/v1\/agents\/([^/]+)\/run$/);
+  if (method === "POST" && agentRunMatch) {
+    const agentId = agentRunMatch[1] ?? "";
+    const agent = ctx.repos.agents.findById(agentId);
+    if (!agent) {
+      return failure("not_found", "Agent not found", 404);
     }
 
     const run = await ctx.coordinator.enqueueRun({
-      projectId: task.projectId,
-      taskId: task.id,
+      projectId: agent.projectId,
+      agentId: agent.id,
       trigger: "api",
     });
     ctx.dispatcher.kick();
@@ -875,25 +875,25 @@ export async function handleApiRequest(
     return success({ run }, 202);
   }
 
-  const taskActionMatch = pathname.match(/^\/api\/v1\/tasks\/([^/]+)\/(enable|disable)$/);
-  if (method === "POST" && taskActionMatch) {
-    const taskId = taskActionMatch[1] ?? "";
-    const action = taskActionMatch[2];
-    const task = ctx.repos.tasks.findById(taskId);
-    if (!task) {
-      return failure("not_found", "Task not found", 404);
+  const agentActionMatch = pathname.match(/^\/api\/v1\/agents\/([^/]+)\/(enable|disable)$/);
+  if (method === "POST" && agentActionMatch) {
+    const agentId = agentActionMatch[1] ?? "";
+    const action = agentActionMatch[2];
+    const agent = ctx.repos.agents.findById(agentId);
+    if (!agent) {
+      return failure("not_found", "Agent not found", 404);
     }
 
-    const updated = ctx.repos.tasks.update(taskId, { enabled: action === "enable" });
+    const updated = ctx.repos.agents.update(agentId, { enabled: action === "enable" });
     ctx.platformEvents.append({
-      projectId: task.projectId,
-      type: "task.updated",
-      entityKind: "task",
-      entityId: task.id,
-      topics: ["dashboard", "overview", "projects", "tasks"],
+      projectId: agent.projectId,
+      type: "agent.updated",
+      entityKind: "agent",
+      entityId: agent.id,
+      topics: ["dashboard", "overview", "projects", "agents"],
       data: { enabled: action === "enable" },
     });
-    return success({ task: updated });
+    return success({ agent: updated });
   }
 
   if (method === "GET" && pathname === "/api/v1/schedules") {
@@ -907,7 +907,7 @@ export async function handleApiRequest(
       ...page,
       ...sort,
       projectId: url.searchParams.get("projectId"),
-      taskId: url.searchParams.get("taskId"),
+      agentId: url.searchParams.get("agentId"),
       enabled: parseEnabledParam(url.searchParams.get("enabled")),
       q: url.searchParams.get("q"),
     });
@@ -938,7 +938,7 @@ export async function handleApiRequest(
     if (!schedule) {
       return failure("not_found", "Schedule not found", 404);
     }
-    const scheduleProjectId = ctx.repos.tasks.findById(schedule.taskId)?.projectId ?? null;
+    const scheduleProjectId = ctx.repos.agents.findById(schedule.agentId)?.projectId ?? null;
 
     if (action === "enable") {
       const nextRunAt = computeScheduleNextRun(schedule.cronExpr, schedule.timezone);
@@ -977,7 +977,7 @@ export async function handleApiRequest(
       ...page,
       ...sort,
       projectId: url.searchParams.get("projectId"),
-      taskId: url.searchParams.get("taskId"),
+      agentId: url.searchParams.get("agentId"),
       state: url.searchParams.get("state"),
       trigger: url.searchParams.get("trigger"),
       q: url.searchParams.get("q"),
@@ -1085,7 +1085,7 @@ export async function handleApiRequest(
 
     const retried = await ctx.coordinator.enqueueRun({
       projectId: run.projectId,
-      taskId: run.taskId,
+      agentId: run.agentId,
       trigger: "manual",
     });
     ctx.dispatcher.kick();
@@ -1105,13 +1105,13 @@ export async function handleApiRequest(
     const runningCount = Object.values(runningByProject).reduce((a, b) => a + b, 0);
     const waitingRows = queued.map((run, index) => {
       const project = ctx.repos.projects.findById(run.projectId);
-      const task = ctx.repos.tasks.findById(run.taskId);
+      const agent = ctx.repos.agents.findById(run.agentId);
       return {
         runId: run.id,
         projectId: run.projectId,
         projectName: project?.name ?? null,
-        taskId: run.taskId,
-        taskName: task?.name ?? null,
+        agentId: run.agentId,
+        agentName: agent?.name ?? null,
         trigger: run.trigger,
         priority: run.priority,
         notBeforeAt: run.notBeforeAt,
@@ -1134,13 +1134,13 @@ export async function handleApiRequest(
       )
       .map((run) => {
         const project = ctx.repos.projects.findById(run.projectId);
-        const task = ctx.repos.tasks.findById(run.taskId);
+        const agent = ctx.repos.agents.findById(run.agentId);
         return {
           runId: run.id,
           projectId: run.projectId,
           projectName: project?.name ?? null,
-          taskId: run.taskId,
-          taskName: task?.name ?? null,
+          agentId: run.agentId,
+          agentName: agent?.name ?? null,
           state: run.state,
           admittedAt: run.admittedAt,
         };
@@ -1182,7 +1182,7 @@ export async function handleApiRequest(
   if (method === "GET" && pathname === "/api/v1/dashboard") {
     const compareWindow = parseCompareWindow(url.searchParams.get("compare"));
     const projects = ctx.repos.projects.list().length;
-    const tasks = ctx.repos.tasks.count();
+    const agents = ctx.repos.agents.count();
     const schedules = ctx.repos.schedules.count();
     const runs = ctx.repos.runs.count();
     const activeRuns = ctx.repos.runs.listNonTerminal().length;
@@ -1216,7 +1216,7 @@ export async function handleApiRequest(
 
     return success({
       projects,
-      tasks,
+      agents,
       schedules,
       runs,
       activeRuns,
@@ -1411,7 +1411,7 @@ export async function handleApiRequest(
     const samplePayload = {
       test: true,
       project: "gojo-test",
-      task: "notification-test",
+      agent: "notification-test",
       runId: "test",
       state: "Succeeded",
       error: null,

@@ -92,7 +92,7 @@ export const WorkItemSchema = z.object({
   attention: WorkAttentionSchema,
   provenance: WorkProvenanceSchema,
   actorName: z.string().nullable(),
-  agentProfileId: z.string().nullable(),
+  profileId: z.string().nullable(),
   labels: z.array(z.string()),
   nativeState: z.string().nullable(),
   nativeJson: z.string(),
@@ -109,9 +109,9 @@ export const WorkItemSchema = z.object({
   updatedAt: z.string(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
-  /** Durable task name for runs, or delivering run task for forge rows. */
-  taskName: z.string().nullable().optional(),
-  /** Agent profile/adapter name, actor, or provenance fallback. */
+  /** Durable agent name for runs, or delivering run agent for forge rows. */
+  agentName: z.string().nullable().optional(),
+  /** Profile/adapter name, actor, or provenance fallback. */
   agentLabel: z.string().nullable().optional(),
 });
 export type WorkItem = z.infer<typeof WorkItemSchema> & {

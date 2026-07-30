@@ -1,12 +1,20 @@
-# Module: agents
+# Module: adapters (agent adapters)
 
 **Path:** `src/agents/`
 
+## Vocabulary
+
+- **Adapter** — the invocation surface for a coding agent implementation (shell, Cursor Agent, Claude Code). Top-level UI/CLI "Adapters" tab in the ops console; `gojo adapter detect|list|inspect|test`.
+- **Profile** — an entry in a project manifest's `profiles:` map that binds an adapter to a model, timeout, and permissions. Referenced from an agent (work unit) as `profile: <name>`.
+- **Agent** — the work-unit definition (was "task" pre-rebrand). Lives under `agents:` in `gojo.yaml`; prompts live under `.gojo/agents/`.
+
+The folder stays `src/agents/` for now because it holds the adapter *implementations*.
+
 ## Responsibility
 
-Detect and invoke agent **adapters** (shell, Cursor Agent, Claude Code). Normalize invocation, timeouts, and structured handoff when present.
+Detect and invoke agent **adapters**. Normalize invocation, timeouts, and structured handoff when present.
 
-Registry/list/detect entrypoints are used by CLI, API, and doctor.
+Registry/list/detect entrypoints are used by CLI (`gojo adapter …`), API (`/api/v1/adapters`), and doctor.
 
 ## May call
 

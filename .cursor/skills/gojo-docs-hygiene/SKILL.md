@@ -29,4 +29,19 @@ description: >-
 ## When unsure
 
 - New module boundary → `docs/architecture/boundaries.md` + a `docs/modules/<name>.md` stub
-- Scheduler/run/agent ownership → existing module pages + PRD §§9–14, 23
+- Scheduler/run/adapter/agent ownership → existing module pages + PRD §§9–14, 23
+
+## Vocabulary anchors
+
+The Tasks→Agents rebrand renamed the top-level UI/CLI and manifest keys. When
+writing or reviewing docs:
+
+- **Adapter** — installed coding-agent CLI. UI/CLI: `Adapters` / `gojo adapter …`.
+- **Profile** — `profiles:` map entry binding an adapter to a model/timeout.
+- **Agent** — `agents:` map entry: the work-unit definition. UI/CLI: `Agents` / `gojo agent …`.
+- Prompt files live under `.gojo/agents/`.
+- User-facing docs page: `site/src/pages/agent-prompts.md` (URL `/agent-prompts`).
+- Engineering note: `docs/agent-prompts.md`.
+
+Do not reintroduce the old vocabulary (`task`, `.gojo/tasks/`, `gojo task`,
+`agents:` as the adapter map) in living docs.

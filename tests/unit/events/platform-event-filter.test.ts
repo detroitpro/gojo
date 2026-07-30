@@ -28,7 +28,7 @@ describe("matchesPlatformEvent", () => {
     expect(matchesPlatformEvent(e, { projectId: "project-1" })).toBe(true);
     expect(matchesPlatformEvent(e, { projectId: "project-2" })).toBe(false);
     expect(matchesPlatformEvent(e, { topics: ["dashboard"] })).toBe(true);
-    expect(matchesPlatformEvent(e, { topics: ["tasks"] })).toBe(false);
+    expect(matchesPlatformEvent(e, { topics: ["agents"] })).toBe(false);
     expect(
       matchesPlatformEvent(e, { projectId: "project-1", topics: ["queue"] }),
     ).toBe(false);

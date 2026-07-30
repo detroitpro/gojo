@@ -9,7 +9,7 @@ import {
 } from "@/diagnostics/binary-stale";
 import { execGit } from "@/git/git";
 import type { Repositories } from "@/storage";
-import type { Project, Task } from "@/storage/types";
+import type { Agent, Project } from "@/storage/types";
 
 export interface DoctorToolCheck {
   name: string;
@@ -24,7 +24,7 @@ export interface ProjectBaseCheckout {
 }
 
 export interface ProjectValidationToolCheck {
-  task: string;
+  agent: string;
   step: string;
   binary: string;
   found: boolean;
@@ -174,20 +174,20 @@ function parseValidationSteps(
   }
 }
 
-export function validationToolsForTasks(
-  tasks: Task[],
+export function validationToolsForAgents(
+  agents: Agent[],
   repoPath: string,
 ): ProjectValidationToolCheck[] {
   const out: ProjectValidationToolCheck[] = [];
-  for (const task of tasks) {
-    if (!task.enabled) {
+  for (const agent of agents) {
+    if (!agent.enabled) {
       continue;
     }
-    for (const step of parseValidationSteps(task.validationProfileJson)) {
+    for (const step of parseValidationSteps(agent.validationProfileJson)) {
       const { binary, shellBuiltin } = primaryValidationTool(step.command);
       if (shellBuiltin) {
         out.push({
-          task: task.name,
+          agent: agent.name,
           step: step.name,
           binary,
           found: true,
@@ -197,7 +197,7 @@ export function validationToolsForTasks(
       }
       const resolved = resolveTool(binary, repoPath);
       out.push({
-        task: task.name,
+        agent: agent.name,
         step: step.name,
         binary,
         found: resolved.found,
@@ -260,9 +260,9 @@ export async function projectDoctor(
     ? await inspectBaseCheckout(project.repoPath, project.defaultBranch)
     : { clean: false, dirtyFiles: [], behindOrigin: null };
 
-  const tasks = repos?.tasks.listByProject(project.id) ?? [];
+  const agents = repos?.agents.listByProject(project.id) ?? [];
   const validationTools = repoExists
-    ? validationToolsForTasks(tasks, project.repoPath)
+    ? validationToolsForAgents(agents, project.repoPath)
     : [];
 
   return {

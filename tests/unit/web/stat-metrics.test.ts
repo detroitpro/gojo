@@ -30,7 +30,7 @@ describe("web/stat-metrics", () => {
       "impact.succeededRuns",
       ...IMPACT_CATEGORIES.map((c) => `impact.category.${c}`),
       "dashboard.projects",
-      "dashboard.tasks",
+      "dashboard.agents",
       "dashboard.schedules",
       "dashboard.runs",
       "queue.running",

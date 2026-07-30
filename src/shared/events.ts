@@ -6,7 +6,7 @@ export const PlatformEventTopicSchema = z.enum([
   "impact",
   "queue",
   "runs",
-  "tasks",
+  "agents",
   "schedules",
   "projects",
   "work",

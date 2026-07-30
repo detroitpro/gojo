@@ -8,7 +8,7 @@ import {
 } from '@/agents/handoff-assets';
 
 export interface PrDescriptionInput {
-  taskName: string;
+  agentName: string;
   runId: string;
   /** Used when handoff summary is missing or empty. */
   fallbackTitle: string;
@@ -73,7 +73,7 @@ function gojoFooter(input: PrDescriptionInput, status?: string): string {
   const lines = [
     '---',
     '',
-    `Opened by **gojo** for task \`${input.taskName}\` (run \`${input.runId}\`).`,
+    `Opened by **gojo** for agent \`${input.agentName}\` (run \`${input.runId}\`).`,
   ];
   if (status) {
     lines.push(`Handoff status: \`${status}\`.`);
@@ -113,7 +113,7 @@ export function buildPrDescription(input: PrDescriptionInput): PrDescription {
   sections.push(
     summary.length > 0
       ? summary
-      : `Automated gojo task \`${input.taskName}\` completed.`,
+      : `Automated gojo agent \`${input.agentName}\` completed.`,
   );
 
   if (fields.decisions && fields.decisions.length > 0) {

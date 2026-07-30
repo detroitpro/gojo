@@ -27,8 +27,8 @@ describe("runs/dispatcher", () => {
 
     const projectA = repos.projects.create({ name: "a", repoPath: "/tmp/a" });
     const projectB = repos.projects.create({ name: "b", repoPath: "/tmp/b" });
-    const taskA = repos.tasks.create({ projectId: projectA.id, name: "ta", prompt: "go" });
-    const taskB = repos.tasks.create({ projectId: projectB.id, name: "tb", prompt: "go" });
+    const taskA = repos.agents.create({ projectId: projectA.id, name: "ta", prompt: "go" });
+    const taskB = repos.agents.create({ projectId: projectB.id, name: "tb", prompt: "go" });
 
     return { repos, projectA, projectB, taskA, taskB };
   }
@@ -49,7 +49,7 @@ describe("runs/dispatcher", () => {
 
     const runA = repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "run-a",
       trigger: "manual",
       state: RunState.Queued,
@@ -58,7 +58,7 @@ describe("runs/dispatcher", () => {
     });
     const runB = repos.runs.create({
       projectId: projectB.id,
-      taskId: taskB.id,
+      agentId: taskB.id,
       idempotencyKey: "run-b",
       trigger: "schedule",
       state: RunState.Queued,
@@ -90,7 +90,7 @@ describe("runs/dispatcher", () => {
 
     const expired = repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "expired-run",
       trigger: "schedule",
       state: RunState.Queued,
@@ -117,11 +117,11 @@ describe("runs/dispatcher", () => {
   test("respects global concurrency against already-running runs", async () => {
     const { repos, projectA, projectB, taskA, taskB } = setup();
     const projectC = repos.projects.create({ name: "c", repoPath: "/tmp/c" });
-    const taskC = repos.tasks.create({ projectId: projectC.id, name: "tc", prompt: "go" });
+    const taskC = repos.agents.create({ projectId: projectC.id, name: "tc", prompt: "go" });
 
     repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "running-a",
       trigger: "manual",
       state: RunState.Running,
@@ -129,7 +129,7 @@ describe("runs/dispatcher", () => {
     });
     repos.runs.create({
       projectId: projectB.id,
-      taskId: taskB.id,
+      agentId: taskB.id,
       idempotencyKey: "running-b",
       trigger: "manual",
       state: RunState.Running,
@@ -137,7 +137,7 @@ describe("runs/dispatcher", () => {
     });
     const waiting = repos.runs.create({
       projectId: projectC.id,
-      taskId: taskC.id,
+      agentId: taskC.id,
       idempotencyKey: "waiting-c",
       trigger: "manual",
       state: RunState.Queued,
@@ -170,7 +170,7 @@ describe("runs/dispatcher", () => {
     const { repos, projectA, taskA } = setup();
     const run = repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "coalesce-run",
       trigger: "manual",
       state: RunState.Queued,
@@ -213,7 +213,7 @@ describe("runs/dispatcher", () => {
     const { repos, projectA, taskA } = setup();
     const run = repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "start-run",
       trigger: "manual",
       state: RunState.Queued,
@@ -253,7 +253,7 @@ describe("runs/dispatcher", () => {
     const { repos, projectA, taskA } = setup();
     const scheduled = repos.runs.create({
       projectId: projectA.id,
-      taskId: taskA.id,
+      agentId: taskA.id,
       idempotencyKey: "scheduled-run",
       trigger: "schedule",
       state: RunState.Scheduled,

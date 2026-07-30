@@ -1,7 +1,7 @@
-import type { TaskFailurePolicy, TaskSelfHeal } from '@shared/manifest';
+import type { AgentFailurePolicy, AgentSelfHeal } from '@shared/manifest';
 
-export interface ParsedFailurePolicy extends TaskFailurePolicy {
-  selfHeal?: TaskSelfHeal;
+export interface ParsedFailurePolicy extends AgentFailurePolicy {
+  selfHeal?: AgentSelfHeal;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 1;
@@ -32,9 +32,9 @@ export function parseFailurePolicy(json: string): ParsedFailurePolicy {
     const heal = raw['selfHeal'];
     if (heal && typeof heal === 'object' && heal !== null) {
       const record = heal as Record<string, unknown>;
-      if (typeof record['task'] === 'string' && record['task'].length > 0) {
+      if (typeof record['agent'] === 'string' && record['agent'].length > 0) {
         policy.selfHeal = {
-          task: record['task'],
+          agent: record['agent'],
           ...(typeof record['afterConsecutiveFailedRuns'] === 'number' &&
           record['afterConsecutiveFailedRuns'] > 0
             ? {

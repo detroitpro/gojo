@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   live: [] as Array<{ topics: string[]; refresh: () => Promise<void> | void }>,
   getProject: vi.fn(),
   getProjectDoctor: vi.fn(),
-  listTasks: vi.fn(),
+  listAgents: vi.fn(),
   listProjectWork: vi.fn(),
   getProjectWorkStatus: vi.fn(),
   listProjectSources: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock("@/composables/useLiveQuery", () => ({
 vi.mock("@/api", () => ({
   getProject: mocks.getProject,
   getProjectDoctor: mocks.getProjectDoctor,
-  listTasks: mocks.listTasks,
+  listAgents: mocks.listAgents,
   listProjectWork: mocks.listProjectWork,
   getProjectWorkStatus: mocks.getProjectWorkStatus,
   listProjectSources: mocks.listProjectSources,
@@ -38,7 +38,7 @@ vi.mock("@/api", () => ({
   resolveWorkItem: mocks.resolveWorkItem,
   syncProject: vi.fn(),
   deleteProject: vi.fn(),
-  runTask: vi.fn(),
+  runAgent: vi.fn(),
 }));
 
 import ProjectDetailView from "@/views/ProjectDetailView.vue";
@@ -86,8 +86,8 @@ async function mountView() {
     remoteUrl: "https://github.com/quotient-research/quotient-server.git",
     defaultBranch: "main",
     manifestJson: null,
-    taskCount: 0,
-    enabledTaskCount: 0,
+    agentCount: 0,
+    enabledAgentCount: 0,
     scheduleCount: 0,
     enabledScheduleCount: 0,
     hasManifest: false,
@@ -102,7 +102,7 @@ async function mountView() {
     baseCheckout: { clean: true, dirtyFiles: [], behindOrigin: 0 },
     validationTools: [],
   });
-  mocks.listTasks.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
+  mocks.listAgents.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
   mocks.listProjectWork.mockResolvedValue({
     items: [workItem()],
     total: 1,
@@ -171,7 +171,7 @@ async function mountView() {
       { path: "/projects/:id", name: "project-detail", component: ProjectDetailView },
       { path: "/projects", name: "projects", component: { template: "<div />" } },
       { path: "/runs/:id", name: "run-detail", component: { template: "<div />" } },
-      { path: "/tasks", name: "tasks", component: { template: "<div />" } },
+      { path: "/agents", name: "agents", component: { template: "<div />" } },
       { path: "/schedules", name: "schedules", component: { template: "<div />" } },
       { path: "/runs", name: "runs", component: { template: "<div />" } },
       { path: "/integrations", name: "integrations", component: { template: "<div />" } },

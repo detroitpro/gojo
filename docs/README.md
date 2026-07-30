@@ -14,20 +14,20 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 
 - [Architecture overview](./architecture/overview.md)
 - [Module boundaries](./architecture/boundaries.md)
-- [Task prompts](./task-prompts.md) — constrained limits for `.gojo/tasks/`
+- [Agent prompts](./agent-prompts.md) — constrained limits for `.gojo/agents/`
 - Modules:
   - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [work](./modules/work.md) (cross-source project visibility)
   - [sources](./modules/sources.md) (GitHub/GitLab/Forgejo/non-git connectors)
   - [platform events](./modules/events.md) (durable invalidation over WebSocket + live UI refresh)
-  - [notifications](./modules/notifications.md) (channels, per-task routing, report delivery)
-  - [agents](./modules/agents.md)
+  - [notifications](./modules/notifications.md) (channels, per-agent routing, report delivery)
+  - [adapters](./modules/agents.md) (adapter registry — file kept at `modules/agents.md`)
   - [scheduler](./modules/scheduler.md)
 
 User-facing guides (site):
 
 - Self-healing: [`site/src/pages/self-healing.md`](../site/src/pages/self-healing.md)
-- Task prompt best practices: [`site/src/pages/task-prompts.md`](../site/src/pages/task-prompts.md)
+- Agent prompt best practices: [`site/src/pages/agent-prompts.md`](../site/src/pages/agent-prompts.md)
 
 ## Quality gate
 

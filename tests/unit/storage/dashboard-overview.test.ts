@@ -5,7 +5,7 @@ import { Database, createRepositories } from "@/storage";
 import { RunState } from "@shared/run-states";
 
 describe("storage/dashboard-overview", () => {
-  test("groups enabled tasks by project with last 5 runs oldest-to-newest", () => {
+  test("groups enabled agents by project with last 5 runs oldest-to-newest", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
@@ -13,31 +13,31 @@ describe("storage/dashboard-overview", () => {
     const alpha = repos.projects.create({ name: "alpha", repoPath: "/tmp/alpha" });
     const beta = repos.projects.create({ name: "beta", repoPath: "/tmp/beta" });
 
-    const taskA = repos.tasks.create({
+    const agentA = repos.agents.create({
       projectId: alpha.id,
       name: "maintain-a",
       prompt: "a",
-      description: "Alpha task",
+      description: "Alpha agent",
       enabled: true,
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: alpha.id,
       name: "disabled-a",
       prompt: "x",
       enabled: false,
     });
-    const taskB = repos.tasks.create({
+    const agentB = repos.agents.create({
       projectId: beta.id,
       name: "maintain-b",
       prompt: "b",
       enabled: true,
     });
 
-    // 0 runs for taskB; 3 for taskA; then add more to exceed 5
+    // 0 runs for agentB; 3 for agentA; then add more to exceed 5
     for (let i = 0; i < 3; i += 1) {
       const run = repos.runs.create({
         projectId: alpha.id,
-        taskId: taskA.id,
+        agentId: agentA.id,
         idempotencyKey: `a-${i}`,
         trigger: "schedule",
         state: i === 2 ? RunState.Succeeded : RunState.Failed,
@@ -49,7 +49,7 @@ describe("storage/dashboard-overview", () => {
     for (let i = 3; i < 7; i += 1) {
       const run = repos.runs.create({
         projectId: alpha.id,
-        taskId: taskA.id,
+        agentId: agentA.id,
         idempotencyKey: `a-${i}`,
         trigger: "manual",
         state: RunState.Succeeded,
@@ -62,13 +62,13 @@ describe("storage/dashboard-overview", () => {
     const overview = getDashboardOverview(db);
     expect(overview.projects.map((p) => p.name)).toEqual(["alpha", "beta"]);
 
-    const alphaTasks = overview.projects[0]?.tasks ?? [];
-    expect(alphaTasks).toHaveLength(1);
-    expect(alphaTasks[0]?.name).toBe("maintain-a");
-    expect(alphaTasks[0]?.description).toBe("Alpha task");
-    expect(alphaTasks[0]?.recentRuns).toHaveLength(5);
+    const alphaAgents = overview.projects[0]?.agents ?? [];
+    expect(alphaAgents).toHaveLength(1);
+    expect(alphaAgents[0]?.name).toBe("maintain-a");
+    expect(alphaAgents[0]?.description).toBe("Alpha agent");
+    expect(alphaAgents[0]?.recentRuns).toHaveLength(5);
     // Oldest → newest among the last 5 (Jan 3..7), newest last
-    expect(alphaTasks[0]?.recentRuns.map((r) => r.createdAt)).toEqual([
+    expect(alphaAgents[0]?.recentRuns.map((r) => r.createdAt)).toEqual([
       "2026-01-03T00:00:00.000Z",
       "2026-01-04T00:00:00.000Z",
       "2026-01-05T00:00:00.000Z",
@@ -76,19 +76,19 @@ describe("storage/dashboard-overview", () => {
       "2026-01-07T00:00:00.000Z",
     ]);
     // Jan 3 was Succeeded (i===2); Jan 4–7 are Succeeded manual
-    expect(alphaTasks[0]?.recentRuns[0]?.state).toBe(RunState.Succeeded);
-    expect(alphaTasks[0]?.recentRuns[0]?.trigger).toBe("schedule");
-    expect(alphaTasks[0]?.recentRuns[4]?.trigger).toBe("manual");
+    expect(alphaAgents[0]?.recentRuns[0]?.state).toBe(RunState.Succeeded);
+    expect(alphaAgents[0]?.recentRuns[0]?.trigger).toBe("schedule");
+    expect(alphaAgents[0]?.recentRuns[4]?.trigger).toBe("manual");
 
-    const betaTasks = overview.projects[1]?.tasks ?? [];
-    expect(betaTasks).toHaveLength(1);
-    expect(betaTasks[0]?.id).toBe(taskB.id);
-    expect(betaTasks[0]?.recentRuns).toEqual([]);
+    const betaAgents = overview.projects[1]?.agents ?? [];
+    expect(betaAgents).toHaveLength(1);
+    expect(betaAgents[0]?.id).toBe(agentB.id);
+    expect(betaAgents[0]?.recentRuns).toEqual([]);
 
     db.close();
   });
 
-  test("includes projects with no enabled tasks", () => {
+  test("includes projects with no enabled agents", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
@@ -96,7 +96,7 @@ describe("storage/dashboard-overview", () => {
 
     const overview = getDashboardOverview(db);
     expect(overview.projects).toHaveLength(1);
-    expect(overview.projects[0]?.tasks).toEqual([]);
+    expect(overview.projects[0]?.agents).toEqual([]);
 
     db.close();
   });

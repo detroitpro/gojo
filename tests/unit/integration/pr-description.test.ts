@@ -8,7 +8,7 @@ import { buildPrDescription } from "@/integration/pr-description";
 describe("buildPrDescription", () => {
   test("uses handoff summary first line as title and rich body sections", () => {
     const pr = buildPrDescription({
-      taskName: "maintain-tests",
+      agentName: "maintain-tests",
       runId: "01KYTEST000000000000000001",
       fallbackTitle: "gojo: maintain-tests (01KYTEST000000000000000001)",
       handoff: {
@@ -42,13 +42,13 @@ describe("buildPrDescription", () => {
 
   test("falls back when handoff is missing", () => {
     const pr = buildPrDescription({
-      taskName: "maintain-deps",
+      agentName: "maintain-deps",
       runId: "run-2",
       fallbackTitle: "gojo: maintain-deps (run-2)",
     });
 
     expect(pr.title).toBe("gojo: maintain-deps (run-2)");
-    expect(pr.body).toContain("Automated gojo task `maintain-deps` completed.");
+    expect(pr.body).toContain("Automated gojo agent `maintain-deps` completed.");
     expect(pr.body).toContain("run `run-2`");
   });
 
@@ -56,7 +56,7 @@ describe("buildPrDescription", () => {
     const long =
       "This is a very long first line that should be truncated for GitHub PR title length limits and stay readable";
     const pr = buildPrDescription({
-      taskName: "t",
+      agentName: "t",
       runId: "r",
       fallbackTitle: "fallback",
       handoff: { summary: long },
@@ -75,7 +75,7 @@ describe("buildPrDescription", () => {
     );
 
     const pr = buildPrDescription({
-      taskName: "maintain-tests",
+      agentName: "maintain-tests",
       runId: "01KYTEST000000000000000099",
       fallbackTitle: "fallback",
       workspacePath: root,
@@ -99,7 +99,7 @@ describe("buildPrDescription", () => {
 
   test("uses inline pr-body content without workspace", () => {
     const pr = buildPrDescription({
-      taskName: "t",
+      agentName: "t",
       runId: "r1",
       fallbackTitle: "fallback",
       handoff: {

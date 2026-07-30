@@ -20,9 +20,9 @@ describe("storage/schedule-outcomes", () => {
   function createSchedule(disableAfter: number | null = 3) {
     const repos = createRepositories(openDb());
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const task = repos.tasks.create({ projectId: project.id, name: "task", prompt: "go" });
+    const agent = repos.agents.create({ projectId: project.id, name: "agent", prompt: "go" });
     return repos.schedules.create({
-      taskId: task.id,
+      agentId: agent.id,
       name: "nightly",
       cronExpr: "0 2 * * *",
       disableAfter,

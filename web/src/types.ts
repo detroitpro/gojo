@@ -33,8 +33,8 @@ export type {
 export type { RunEvent } from "@shared/ws";
 
 export interface ProjectSummaryCounts {
-  taskCount: number;
-  enabledTaskCount: number;
+  agentCount: number;
+  enabledAgentCount: number;
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
@@ -86,7 +86,7 @@ export interface WorkItem {
   attention: WorkAttention;
   provenance: "gojo-agent" | "human" | "bot" | "external";
   actorName: string | null;
-  agentProfileId?: string | null;
+  profileId?: string | null;
   labels: string[];
   nativeState: string | null;
   webUrl: string | null;
@@ -102,7 +102,9 @@ export interface WorkItem {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
-  taskName?: string | null;
+  /** Durable agent name for runs, or delivering run agent for forge rows. */
+  agentName?: string | null;
+  /** Profile/adapter/actor label attribution. */
   agentLabel?: string | null;
   /** Outbound delivers targets (PRs/issues) when returned from list APIs. */
   deliveredWork?: WorkItem[];
@@ -158,8 +160,8 @@ export interface IntegrationListItem {
   runId: string;
   projectId: string;
   projectName: string | null;
-  taskId: string;
-  taskName: string | null;
+  agentId: string;
+  agentName: string | null;
   prNumber: number | null;
   prUrl: string | null;
   provider: string | null;
@@ -180,8 +182,8 @@ export interface ImpactItemListRow {
   runId: string;
   projectId: string;
   projectName: string;
-  taskId: string;
-  taskName: string;
+  agentId: string;
+  agentName: string;
   category: string;
   subject: string;
   summary: string;
@@ -205,8 +207,8 @@ export interface Project extends ProjectSummaryCounts {
 
 export interface ProjectSyncResult {
   manifestPath: string | null;
-  agentProfiles: number;
-  tasks: number;
+  profiles: number;
+  agents: number;
   schedules: number;
 }
 
@@ -218,7 +220,7 @@ export interface ProjectSyncResponse {
 export interface Run {
   id: string;
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId: string | null;
   state: RunState;
   idempotencyKey: string;
@@ -234,7 +236,7 @@ export interface Run {
   workItemId?: string | null;
   /** Present on list/detail API responses */
   projectName?: string | null;
-  taskName?: string | null;
+  agentName?: string | null;
 }
 
 export interface SchedulingPolicy {
@@ -248,8 +250,8 @@ export interface QueueWaitingItem {
   runId: string;
   projectId: string;
   projectName: string | null;
-  taskId: string;
-  taskName: string | null;
+  agentId: string;
+  agentName: string | null;
   trigger: RunTrigger;
   priority: number;
   notBeforeAt: string | null;
@@ -262,8 +264,8 @@ export interface QueueRunningItem {
   runId: string;
   projectId: string;
   projectName: string | null;
-  taskId: string;
-  taskName: string | null;
+  agentId: string;
+  agentName: string | null;
   state: RunState;
   admittedAt: string | null;
 }
@@ -307,7 +309,7 @@ export interface Attempt {
 
 export interface Schedule {
   id: string;
-  taskId: string;
+  agentId: string;
   name: string;
   cronExpr: string;
   timezone: string;
@@ -321,7 +323,7 @@ export interface Schedule {
   lastRunAt: string | null;
   createdAt: string;
   /** Present on list API responses */
-  taskName?: string | null;
+  agentName?: string | null;
   projectId?: string | null;
   projectName?: string | null;
   /** Human-readable cron from list API */
@@ -331,7 +333,7 @@ export interface Schedule {
 export interface UpcomingScheduleSeries {
   id: string;
   name: string;
-  taskName: string | null;
+  agentName: string | null;
   timezone: string;
   enabled: boolean;
   color: string;
@@ -345,7 +347,8 @@ export interface SchedulesUpcomingResult {
   schedules: UpcomingScheduleSeries[];
 }
 
-export interface AgentInfo {
+/** Adapter detection result from GET /adapters. */
+export interface AdapterInfo {
   name: string;
   installed: boolean;
   version?: string;
@@ -362,7 +365,7 @@ export interface DashboardPreviousStats {
 
 export interface DashboardStats {
   projects: number;
-  tasks: number;
+  agents: number;
   schedules: number;
   runs: number;
   activeRuns: number;
@@ -381,7 +384,7 @@ export interface DashboardOverviewRun {
   finishedAt: string | null;
 }
 
-export interface DashboardOverviewTask {
+export interface DashboardOverviewAgent {
   id: string;
   name: string;
   description: string;
@@ -391,7 +394,7 @@ export interface DashboardOverviewTask {
 export interface DashboardOverviewProject {
   id: string;
   name: string;
-  tasks: DashboardOverviewTask[];
+  agents: DashboardOverviewAgent[];
 }
 
 export interface DashboardOverview {
@@ -419,8 +422,8 @@ export interface DashboardImpactRecentItem {
   runId: string;
   projectId: string;
   projectName: string;
-  taskId: string;
-  taskName: string;
+  agentId: string;
+  agentName: string;
   category: string;
   subject: string;
   summary: string;
@@ -498,36 +501,48 @@ export interface HealthInfo {
   version: string;
 }
 
-export interface TaskSource {
+export interface AgentSource {
   repoPath: string;
   manifestPath: string | null;
   promptFile: string | null;
   promptAbsolutePath: string | null;
 }
 
-export interface Task {
+/** Work unit (previously "Task"): a manifest-defined runnable definition. */
+export interface Agent {
   id: string;
   projectId: string;
   name: string;
   description: string;
-  agentProfileId: string | null;
+  profileId: string | null;
   prompt: string;
   validationProfileJson: string;
   integrationJson: string;
   failurePolicyJson: string;
   concurrencyJson: string;
+  notificationsJson: string;
   enabled: boolean;
   createdAt: string;
   /** Present on list API responses */
   projectName?: string | null;
-  agentProfileName?: string | null;
+  profileName?: string | null;
   lastRunId?: string | null;
   lastRunState?: string | null;
   lastRunCreatedAt?: string | null;
   /** Present on list API: up to 5 recent runs, oldest → newest. */
   recentRuns?: DashboardOverviewRun[];
-  /** Present on GET /tasks/:id */
-  source?: TaskSource;
+  /** Present on GET /agents/:id */
+  source?: AgentSource;
+}
+
+/** YAML profile (adapter+model config). Previously called `AgentProfile`. */
+export interface Profile {
+  id: string;
+  projectId: string | null;
+  name: string;
+  adapter: string;
+  configJson: string;
+  createdAt: string;
 }
 
 export interface ApiTokenInfo {
@@ -548,7 +563,7 @@ export interface ProjectBaseCheckout {
 }
 
 export interface ProjectValidationToolCheck {
-  task: string;
+  agent: string;
   step: string;
   binary: string;
   found: boolean;
@@ -574,7 +589,8 @@ export interface InstanceDoctorResult {
   git: boolean;
   disk: boolean;
   database: boolean;
-  agents: AgentInfo[];
+  /** Adapter detection info; backend field name is still `agents`. */
+  agents: AdapterInfo[];
   home: string;
   daemonPath: string;
   tools: DoctorToolCheck[];
@@ -587,7 +603,7 @@ export interface InstanceDoctorResult {
   warnings: string[];
 }
 
-export interface AgentTestResult {
+export interface AdapterTestResult {
   exitCode: number;
   stdout: string;
   stderr: string;

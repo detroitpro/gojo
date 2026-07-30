@@ -5,15 +5,15 @@ import { SCHEMA_MIGRATIONS } from '@/storage/schema';
 
 function seedRun(repos: ReturnType<typeof createRepositories>) {
   const project = repos.projects.create({ name: 'p', repoPath: '/tmp/p' });
-  const task = repos.tasks.create({ projectId: project.id, name: 't', prompt: 'x' });
+  const agent = repos.agents.create({ projectId: project.id, name: 't', prompt: 'x' });
   const run = repos.runs.create({
     projectId: project.id,
-    taskId: task.id,
+    agentId: agent.id,
     idempotencyKey: `k-${Math.random()}`,
     trigger: 'manual',
   });
   const attempt = repos.attempts.create({ runId: run.id, attemptNumber: 1 });
-  return { project, task, run, attempt };
+  return { project, agent, run, attempt };
 }
 
 describe('storage/run-outcomes', () => {
@@ -21,12 +21,24 @@ describe('storage/run-outcomes', () => {
     const db = Database.open(':memory:');
     // Simulate an existing v3 DB: apply DDL then force version 3.
     db.migrate();
-    db.connection().query('DELETE FROM schema_migrations').run();
-    db.connection()
+    const sqlite = db.connection();
+    // v9 targets `tasks` and v11 renames to `agents`; roll v11 back so the
+    // upgrade path from v3 replays cleanly through both migrations.
+    sqlite.exec('ALTER TABLE agents RENAME TO tasks;');
+    sqlite.exec('ALTER TABLE profiles RENAME TO agent_profiles;');
+    sqlite.exec('ALTER TABLE tasks RENAME COLUMN profile_id TO agent_profile_id;');
+    sqlite.exec('ALTER TABLE schedules RENAME COLUMN agent_id TO task_id;');
+    sqlite.exec('ALTER TABLE runs RENAME COLUMN agent_id TO task_id;');
+    sqlite.exec('ALTER TABLE work_items RENAME COLUMN profile_id TO agent_profile_id;');
+    sqlite.exec('ALTER TABLE run_context RENAME COLUMN agent_name TO task_name;');
+    sqlite.exec('ALTER TABLE run_context RENAME COLUMN agent_description TO task_description;');
+    sqlite.exec('ALTER TABLE run_context RENAME COLUMN profile_json TO agent_profile_json;');
+    sqlite.query('DELETE FROM schema_migrations').run();
+    sqlite
       .query('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
       .run(3, new Date().toISOString());
-    db.connection().query('DROP TABLE run_impact_items').run();
-    db.connection().query('DROP TABLE run_integrations').run();
+    sqlite.query('DROP TABLE run_impact_items').run();
+    sqlite.query('DROP TABLE run_integrations').run();
 
     db.migrate();
     expect(db.hasExpectedTables()).toBe(true);

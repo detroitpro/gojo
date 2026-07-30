@@ -58,6 +58,16 @@ describe("storage/db", () => {
     sqlite.exec("ALTER TABLE runs DROP COLUMN expires_at;");
     sqlite.exec("ALTER TABLE runs DROP COLUMN admitted_at;");
     sqlite.exec("ALTER TABLE runs DROP COLUMN priority;");
+    // Reverse the v11 rename so v9 (ALTER TABLE tasks…) and v11 replay cleanly.
+    sqlite.exec("ALTER TABLE agents RENAME TO tasks;");
+    sqlite.exec("ALTER TABLE profiles RENAME TO agent_profiles;");
+    sqlite.exec("ALTER TABLE tasks RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE schedules RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE runs RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE work_items RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_name TO task_name;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_description TO task_description;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN profile_json TO agent_profile_json;");
     // Fresh DBs only record latest SCHEMA_VERSION; pin to 4 so v5+ run.
     sqlite.query("DELETE FROM schema_migrations").run();
     sqlite
@@ -83,10 +93,23 @@ describe("storage/db", () => {
     expect(columns).toContain("priority");
   });
 
-  test("migration v9 adds task notification routing on existing v8 databases", () => {
+  test("migration v9 adds agent notification routing on existing v8 databases", () => {
     const database = openInMemory();
     const sqlite = database.connection();
 
+    // v9's ALTER TABLE targets the pre-v11 `tasks` name and v11 later renames
+    // it to `agents`, so simulate a v8 DB by fully reversing v11 (tables,
+    // FK columns, run_context ownership fields) and then dropping the
+    // notifications column that v9 will re-add.
+    sqlite.exec("ALTER TABLE agents RENAME TO tasks;");
+    sqlite.exec("ALTER TABLE profiles RENAME TO agent_profiles;");
+    sqlite.exec("ALTER TABLE tasks RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE schedules RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE runs RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE work_items RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_name TO task_name;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_description TO task_description;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN profile_json TO agent_profile_json;");
     sqlite.exec("ALTER TABLE tasks DROP COLUMN notifications_json;");
     sqlite.query("DELETE FROM schema_migrations").run();
     sqlite
@@ -96,23 +119,97 @@ describe("storage/db", () => {
     database.migrate();
 
     const columns = sqlite
-      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('tasks')")
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('agents')")
       .all()
       .map((row) => row.name);
     expect(columns).toContain("notifications_json");
 
     const repos = createRepositories(database);
     const project = repos.projects.create({ name: "routing", repoPath: "/tmp/routing" });
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
       name: "activity-digest",
       prompt: "report",
       notificationsJson: JSON.stringify({ onSuccess: ["ghost"] }),
     });
-    expect(repos.tasks.findById(task.id)?.notificationsJson).toBe('{"onSuccess":["ghost"]}');
+    expect(repos.agents.findById(agent.id)?.notificationsJson).toBe('{"onSuccess":["ghost"]}');
   });
 
-  test("creates project, task, schedule, run, and attempt", () => {
+  test("migration v11 renames tasks/agent_profiles into agents/profiles", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    // Simulate a v10 database by reversing v11's renames end-to-end (tables,
+    // FK columns, and run_context ownership fields). The v11 migration should
+    // put us right back at the current schema.
+    sqlite.exec("ALTER TABLE agents RENAME TO tasks;");
+    sqlite.exec("ALTER TABLE profiles RENAME TO agent_profiles;");
+    sqlite.exec("ALTER TABLE tasks RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE schedules RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE runs RENAME COLUMN agent_id TO task_id;");
+    sqlite.exec("ALTER TABLE work_items RENAME COLUMN profile_id TO agent_profile_id;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_name TO task_name;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN agent_description TO task_description;");
+    sqlite.exec("ALTER TABLE run_context RENAME COLUMN profile_json TO agent_profile_json;");
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(10, new Date().toISOString());
+
+    database.migrate();
+
+    expect(database.hasExpectedTables()).toBe(true);
+    const tableNames = new Set(database.tableNames());
+    expect(tableNames.has("agents")).toBe(true);
+    expect(tableNames.has("profiles")).toBe(true);
+    expect(tableNames.has("tasks")).toBe(false);
+    expect(tableNames.has("agent_profiles")).toBe(false);
+
+    const version = sqlite
+      .query<{ version: number }, []>(
+        "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations",
+      )
+      .get()?.version;
+    expect(version).toBe(SCHEMA_VERSION);
+
+    const agentColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('agents')")
+      .all()
+      .map((row) => row.name);
+    expect(agentColumns).toContain("profile_id");
+    expect(agentColumns).not.toContain("agent_profile_id");
+
+    const runColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')")
+      .all()
+      .map((row) => row.name);
+    expect(runColumns).toContain("agent_id");
+    expect(runColumns).not.toContain("task_id");
+
+    const scheduleColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('schedules')")
+      .all()
+      .map((row) => row.name);
+    expect(scheduleColumns).toContain("agent_id");
+
+    const workItemColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('work_items')")
+      .all()
+      .map((row) => row.name);
+    expect(workItemColumns).toContain("profile_id");
+    expect(workItemColumns).not.toContain("agent_profile_id");
+
+    const runContextColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('run_context')")
+      .all()
+      .map((row) => row.name);
+    expect(runContextColumns).toContain("agent_name");
+    expect(runContextColumns).toContain("agent_description");
+    expect(runContextColumns).toContain("profile_json");
+    expect(runContextColumns).not.toContain("task_name");
+  });
+
+  test("creates project, agent, schedule, run, and attempt", () => {
     const database = openInMemory();
     const repos = createRepositories(database);
 
@@ -122,21 +219,21 @@ describe("storage/db", () => {
       remoteUrl: "https://example.com/demo.git",
     });
 
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
       name: "lint-fix",
       prompt: "Fix lint errors",
     });
 
     const schedule = repos.schedules.create({
-      taskId: task.id,
+      agentId: agent.id,
       name: "nightly",
       cronExpr: "0 2 * * *",
     });
 
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       scheduleId: schedule.id,
       idempotencyKey: "run-1",
       trigger: "schedule",
@@ -149,8 +246,8 @@ describe("storage/db", () => {
     });
 
     expect(repos.projects.findById(project.id)?.name).toBe("demo");
-    expect(repos.tasks.findById(task.id)?.projectId).toBe(project.id);
-    expect(repos.schedules.findById(schedule.id)?.taskId).toBe(task.id);
+    expect(repos.agents.findById(agent.id)?.projectId).toBe(project.id);
+    expect(repos.schedules.findById(schedule.id)?.agentId).toBe(agent.id);
     expect(repos.runs.findById(run.id)?.scheduleId).toBe(schedule.id);
     expect(repos.attempts.findById(attempt.id)?.runId).toBe(run.id);
   });
@@ -160,7 +257,7 @@ describe("storage/db", () => {
     const repos = createRepositories(database);
 
     expect(() =>
-      repos.tasks.create({
+      repos.agents.create({
         projectId: "missing-project",
         name: "orphan",
         prompt: "noop",
@@ -172,16 +269,16 @@ describe("storage/db", () => {
       repoPath: "/tmp/fk-demo",
     });
 
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
-      name: "task",
+      name: "agent",
       prompt: "noop",
     });
 
     expect(() =>
       repos.runs.create({
         projectId: project.id,
-        taskId: "missing-task",
+        agentId: "missing-agent",
         idempotencyKey: "bad-run",
         trigger: "manual",
       }),
@@ -189,7 +286,7 @@ describe("storage/db", () => {
 
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "good-run",
       trigger: "manual",
     });
@@ -203,7 +300,7 @@ describe("storage/db", () => {
 
     repos.projects.delete(project.id);
 
-    expect(repos.tasks.findById(task.id)).toBeNull();
+    expect(repos.agents.findById(agent.id)).toBeNull();
     expect(repos.runs.findById(run.id)).toBeNull();
   });
 
@@ -216,15 +313,15 @@ describe("storage/db", () => {
         name: "tx",
         repoPath: "/tmp/tx",
       });
-      const task = repos.tasks.create({
+      const agent = repos.agents.create({
         projectId: project.id,
-        name: "tx-task",
+        name: "tx-agent",
         prompt: "tx",
       });
-      return { project, task };
+      return { project, agent };
     });
 
     expect(repos.projects.findById(result.project.id)).not.toBeNull();
-    expect(repos.tasks.findById(result.task.id)).not.toBeNull();
+    expect(repos.agents.findById(result.agent.id)).not.toBeNull();
   });
 });

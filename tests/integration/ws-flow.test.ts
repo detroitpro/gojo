@@ -168,14 +168,14 @@ describe("WebSocket flow", () => {
         name: "ws-demo",
         repoPath: tempDir ?? "/tmp/ws-demo",
       });
-      const task = ctx!.repos.tasks.create({
+      const task = ctx!.repos.agents.create({
         projectId: project.id,
         name: "task",
         prompt: "do work",
       });
       const run = ctx!.repos.runs.create({
         projectId: project.id,
-        taskId: task.id,
+        agentId: task.id,
         idempotencyKey: "ws-run",
         trigger: "manual",
       });

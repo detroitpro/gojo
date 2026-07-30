@@ -2,21 +2,21 @@ import { describe, expect, test } from "bun:test";
 
 import { RunState } from "@shared/run-states";
 import { Database, createRepositories } from "@/storage";
-import { listTasksPage } from "@/storage/paged-lists";
+import { listAgentsPage } from "@/storage/paged-lists";
 
-describe("listTasksPage recentRuns", () => {
-  test("attaches up to 5 recent runs oldest-to-newest per page task", () => {
+describe("listAgentsPage recentRuns", () => {
+  test("attaches up to 5 recent runs oldest-to-newest per page agent", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
 
     const project = repos.projects.create({ name: "alpha", repoPath: "/tmp/alpha" });
-    const withRuns = repos.tasks.create({
+    const withRuns = repos.agents.create({
       projectId: project.id,
       name: "with-runs",
       prompt: "a",
     });
-    const empty = repos.tasks.create({
+    const empty = repos.agents.create({
       projectId: project.id,
       name: "empty",
       prompt: "b",
@@ -25,7 +25,7 @@ describe("listTasksPage recentRuns", () => {
     for (let i = 0; i < 7; i += 1) {
       const run = repos.runs.create({
         projectId: project.id,
-        taskId: withRuns.id,
+        agentId: withRuns.id,
         idempotencyKey: `r-${i}`,
         trigger: i < 2 ? "schedule" : "manual",
         state: i % 2 === 0 ? RunState.Succeeded : RunState.Failed,
@@ -35,13 +35,13 @@ describe("listTasksPage recentRuns", () => {
         .run(`2026-01-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`, run.id);
     }
 
-    const page = listTasksPage(db, { limit: 50, offset: 0 });
+    const page = listAgentsPage(db, { limit: 50, offset: 0 });
     expect(page.items).toHaveLength(2);
 
-    const emptyRow = page.items.find((task) => task.id === empty.id);
+    const emptyRow = page.items.find((agent) => agent.id === empty.id);
     expect(emptyRow?.recentRuns).toEqual([]);
 
-    const busy = page.items.find((task) => task.id === withRuns.id);
+    const busy = page.items.find((agent) => agent.id === withRuns.id);
     expect(busy?.recentRuns).toHaveLength(5);
     expect(busy?.recentRuns.map((run) => run.createdAt)).toEqual([
       "2026-01-03T00:00:00.000Z",
@@ -63,22 +63,22 @@ describe("listTasksPage recentRuns", () => {
     const repos = createRepositories(db);
 
     const project = repos.projects.create({ name: "ops", repoPath: "/tmp/ops" });
-    const healthy = repos.tasks.create({
+    const healthy = repos.agents.create({
       projectId: project.id,
       name: "healthy",
       prompt: "ok",
     });
-    const flaky = repos.tasks.create({
+    const flaky = repos.agents.create({
       projectId: project.id,
       name: "flaky",
       prompt: "maybe",
     });
-    const broken = repos.tasks.create({
+    const broken = repos.agents.create({
       projectId: project.id,
       name: "broken",
       prompt: "no",
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: "idle",
       prompt: "never",
@@ -88,7 +88,7 @@ describe("listTasksPage recentRuns", () => {
     for (let i = 0; i < 5; i += 1) {
       repos.runs.create({
         projectId: project.id,
-        taskId: healthy.id,
+        agentId: healthy.id,
         idempotencyKey: `h-${i}`,
         trigger: "manual",
         state: RunState.Succeeded,
@@ -98,7 +98,7 @@ describe("listTasksPage recentRuns", () => {
     for (let i = 0; i < 4; i += 1) {
       repos.runs.create({
         projectId: project.id,
-        taskId: flaky.id,
+        agentId: flaky.id,
         idempotencyKey: `f-${i}`,
         trigger: "manual",
         state: i < 2 ? RunState.Succeeded : RunState.Failed,
@@ -108,33 +108,33 @@ describe("listTasksPage recentRuns", () => {
     for (let i = 0; i < 3; i += 1) {
       repos.runs.create({
         projectId: project.id,
-        taskId: broken.id,
+        agentId: broken.id,
         idempotencyKey: `b-${i}`,
         trigger: "manual",
         state: RunState.Failed,
       });
     }
 
-    const worstFirst = listTasksPage(db, {
+    const worstFirst = listAgentsPage(db, {
       limit: 50,
       offset: 0,
       sort: "successRate",
       order: "asc",
     });
-    expect(worstFirst.items.map((task) => task.name)).toEqual([
+    expect(worstFirst.items.map((agent) => agent.name)).toEqual([
       "broken",
       "flaky",
       "healthy",
       "idle",
     ]);
 
-    const bestFirst = listTasksPage(db, {
+    const bestFirst = listAgentsPage(db, {
       limit: 50,
       offset: 0,
       sort: "successRate",
       order: "desc",
     });
-    expect(bestFirst.items.map((task) => task.name)).toEqual([
+    expect(bestFirst.items.map((agent) => agent.name)).toEqual([
       "healthy",
       "flaky",
       "broken",

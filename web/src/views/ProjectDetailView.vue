@@ -8,13 +8,13 @@ import {
   getProject,
   getProjectDoctor,
   getProjectWorkStatus,
+  listAgents,
   listProjectSources,
   listProjectWork,
-  listTasks,
   recheckWorkItem,
   refreshProjectSource,
   resolveWorkItem,
-  runTask,
+  runAgent,
   syncProject,
 } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
@@ -42,10 +42,10 @@ import {
 } from "@/lib/work-attention";
 import {
   collapseHistoryTimeline,
+  workAgentProfileLabel,
   workHistoryHref,
   workPrimaryLabel,
   workSecondaryLabel,
-  workTaskAgentLabel,
 } from "@/lib/work-display";
 import { compareLabel } from "@/lib/stat-metrics";
 import { isVerifiedActiveDelivery } from "@/lib/work-visibility";
@@ -59,12 +59,12 @@ import {
   Trash2,
 } from "lucide-vue-next";
 import type {
+  Agent,
   DashboardImpact,
   Project,
   ProjectDoctorResult,
   ProjectSource,
   ProjectSyncResult,
-  Task,
   WorkItem,
   WorkStatus,
 } from "@/types";
@@ -75,7 +75,7 @@ const router = useRouter();
 const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
-const projectTasks = ref<Task[]>([]);
+const projectAgents = ref<Agent[]>([]);
 const openPrTotal = ref(0);
 const workItems = ref<WorkItem[]>([]);
 const historyItems = ref<WorkItem[]>([]);
@@ -95,8 +95,8 @@ const resolveTarget = ref<WorkItem | null>(null);
 type ImpactRange = "30d" | "90d" | "all";
 const impact = ref<DashboardImpact | null>(null);
 const impactRange = ref<ImpactRange>("30d");
-/** Task ids whose impact rows are hidden; empty = all visible. */
-const hiddenTaskIds = ref<Set<string>>(new Set());
+/** Agent ids whose impact rows are hidden; empty = all visible. */
+const hiddenAgentIds = ref<Set<string>>(new Set());
 
 const projectId = computed(() => route.params.id as string);
 
@@ -143,12 +143,12 @@ function workCompareLabel(): string {
   return compareLabel("asOf", workStatus.value?.compareWindow);
 }
 
-const impactTasks = computed(() => {
+const impactAgents = computed(() => {
   const items = impact.value?.recentItems ?? [];
   const byId = new Map<string, string>();
   for (const item of items) {
-    if (!byId.has(item.taskId)) {
-      byId.set(item.taskId, item.taskName);
+    if (!byId.has(item.agentId)) {
+      byId.set(item.agentId, item.agentName);
     }
   }
   return [...byId.entries()]
@@ -158,24 +158,24 @@ const impactTasks = computed(() => {
 
 const visibleImpactItems = computed(() => {
   const items = impact.value?.recentItems ?? [];
-  if (hiddenTaskIds.value.size === 0) {
+  if (hiddenAgentIds.value.size === 0) {
     return items;
   }
-  return items.filter((item) => !hiddenTaskIds.value.has(item.taskId));
+  return items.filter((item) => !hiddenAgentIds.value.has(item.agentId));
 });
 
-function isTaskVisible(taskId: string): boolean {
-  return !hiddenTaskIds.value.has(taskId);
+function isAgentVisible(agentId: string): boolean {
+  return !hiddenAgentIds.value.has(agentId);
 }
 
-function toggleTaskVisibility(taskId: string) {
-  const next = new Set(hiddenTaskIds.value);
-  if (next.has(taskId)) {
-    next.delete(taskId);
+function toggleAgentVisibility(agentId: string) {
+  const next = new Set(hiddenAgentIds.value);
+  if (next.has(agentId)) {
+    next.delete(agentId);
   } else {
-    next.add(taskId);
+    next.add(agentId);
   }
-  hiddenTaskIds.value = next;
+  hiddenAgentIds.value = next;
 }
 
 async function loadImpact() {
@@ -184,11 +184,11 @@ async function loadImpact() {
       projectId: projectId.value,
       range: impactRange.value,
     });
-    // Drop hide state for tasks no longer present in this range.
-    const known = new Set(impactTasks.value.map((task) => task.id));
-    const next = new Set([...hiddenTaskIds.value].filter((id) => known.has(id)));
-    if (next.size !== hiddenTaskIds.value.size) {
-      hiddenTaskIds.value = next;
+    // Drop hide state for agents no longer present in this range.
+    const known = new Set(impactAgents.value.map((agent) => agent.id));
+    const next = new Set([...hiddenAgentIds.value].filter((id) => known.has(id)));
+    if (next.size !== hiddenAgentIds.value.size) {
+      hiddenAgentIds.value = next;
     }
   } catch {
     impact.value = null;
@@ -203,16 +203,16 @@ const health = computed(() =>
     : { score: null, level: "missing" as const, label: "…" },
 );
 
-const tasksByName = computed(() => {
-  const map = new Map<string, Task>();
-  for (const task of projectTasks.value) {
-    map.set(task.name, task);
+const agentsByName = computed(() => {
+  const map = new Map<string, Agent>();
+  for (const agent of projectAgents.value) {
+    map.set(agent.name, agent);
   }
   return map;
 });
 
 const mergeBabysitter = computed(() =>
-  projectTasks.value.find((task) => task.name === "maintain-merge" && task.enabled) ?? null,
+  projectAgents.value.find((agent) => agent.name === "maintain-merge" && agent.enabled) ?? null,
 );
 
 function scrollToOpenPrs() {
@@ -402,14 +402,14 @@ async function loadWork() {
 }
 
 async function runMergeBabysitter() {
-  const task = mergeBabysitter.value;
-  if (!task) {
+  const agent = mergeBabysitter.value;
+  if (!agent) {
     return;
   }
   mergeBusy.value = true;
   error.value = "";
   try {
-    const run = await runTask(task.id);
+    const run = await runAgent(agent.id);
     await router.push({ name: "run-detail", params: { id: run.id } });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to enqueue merge babysitter";
@@ -423,18 +423,18 @@ async function load() {
   try {
     project.value = await getProject(projectId.value);
     doctor.value = await getProjectDoctor(projectId.value);
-    const tasks = await listTasks({
+    const agents = await listAgents({
       limit: MAX_PAGE_LIMIT,
       offset: 0,
       projectId: projectId.value,
     });
-    projectTasks.value = tasks.items;
+    projectAgents.value = agents.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load project";
     if (initial) {
       project.value = null;
       doctor.value = null;
-      projectTasks.value = [];
+      projectAgents.value = [];
     }
   } finally {
     endLoad(initial);
@@ -458,14 +458,14 @@ async function runSync() {
     const path = result.sync.manifestPath
       ? result.sync.manifestPath.split(/[/\\]/).slice(-2).join("/")
       : "no manifest file";
-    notice.value = `Synced from ${path} — ${result.sync.agentProfiles} agents, ${result.sync.tasks} tasks, ${result.sync.schedules} schedules`;
+    notice.value = `Synced from ${path} — ${result.sync.profiles} profiles, ${result.sync.agents} agents, ${result.sync.schedules} schedules`;
     doctor.value = await getProjectDoctor(project.value.id);
-    const tasks = await listTasks({
+    const agents = await listAgents({
       limit: MAX_PAGE_LIMIT,
       offset: 0,
       projectId: project.value.id,
     });
-    projectTasks.value = tasks.items;
+    projectAgents.value = agents.items;
     await loadWork();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Sync failed";
@@ -494,7 +494,7 @@ watch(projectId, () => {
   resetLoad();
   project.value = null;
   doctor.value = null;
-  projectTasks.value = [];
+  projectAgents.value = [];
   workItems.value = [];
   historyItems.value = [];
   historyTotal.value = 0;
@@ -503,7 +503,7 @@ watch(projectId, () => {
   impact.value = null;
   lastSync.value = null;
   notice.value = "";
-  hiddenTaskIds.value = new Set();
+  hiddenAgentIds.value = new Set();
   void load();
   void loadImpact();
   void loadWork();
@@ -523,7 +523,7 @@ watch(
 );
 
 useLiveRefresh({
-  topics: ["projects", "tasks"],
+  topics: ["projects", "agents"],
   projectId,
   refresh: load,
 });
@@ -607,7 +607,7 @@ useLiveRefresh({
             <div>
               <dt>Configured</dt>
               <dd>
-                {{ project.enabledTaskCount }}/{{ project.taskCount }} tasks ·
+                {{ project.enabledAgentCount }}/{{ project.agentCount }} agents ·
                 {{ project.enabledScheduleCount }}/{{ project.scheduleCount }} schedules
               </dd>
             </div>
@@ -621,9 +621,9 @@ useLiveRefresh({
             <AppButton
               size="sm"
               :icon="ListTodo"
-              :to="{ name: 'tasks', query: { projectId: project.id } }"
+              :to="{ name: 'agents', query: { projectId: project.id } }"
             >
-              Tasks
+              Agents
             </AppButton>
             <AppButton
               size="sm"
@@ -709,7 +709,7 @@ useLiveRefresh({
         <div v-if="nowWork.length === 0" class="muted text-sm">No active or queued work</div>
         <div v-else class="table-wrap">
           <table class="data">
-            <thead><tr><th>Work</th><th>Task / agent</th><th>Phase</th><th>Platform / repo</th><th>Activity</th></tr></thead>
+            <thead><tr><th>Work</th><th>Agent / profile</th><th>Phase</th><th>Platform / repo</th><th>Activity</th></tr></thead>
             <tbody>
               <tr v-for="item in nowWork" :key="item.id">
                 <td>
@@ -730,7 +730,7 @@ useLiveRefresh({
                     {{ workSecondaryLabel(item) }}
                   </div>
                 </td>
-                <td>{{ workTaskAgentLabel(item) }}</td>
+                <td>{{ workAgentProfileLabel(item) }}</td>
                 <td><ExecutionBadge :execution="item.execution" /></td>
                 <td>{{ sourceLabel(item) }}</td>
                 <td class="mono muted">{{ observedLabel(item) }}</td>
@@ -902,7 +902,7 @@ useLiveRefresh({
               <tr>
                 <th>Type</th>
                 <th>Work</th>
-                <th>Task / agent</th>
+                <th>Agent / profile</th>
                 <th>Result</th>
                 <th>Platform / repo</th>
                 <th>When</th>
@@ -933,7 +933,7 @@ useLiveRefresh({
                     {{ workSecondaryLabel(row.item) }}
                   </div>
                 </td>
-                <td>{{ workTaskAgentLabel(row.item) }}</td>
+                <td>{{ workAgentProfileLabel(row.item) }}</td>
                 <td><WorkResultBadge :item="row.item" /></td>
                 <td>{{ sourceLabel(row.item) }}</td>
                 <td class="mono muted">
@@ -1015,19 +1015,19 @@ useLiveRefresh({
             No impact items recorded in this range
           </div>
 
-          <div v-if="impactTasks.length > 0" class="impact-task-toggles">
-            <span class="muted text-sm">Tasks</span>
+          <div v-if="impactAgents.length > 0" class="impact-task-toggles">
+            <span class="muted text-sm">Agents</span>
             <label
-              v-for="task in impactTasks"
-              :key="task.id"
+              v-for="agent in impactAgents"
+              :key="agent.id"
               class="impact-task-toggle"
             >
               <input
                 type="checkbox"
-                :checked="isTaskVisible(task.id)"
-                @change="toggleTaskVisibility(task.id)"
+                :checked="isAgentVisible(agent.id)"
+                @change="toggleAgentVisibility(agent.id)"
               />
-              {{ task.name }}
+              {{ agent.name }}
             </label>
           </div>
 
@@ -1035,7 +1035,7 @@ useLiveRefresh({
             <table class="data">
               <thead>
                 <tr>
-                  <th>Task</th>
+                  <th>Agent</th>
                   <th>Subject</th>
                   <th>Summary</th>
                   <th>Trust</th>
@@ -1048,7 +1048,7 @@ useLiveRefresh({
                       :to="{ name: 'run-detail', params: { id: item.runId } }"
                       class="entity-name"
                     >
-                      {{ item.taskName }}
+                      {{ item.agentName }}
                     </RouterLink>
                   </td>
                   <td class="mono">{{ item.subject }}</td>
@@ -1064,7 +1064,7 @@ useLiveRefresh({
             v-else-if="impact.recentItems.length > 0"
             class="muted text-sm impact-empty"
           >
-            All tasks are hidden — turn a task back on to see its impact items
+            All agents are hidden — turn an agent back on to see its impact items
           </div>
         </div>
       </section>
@@ -1074,9 +1074,9 @@ useLiveRefresh({
         <div class="panel-body">
           <p class="muted">
             Sync reads <span class="mono">gojo.yaml</span> (or
-            <span class="mono">.gojo/project.yaml</span>) and upserts agents, tasks, and schedules
-            by name. Entries removed from the manifest are soft-disabled so they stop firing.
-            Sync does not change git history or your working tree.
+            <span class="mono">.gojo/project.yaml</span>) and upserts profiles, agents, and
+            schedules by name. Entries removed from the manifest are soft-disabled so they stop
+            firing. Sync does not change git history or your working tree.
           </p>
           <div v-if="lastSync" class="mt-5 project-sync-result">
             <div>
@@ -1084,7 +1084,7 @@ useLiveRefresh({
               <span class="mono">{{ lastSync.manifestPath ?? "not found" }}</span>
             </div>
             <div class="muted mt-2">
-              {{ lastSync.agentProfiles }} agents · {{ lastSync.tasks }} tasks ·
+              {{ lastSync.profiles }} profiles · {{ lastSync.agents }} agents ·
               {{ lastSync.schedules }} schedules
             </div>
           </div>
@@ -1127,13 +1127,13 @@ useLiveRefresh({
                 </li>
               </ul>
             </li>
-            <li v-for="tool in doctor.validationTools" :key="`${tool.task}:${tool.step}:${tool.binary}`">
+            <li v-for="tool in doctor.validationTools" :key="`${tool.agent}:${tool.step}:${tool.binary}`">
               <span :class="tool.found ? 'ok' : 'bad'">●</span>
               Validation tool <span class="mono">{{ tool.binary }}</span>
               <template v-if="tool.shellBuiltin"> (shell builtin — ok)</template>
               <template v-else-if="tool.found"> found on daemon PATH</template>
               <template v-else> missing under daemon PATH</template>
-              <span class="muted"> — {{ tool.task }} / {{ tool.step }}</span>
+              <span class="muted"> — {{ tool.agent }} / {{ tool.step }}</span>
             </li>
             <li v-if="doctor.validationTools.length === 0" class="muted">
               No validation tool checks reported
@@ -1164,8 +1164,8 @@ useLiveRefresh({
             </div>
 
             <div class="mb-7">
-              <div class="panel-subheader">Agents ({{ manifest.agents.length }})</div>
-              <div v-if="manifest.agents.length === 0" class="muted">None</div>
+              <div class="panel-subheader">Profiles ({{ manifest.profiles.length }})</div>
+              <div v-if="manifest.profiles.length === 0" class="muted">None</div>
               <div v-else class="table-wrap">
                 <table class="data">
                   <thead>
@@ -1177,11 +1177,11 @@ useLiveRefresh({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="agent in manifest.agents" :key="agent.name">
-                      <td class="entity-name">{{ agent.name }}</td>
-                      <td class="mono">{{ agent.adapter }}</td>
-                      <td class="mono muted">{{ agent.model ?? "—" }}</td>
-                      <td class="mono muted">{{ agent.timeout ?? "—" }}</td>
+                    <tr v-for="profile in manifest.profiles" :key="profile.name">
+                      <td class="entity-name">{{ profile.name }}</td>
+                      <td class="mono">{{ profile.adapter }}</td>
+                      <td class="mono muted">{{ profile.model ?? "—" }}</td>
+                      <td class="mono muted">{{ profile.timeout ?? "—" }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1189,36 +1189,36 @@ useLiveRefresh({
             </div>
 
             <div class="mb-7">
-              <div class="panel-subheader">Tasks ({{ manifest.tasks.length }})</div>
-              <div v-if="manifest.tasks.length === 0" class="muted">None</div>
+              <div class="panel-subheader">Agents ({{ manifest.agents.length }})</div>
+              <div v-if="manifest.agents.length === 0" class="muted">None</div>
               <div v-else class="table-wrap">
                 <table class="data">
                   <thead>
                     <tr>
                       <th>Name</th>
-                      <th>Agent</th>
+                      <th>Profile</th>
                       <th>Integration</th>
                       <th>Description</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="task in manifest.tasks" :key="task.name">
+                    <tr v-for="agent in manifest.agents" :key="agent.name">
                       <td>
                         <RouterLink
-                          v-if="tasksByName.get(task.name)"
+                          v-if="agentsByName.get(agent.name)"
                           :to="{
-                            name: 'task-detail',
-                            params: { id: tasksByName.get(task.name)!.id },
+                            name: 'agent-detail',
+                            params: { id: agentsByName.get(agent.name)!.id },
                           }"
                           class="entity-name"
                         >
-                          {{ task.name }}
+                          {{ agent.name }}
                         </RouterLink>
-                        <span v-else class="entity-name">{{ task.name }}</span>
+                        <span v-else class="entity-name">{{ agent.name }}</span>
                       </td>
-                      <td class="mono">{{ task.agent }}</td>
-                      <td class="mono">{{ task.integrationMode }}</td>
-                      <td class="muted">{{ task.description || "—" }}</td>
+                      <td class="mono">{{ agent.profile }}</td>
+                      <td class="mono">{{ agent.integrationMode }}</td>
+                      <td class="muted">{{ agent.description || "—" }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1233,7 +1233,7 @@ useLiveRefresh({
                   <thead>
                     <tr>
                       <th>Name</th>
-                      <th>Task</th>
+                      <th>Agent</th>
                       <th>Cron</th>
                       <th>Timezone</th>
                     </tr>
@@ -1241,7 +1241,7 @@ useLiveRefresh({
                   <tbody>
                     <tr v-for="schedule in manifest.schedules" :key="schedule.name">
                       <td class="entity-name">{{ schedule.name }}</td>
-                      <td class="mono">{{ schedule.task }}</td>
+                      <td class="mono">{{ schedule.agent }}</td>
                       <td class="mono">{{ schedule.cron }}</td>
                       <td class="mono muted">{{ schedule.timezone }}</td>
                     </tr>

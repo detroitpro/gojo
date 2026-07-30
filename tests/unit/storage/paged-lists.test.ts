@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { Database, createRepositories } from "@/storage";
 import {
+  listAgentsPage,
   listImpactItemsPage,
   listIntegrationsPage,
   listProjectsPage,
   listRunsPage,
-  listTasksPage,
   projectSummaryFor,
 } from "@/storage/paged-lists";
 import { RunState } from "@shared/run-states";
@@ -18,12 +18,12 @@ describe("paged-lists", () => {
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
     const other = repos.projects.create({ name: "other", repoPath: "/tmp/other" });
-    const task = repos.tasks.create({
+    const agent = repos.agents.create({
       projectId: project.id,
       name: "maintain-quality",
       prompt: "work",
     });
-    const task2 = repos.tasks.create({
+    const agent2 = repos.agents.create({
       projectId: other.id,
       name: "deps",
       prompt: "work",
@@ -32,7 +32,7 @@ describe("paged-lists", () => {
     for (let i = 0; i < 3; i += 1) {
       repos.runs.create({
         projectId: project.id,
-        taskId: task.id,
+        agentId: agent.id,
         idempotencyKey: `k-${i}`,
         trigger: "schedule",
         state: RunState.Failed,
@@ -40,7 +40,7 @@ describe("paged-lists", () => {
     }
     repos.runs.create({
       projectId: other.id,
-      taskId: task2.id,
+      agentId: agent2.id,
       idempotencyKey: "other",
       trigger: "manual",
       state: RunState.Succeeded,
@@ -57,7 +57,7 @@ describe("paged-lists", () => {
     expect(page.total).toBe(3);
     expect(page.items).toHaveLength(2);
     expect(page.items.every((run) => run.projectId === project.id)).toBe(true);
-    expect(page.items[0]?.taskName).toBe("maintain-quality");
+    expect(page.items[0]?.agentName).toBe("maintain-quality");
 
     db.close();
   });
@@ -67,18 +67,18 @@ describe("paged-lists", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const taskA = repos.tasks.create({ projectId: project.id, name: "alpha", prompt: "a" });
-    const taskB = repos.tasks.create({ projectId: project.id, name: "beta", prompt: "b" });
+    const agentA = repos.agents.create({ projectId: project.id, name: "alpha", prompt: "a" });
+    const agentB = repos.agents.create({ projectId: project.id, name: "beta", prompt: "b" });
     repos.runs.create({
       projectId: project.id,
-      taskId: taskB.id,
+      agentId: agentB.id,
       idempotencyKey: "b",
       trigger: "manual",
       state: RunState.Queued,
     });
     repos.runs.create({
       projectId: project.id,
-      taskId: taskA.id,
+      agentId: agentA.id,
       idempotencyKey: "a",
       trigger: "manual",
       state: RunState.Queued,
@@ -87,18 +87,18 @@ describe("paged-lists", () => {
     const asc = listRunsPage(db, {
       limit: 10,
       offset: 0,
-      sort: "taskName",
+      sort: "agentName",
       order: "asc",
     });
-    expect(asc.items.map((run) => run.taskName)).toEqual(["alpha", "beta"]);
+    expect(asc.items.map((run) => run.agentName)).toEqual(["alpha", "beta"]);
 
     const desc = listRunsPage(db, {
       limit: 10,
       offset: 0,
-      sort: "taskName",
+      sort: "agentName",
       order: "desc",
     });
-    expect(desc.items.map((run) => run.taskName)).toEqual(["beta", "alpha"]);
+    expect(desc.items.map((run) => run.agentName)).toEqual(["beta", "alpha"]);
 
     const fallback = listRunsPage(db, {
       limit: 10,
@@ -111,14 +111,14 @@ describe("paged-lists", () => {
     db.close();
   });
 
-  test("listProjectsPage and listTasksPage honor sort", () => {
+  test("listProjectsPage and listAgentsPage honor sort", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
     repos.projects.create({ name: "zeta", repoPath: "/tmp/z" });
     const alpha = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
-    repos.tasks.create({ projectId: alpha.id, name: "z-task", prompt: "z" });
-    repos.tasks.create({ projectId: alpha.id, name: "a-task", prompt: "a" });
+    repos.agents.create({ projectId: alpha.id, name: "z-agent", prompt: "z" });
+    repos.agents.create({ projectId: alpha.id, name: "a-agent", prompt: "a" });
 
     const projects = listProjectsPage(db, {
       limit: 10,
@@ -128,99 +128,99 @@ describe("paged-lists", () => {
     });
     expect(projects.items.map((p) => p.name)).toEqual(["alpha", "zeta"]);
 
-    const tasks = listTasksPage(db, {
+    const agents = listAgentsPage(db, {
       limit: 10,
       offset: 0,
       projectId: alpha.id,
       sort: "name",
       order: "asc",
     });
-    expect(tasks.items.map((t) => t.name)).toEqual(["a-task", "z-task"]);
+    expect(agents.items.map((t) => t.name)).toEqual(["a-agent", "z-agent"]);
 
     db.close();
   });
 
-  test("listTasksPage respects enabled filter", () => {
+  test("listAgentsPage respects enabled filter", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: "on",
       prompt: "a",
       enabled: true,
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: "off",
       prompt: "b",
       enabled: false,
     });
 
-    const enabled = listTasksPage(db, { limit: 25, offset: 0, enabled: true });
+    const enabled = listAgentsPage(db, { limit: 25, offset: 0, enabled: true });
     expect(enabled.total).toBe(1);
     expect(enabled.items[0]?.name).toBe("on");
 
     db.close();
   });
 
-  test("listRunsPage filters by taskId", () => {
+  test("listRunsPage filters by agentId", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const taskA = repos.tasks.create({
+    const agentA = repos.agents.create({
       projectId: project.id,
-      name: "task-a",
+      name: "agent-a",
       prompt: "a",
     });
-    const taskB = repos.tasks.create({
+    const agentB = repos.agents.create({
       projectId: project.id,
-      name: "task-b",
+      name: "agent-b",
       prompt: "b",
     });
     repos.runs.create({
       projectId: project.id,
-      taskId: taskA.id,
+      agentId: agentA.id,
       idempotencyKey: "a1",
       trigger: "manual",
       state: RunState.Succeeded,
     });
     repos.runs.create({
       projectId: project.id,
-      taskId: taskB.id,
+      agentId: agentB.id,
       idempotencyKey: "b1",
       trigger: "manual",
       state: RunState.Failed,
     });
 
-    const page = listRunsPage(db, { limit: 25, offset: 0, taskId: taskA.id });
+    const page = listRunsPage(db, { limit: 25, offset: 0, agentId: agentA.id });
     expect(page.total).toBe(1);
-    expect(page.items[0]?.taskId).toBe(taskA.id);
-    expect(page.items[0]?.taskName).toBe("task-a");
+    expect(page.items[0]?.agentId).toBe(agentA.id);
+    expect(page.items[0]?.agentName).toBe("agent-a");
 
     db.close();
   });
 
-  test("listTasksPage includes last-run fields", () => {
+  test("listAgentsPage includes last-run fields", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const withRun = repos.tasks.create({
+    const withRun = repos.agents.create({
       projectId: project.id,
       name: "with-run",
       prompt: "a",
     });
-    const without = repos.tasks.create({
+    const without = repos.agents.create({
       projectId: project.id,
       name: "without-run",
       prompt: "b",
     });
     const older = repos.runs.create({
       projectId: project.id,
-      taskId: withRun.id,
+      agentId: withRun.id,
       idempotencyKey: "older",
       trigger: "manual",
       state: RunState.Failed,
@@ -231,15 +231,15 @@ describe("paged-lists", () => {
       .run("2020-01-01T00:00:00.000Z", older.id);
     const newer = repos.runs.create({
       projectId: project.id,
-      taskId: withRun.id,
+      agentId: withRun.id,
       idempotencyKey: "newer",
       trigger: "api",
       state: RunState.Succeeded,
     });
 
-    const page = listTasksPage(db, { limit: 25, offset: 0 });
-    const withRow = page.items.find((task) => task.id === withRun.id);
-    const withoutRow = page.items.find((task) => task.id === without.id);
+    const page = listAgentsPage(db, { limit: 25, offset: 0 });
+    const withRow = page.items.find((agent) => agent.id === withRun.id);
+    const withoutRow = page.items.find((agent) => agent.id === without.id);
 
     expect(withRow?.lastRunId).toBe(newer.id);
     expect(withRow?.lastRunState).toBe(RunState.Succeeded);
@@ -251,7 +251,7 @@ describe("paged-lists", () => {
     db.close();
   });
 
-  test("listProjectsPage includes task/schedule summary and omits manifestJson", () => {
+  test("listProjectsPage includes agent/schedule summary and omits manifestJson", () => {
     const db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
@@ -261,26 +261,26 @@ describe("paged-lists", () => {
       manifestJson: '{"version":1,"tasks":{}}',
     });
     const empty = repos.projects.create({ name: "empty", repoPath: "/tmp/empty" });
-    const on = repos.tasks.create({
+    const on = repos.agents.create({
       projectId: project.id,
       name: "on",
       prompt: "a",
       enabled: true,
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: "off",
       prompt: "b",
       enabled: false,
     });
     repos.schedules.create({
-      taskId: on.id,
+      agentId: on.id,
       name: "on",
       cronExpr: "0 1 * * *",
       enabled: true,
     });
     repos.schedules.create({
-      taskId: on.id,
+      agentId: on.id,
       name: "off-sched",
       cronExpr: "0 2 * * *",
       enabled: false,
@@ -290,20 +290,20 @@ describe("paged-lists", () => {
     const demo = page.items.find((row) => row.id === project.id);
     const bare = page.items.find((row) => row.id === empty.id);
 
-    expect(demo?.taskCount).toBe(2);
-    expect(demo?.enabledTaskCount).toBe(1);
+    expect(demo?.agentCount).toBe(2);
+    expect(demo?.enabledAgentCount).toBe(1);
     expect(demo?.scheduleCount).toBe(2);
     expect(demo?.enabledScheduleCount).toBe(1);
     expect(demo?.hasManifest).toBe(true);
     expect(demo?.manifestJson).toBeUndefined();
 
-    expect(bare?.taskCount).toBe(0);
+    expect(bare?.agentCount).toBe(0);
     expect(bare?.hasManifest).toBe(false);
 
     const summary = projectSummaryFor(db, project.id);
     expect(summary).toEqual({
-      taskCount: 2,
-      enabledTaskCount: 1,
+      agentCount: 2,
+      enabledAgentCount: 1,
       scheduleCount: 2,
       enabledScheduleCount: 1,
       hasManifest: true,
@@ -319,17 +319,17 @@ describe("paged-lists", () => {
     const repos = createRepositories(db);
     const withOpen = repos.projects.create({ name: "with-open", repoPath: "/tmp/a" });
     const without = repos.projects.create({ name: "without", repoPath: "/tmp/b" });
-    const taskA = repos.tasks.create({
+    const agentA = repos.agents.create({
       projectId: withOpen.id,
       name: "maintain-quality",
       prompt: "a",
     });
-    const taskB = repos.tasks.create({
+    const agentB = repos.agents.create({
       projectId: withOpen.id,
       name: "maintain-docs",
       prompt: "b",
     });
-    const taskC = repos.tasks.create({
+    const agentC = repos.agents.create({
       projectId: without.id,
       name: "other",
       prompt: "c",
@@ -337,25 +337,25 @@ describe("paged-lists", () => {
 
     const runOld = repos.runs.create({
       projectId: withOpen.id,
-      taskId: taskA.id,
+      agentId: agentA.id,
       idempotencyKey: "old",
       trigger: "manual",
     });
     const runNew = repos.runs.create({
       projectId: withOpen.id,
-      taskId: taskB.id,
+      agentId: agentB.id,
       idempotencyKey: "new",
       trigger: "manual",
     });
     const runMerged = repos.runs.create({
       projectId: withOpen.id,
-      taskId: taskA.id,
+      agentId: agentA.id,
       idempotencyKey: "merged",
       trigger: "manual",
     });
     const runOther = repos.runs.create({
       projectId: without.id,
-      taskId: taskC.id,
+      agentId: agentC.id,
       idempotencyKey: "other",
       trigger: "manual",
     });
@@ -419,7 +419,7 @@ describe("paged-lists", () => {
     expect(allOpen.items.map((row) => row.prNumber)).toEqual([2, 1]);
     expect(allOpen.items[0]?.branchName).toBe("gojo/maintain-docs/branch");
     expect(allOpen.items[0]?.projectName).toBe("with-open");
-    expect(allOpen.items[0]?.taskName).toBe("maintain-docs");
+    expect(allOpen.items[0]?.agentName).toBe("maintain-docs");
     expect(allOpen.items[0]?.mergedAt).toBeNull();
 
     const filtered = listIntegrationsPage(db, {
@@ -460,17 +460,17 @@ describe("paged-lists", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
-    const task = repos.tasks.create({ projectId: project.id, name: "deps", prompt: "x" });
+    const agent = repos.agents.create({ projectId: project.id, name: "deps", prompt: "x" });
 
     const commitRun = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "commit",
       trigger: "manual",
     });
     const prRun = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "pr",
       trigger: "manual",
     });
@@ -528,17 +528,17 @@ describe("paged-lists", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
-    const task = repos.tasks.create({ projectId: project.id, name: "t", prompt: "x" });
+    const agent = repos.agents.create({ projectId: project.id, name: "t", prompt: "x" });
     const inRange = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "in",
       trigger: "manual",
       state: RunState.Succeeded,
     });
     const out = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "out",
       trigger: "manual",
       state: RunState.Succeeded,
@@ -566,10 +566,10 @@ describe("paged-lists", () => {
     db.migrate();
     const repos = createRepositories(db);
     const project = repos.projects.create({ name: "alpha", repoPath: "/tmp/a" });
-    const task = repos.tasks.create({ projectId: project.id, name: "deps", prompt: "x" });
+    const agent = repos.agents.create({ projectId: project.id, name: "deps", prompt: "x" });
     const run = repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: agent.id,
       idempotencyKey: "k1",
       trigger: "manual",
     });
@@ -616,7 +616,7 @@ describe("paged-lists", () => {
     expect(deps.total).toBe(2);
     expect(deps.items.every((item) => item.category === "dependency-update")).toBe(true);
     expect(deps.items[0]?.projectName).toBe("alpha");
-    expect(deps.items[0]?.taskName).toBe("deps");
+    expect(deps.items[0]?.agentName).toBe("deps");
 
     const page = listImpactItemsPage(db, {
       limit: 1,
@@ -640,4 +640,3 @@ describe("paged-lists", () => {
     db.close();
   });
 });
-

@@ -41,12 +41,12 @@ import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
 import { createWorkRepositories } from '@/storage/work-repositories';
 import type {
+  Agent,
   Attempt,
   Project,
   Run,
   RunIntegrationStatus,
   RunTrigger,
-  Task,
 } from '@/storage/types';
 import { runValidationProfile, type ValidationStepResult } from '@/validation/engine';
 import { WorkspaceManager } from '@/workspace/manager';
@@ -95,7 +95,7 @@ interface ActiveRunContext {
 
 export interface CreateRunInput {
   projectId: string;
-  taskId: string;
+  agentId: string;
   scheduleId?: string;
   trigger: RunTrigger;
   idempotencyKey?: string;
@@ -118,7 +118,7 @@ export function platformTopicsForRunEvent(type: string): PlatformEventTopic[] {
     topics.add('dashboard');
     topics.add('overview');
     topics.add('queue');
-    topics.add('tasks');
+    topics.add('agents');
     topics.add('projects');
     if (type === 'run.created') topics.add('schedules');
   }
@@ -180,12 +180,12 @@ export class RunCoordinator {
         : RunState.Scheduled;
 
     const project = this.repos.projects.findById(input.projectId);
-    const task = this.repos.tasks.findById(input.taskId);
-    if (!project || !task) {
-      throw new Error("Project or task not found");
+    const agent = this.repos.agents.findById(input.agentId);
+    if (!project || !agent) {
+      throw new Error("Project or agent not found");
     }
-    const profile = task.agentProfileId
-      ? this.repos.agentProfiles.findById(task.agentProfileId)
+    const profile = agent.profileId
+      ? this.repos.profiles.findById(agent.profileId)
       : null;
     const schedule = input.scheduleId
       ? this.repos.schedules.findById(input.scheduleId)
@@ -193,7 +193,7 @@ export class RunCoordinator {
     const run = this.db.transaction(() => {
       let created = this.repos.runs.create({
         projectId: input.projectId,
-        taskId: input.taskId,
+        agentId: input.agentId,
         ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId } : {}),
         idempotencyKey,
         trigger: input.trigger,
@@ -206,14 +206,14 @@ export class RunCoordinator {
         projectId: project.id,
         kind: "run",
         nativeKey: created.id,
-        title: task.name,
-        summary: task.description,
+        title: agent.name,
+        summary: agent.description,
         execution: workExecutionForRunState(created.state),
         outcome: workOutcomeForRunState(created.state),
         attention: workAttentionForRunState(created.state),
         provenance: "gojo-agent",
         actorName: profile?.name ?? profile?.adapter ?? null,
-        agentProfileId: task.agentProfileId,
+        profileId: agent.profileId,
         nativeState: created.state,
         nativeJson: JSON.stringify({ trigger: created.trigger }),
         syncState: "current",
@@ -225,20 +225,20 @@ export class RunCoordinator {
       this.work.runContexts.create({
         runId: created.id,
         workItemId: workItem.id,
-        taskName: task.name,
-        taskDescription: task.description,
-        prompt: task.prompt,
+        agentName: agent.name,
+        agentDescription: agent.description,
+        prompt: agent.prompt,
         manifestHash: createHash("sha256").update(project.manifestJson).digest("hex"),
         instructions: JSON.stringify(readInstructions(project) ?? {}),
-        agentProfileJson: profileConfig,
+        profileJson: profileConfig,
         adapter: profile?.adapter ?? null,
         model:
           typeof parsedProfile["model"] === "string" ? parsedProfile["model"] : null,
-        validationJson: task.validationProfileJson,
-        integrationJson: task.integrationJson,
-        failurePolicyJson: task.failurePolicyJson,
+        validationJson: agent.validationProfileJson,
+        integrationJson: agent.integrationJson,
+        failurePolicyJson: agent.failurePolicyJson,
         baseBranch:
-          parseIntegrationConfig(task.integrationJson).targetBranch ?? project.defaultBranch,
+          parseIntegrationConfig(agent.integrationJson).targetBranch ?? project.defaultBranch,
         scheduleJson: schedule ? JSON.stringify(schedule) : null,
       });
       return created;
@@ -290,14 +290,14 @@ export class RunCoordinator {
       }
 
       let project = this.repos.projects.findById(run.projectId);
-      let task = this.repos.tasks.findById(run.taskId);
-      if (!project || !task) {
-        return this.failRun(run, 'Project or task not found');
+      let agent = this.repos.agents.findById(run.agentId);
+      if (!project || !agent) {
+        return this.failRun(run, 'Project or agent not found');
       }
 
       const syncBeforeRun = readSyncBeforeRun(project);
       const baseBranch = (() => {
-        const integration = parseIntegrationConfig(task!.integrationJson);
+        const integration = parseIntegrationConfig(agent!.integrationJson);
         return integration.targetBranch ?? project!.defaultBranch;
       })();
 
@@ -305,12 +305,12 @@ export class RunCoordinator {
         await this.workspace.syncBaseBranch(project.repoPath, baseBranch);
         syncProjectFromManifest(this.repos, project);
         project = this.repos.projects.findById(run.projectId) ?? project;
-        task = this.repos.tasks.findById(run.taskId) ?? task;
+        agent = this.repos.agents.findById(run.agentId) ?? agent;
       }
 
-      const integration = parseIntegrationConfig(task.integrationJson);
-      const validation = parseValidationConfig(task.validationProfileJson);
-      const failurePolicy = parseFailurePolicy(task.failurePolicyJson);
+      const integration = parseIntegrationConfig(agent.integrationJson);
+      const validation = parseValidationConfig(agent.validationProfileJson);
+      const failurePolicy = parseFailurePolicy(agent.failurePolicyJson);
       const maxAttempts = maxAttemptsFor(failurePolicy);
 
       let lastFailureMessage = 'Run failed';
@@ -342,7 +342,7 @@ export class RunCoordinator {
           baseBranch: integration.targetBranch ?? project.defaultBranch,
           runId: run.id,
           projectName: project.name,
-          taskName: task.name,
+          agentName: agent.name,
           attemptNumber,
           // Coordinator already synced above when configured; still prefer origin/
           // so a dirty primary checkout cannot block worktree creation.
@@ -361,7 +361,7 @@ export class RunCoordinator {
           workspacePath,
           branchName,
           startingCommit: workspace.startingCommit,
-          agentAdapter: resolveAdapterName(task, this.repos.agentProfiles),
+          agentAdapter: resolveAdapterName(agent, this.repos.profiles),
           state: 'pending',
         });
 
@@ -378,7 +378,7 @@ export class RunCoordinator {
         const agentResult = await this.executeAgent(
           run.id,
           attempt.id,
-          task,
+          agent,
           workspacePath,
           controller.signal,
           validation.steps ?? [],
@@ -406,7 +406,7 @@ export class RunCoordinator {
           }
           return this.failRun(run, lastFailureMessage, {
             project,
-            task,
+            agent,
             failurePolicy,
             phase: 'agent',
             exitCode: agentResult.exitCode,
@@ -437,7 +437,7 @@ export class RunCoordinator {
           }
           return this.failRun(run, lastFailureMessage, {
             project,
-            task,
+            agent,
             failurePolicy,
             phase: 'validation',
             validationResults: validationResult.results,
@@ -449,7 +449,7 @@ export class RunCoordinator {
       }
 
       if (!attempt) {
-        return this.failRun(run, lastFailureMessage, { project, task, failurePolicy });
+        return this.failRun(run, lastFailureMessage, { project, agent, failurePolicy });
       }
 
       const mode = integration.mode ?? 'none';
@@ -462,7 +462,7 @@ export class RunCoordinator {
           repoPath: project.repoPath,
           targetBranch: integration.targetBranch ?? project.defaultBranch,
           branchName,
-          commitMessage: buildCommitMessage(task, run, integration),
+          commitMessage: buildCommitMessage(agent, run, integration),
           runId: run.id,
           mergeQueue: this.mergeQueue,
         });
@@ -485,7 +485,7 @@ export class RunCoordinator {
           run,
           attempt,
           project,
-          task,
+          agent,
           validationResults,
         );
         this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
@@ -497,7 +497,7 @@ export class RunCoordinator {
         run,
         attempt,
         project,
-        task,
+        agent,
         integration,
         validationResults,
         workspacePath,
@@ -602,9 +602,9 @@ export class RunCoordinator {
     }
 
     const project = this.repos.projects.findById(run.projectId);
-    const task = this.repos.tasks.findById(run.taskId);
-    if (!project || !task) {
-      this.failRun(run, 'Project or task not found');
+    const agent = this.repos.agents.findById(run.agentId);
+    if (!project || !agent) {
+      this.failRun(run, 'Project or agent not found');
       return;
     }
 
@@ -615,14 +615,14 @@ export class RunCoordinator {
       return;
     }
 
-    const integration = parseIntegrationConfig(task.integrationJson);
+    const integration = parseIntegrationConfig(agent.integrationJson);
     const postMode = integration.postApprovalMode ?? 'auto-merge';
 
     await this.integrateAndFinish({
       run,
       attempt,
       project,
-      task,
+      agent,
       integration,
       validationResults: [],
       workspacePath: attempt.workspacePath,
@@ -689,7 +689,7 @@ export class RunCoordinator {
     run: Run;
     attempt: Attempt;
     project: Project;
-    task: Task;
+    agent: Agent;
     integration: IntegrationConfig;
     validationResults: ValidationStepResult[];
     workspacePath: string;
@@ -700,7 +700,7 @@ export class RunCoordinator {
 
     run = await this.transitionRun(run, RunState.Integrating);
 
-    const fallbackTitle = buildCommitMessage(input.task, run, input.integration);
+    const fallbackTitle = buildCommitMessage(input.agent, run, input.integration);
     const rawHandoff = resolveAttemptHandoff(attempt, input.workspacePath);
     // Runtime-validate the agent handoff; fall back to raw only when invalid
     // so lenient asset/summary extraction still works.
@@ -709,7 +709,7 @@ export class RunCoordinator {
     const pr =
       input.mode === 'pull-request'
         ? buildPrDescription({
-            taskName: input.task.name,
+            agentName: input.agent.name,
             runId: run.id,
             fallbackTitle,
             handoff,
@@ -773,7 +773,7 @@ export class RunCoordinator {
         run,
         attempt,
         input.project,
-        input.task,
+        input.agent,
         input.validationResults,
         result,
       );
@@ -783,7 +783,7 @@ export class RunCoordinator {
         `Pull request create failed via ${tool}. Branch ${input.branchName} may already be pushed; placeholder ${result.prUrl ?? 'local://pr/' + input.branchName}. Restart gojo after install if prTool was recently added, then check ${tool} auth.`,
         {
           project: input.project,
-          task: input.task,
+          agent: input.agent,
           phase: 'integration',
           validationResults: input.validationResults,
         },
@@ -795,7 +795,7 @@ export class RunCoordinator {
       run,
       attempt,
       input.project,
-      input.task,
+      input.agent,
       input.validationResults,
       result,
     );
@@ -942,13 +942,13 @@ export class RunCoordinator {
   private async executeAgent(
     runId: string,
     attemptId: string,
-    task: Task,
+    agent: Agent,
     workspacePath: string,
     signal: AbortSignal,
     validationSteps: Array<{ name: string; command: string; timeout?: string }> = [],
     instructions?: InstructionsConfig,
   ): Promise<AgentExecuteResult> {
-    const adapterName = resolveAdapterName(task, this.repos.agentProfiles);
+    const adapterName = resolveAdapterName(agent, this.repos.profiles);
     const adapter = getAdapter(adapterName);
     if (!adapter) {
       throw new Error(`Unknown agent adapter: ${adapterName}`);
@@ -977,9 +977,9 @@ export class RunCoordinator {
     const startedAt = Date.now();
     try {
       // Shell: script body + validation comments only (no markdown instructions).
-      // AI adapters: notice + instruction files + task prompt + validation gate.
+      // AI adapters: notice + instruction files + agent prompt + validation gate.
       const prompt = assembleAgentPrompt({
-        taskPrompt: task.prompt,
+        taskPrompt: agent.prompt,
         adapterName,
         workspacePath,
         validationSteps,
@@ -988,8 +988,8 @@ export class RunCoordinator {
       });
 
       const agentEnv: Record<string, string> = {
-        GOJO_TASK_ID: task.id,
-        GOJO_PROJECT_ID: task.projectId,
+        GOJO_AGENT_ID: agent.id,
+        GOJO_PROJECT_ID: agent.projectId,
         GOJO_RUN_ID: runId,
       };
       if (this.apiBaseUrl) {
@@ -1096,7 +1096,7 @@ export class RunCoordinator {
     message: string,
     context?: {
       project?: Project;
-      task?: Task;
+      agent?: Agent;
       failurePolicy?: ParsedFailurePolicy;
       phase?: 'agent' | 'validation' | 'integration' | 'workspace' | 'other';
       exitCode?: number | null;
@@ -1114,10 +1114,10 @@ export class RunCoordinator {
 
     const project =
       context?.project ?? this.repos.projects.findById(updated.projectId) ?? undefined;
-    const task = context?.task ?? this.repos.tasks.findById(updated.taskId) ?? undefined;
+    const agent = context?.agent ?? this.repos.agents.findById(updated.agentId) ?? undefined;
     const failurePolicy =
       context?.failurePolicy ??
-      (task ? parseFailurePolicy(task.failurePolicyJson) : parseFailurePolicy('{}'));
+      (agent ? parseFailurePolicy(agent.failurePolicyJson) : parseFailurePolicy('{}'));
 
     this.writeFailureArtifact(updated, message, {
       phase: context?.phase ?? 'other',
@@ -1125,7 +1125,7 @@ export class RunCoordinator {
       ...(context?.validationResults
         ? { validationResults: context.validationResults }
         : {}),
-      taskName: task?.name ?? null,
+      agentName: agent?.name ?? null,
       projectName: project?.name ?? null,
     });
 
@@ -1135,8 +1135,8 @@ export class RunCoordinator {
     this.emit('run.failed', updated.id, { error: message });
     this.emit('run.finished', updated.id, { state: updated.state });
 
-    if (project && task) {
-      this.maybeEnqueueHealer(updated, task, failurePolicy);
+    if (project && agent) {
+      this.maybeEnqueueHealer(updated, agent, failurePolicy);
     }
 
     return updated;
@@ -1149,7 +1149,7 @@ export class RunCoordinator {
       phase: string;
       exitCode: number | null;
       validationResults?: ValidationStepResult[];
-      taskName: string | null;
+      agentName: string | null;
       projectName: string | null;
     },
   ): void {
@@ -1163,8 +1163,8 @@ export class RunCoordinator {
           runId: run.id,
           projectId: run.projectId,
           projectName: details.projectName,
-          taskId: run.taskId,
-          taskName: details.taskName,
+          agentId: run.agentId,
+          agentName: details.agentName,
           trigger: run.trigger,
           state: run.state,
           errorMessage: message,
@@ -1188,24 +1188,24 @@ export class RunCoordinator {
 
   private maybeEnqueueHealer(
     failedRun: Run,
-    failedTask: Task,
+    failedAgent: Agent,
     policy: ParsedFailurePolicy,
   ): void {
     const decision = decideHealEnqueue({
       repos: this.repos,
       failedRun,
-      failedTask,
+      failedAgent,
       policy,
     });
-    if (!decision.shouldEnqueue || !decision.healerTaskId) {
+    if (!decision.shouldEnqueue || !decision.healerAgentId) {
       return;
     }
 
     void this.enqueueRun({
       projectId: failedRun.projectId,
-      taskId: decision.healerTaskId,
+      agentId: decision.healerAgentId,
       trigger: 'heal',
-      idempotencyKey: `heal:${failedRun.id}:${decision.healerTaskId}`,
+      idempotencyKey: `heal:${failedRun.id}:${decision.healerAgentId}`,
     }).then((healerRun) => {
       if (healerRun.workItemId && failedRun.workItemId) {
         this.work.links.create(healerRun.workItemId, failedRun.workItemId, "heals");
@@ -1311,7 +1311,7 @@ export class RunCoordinator {
     run: Run,
     attempt: Attempt,
     project: Project,
-    task: Task,
+    agent: Agent,
     validationResults: ValidationStepResult[],
     integrationResult?: {
       commitSha: string | null;
@@ -1344,7 +1344,7 @@ export class RunCoordinator {
       schemaVersion: HANDOFF_SCHEMA_VERSION,
       runId: run.id,
       status: 'completed',
-      summary: `Task ${task.name} completed for project ${project.name}`,
+      summary: `Agent ${agent.name} completed for project ${project.name}`,
       startingCommit: attempt.startingCommit ?? 'unknown',
       resultCommit,
       filesChanged,
@@ -1649,11 +1649,11 @@ function parseIntegrationConfig(json: string): IntegrationConfig {
 }
 
 function buildCommitMessage(
-  task: Task,
+  agent: Agent,
   run: Run,
   integration: IntegrationConfig,
 ): string {
-  return integration.commitMessage ?? `gojo: ${task.name} (${run.id})`;
+  return integration.commitMessage ?? `gojo: ${agent.name} (${run.id})`;
 }
 
 function parseAttemptHandoffJson(attempt: Attempt): unknown | undefined {
@@ -1750,11 +1750,11 @@ function mergeAgentHandoff(
 }
 
 function resolveAdapterName(
-  task: Task,
-  agentProfiles: ReturnType<typeof createRepositories>['agentProfiles'],
+  agent: Agent,
+  profiles: ReturnType<typeof createRepositories>['profiles'],
 ): string {
-  if (task.agentProfileId) {
-    const profile = agentProfiles.findById(task.agentProfileId);
+  if (agent.profileId) {
+    const profile = profiles.findById(agent.profileId);
     if (profile) {
       return profile.adapter;
     }

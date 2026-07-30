@@ -22,7 +22,7 @@ const IMPACT_SORT_ALLOWED = [
   "category",
   "subject",
   "projectName",
-  "taskName",
+  "agentName",
 ] as const;
 
 const route = useRoute();
@@ -245,8 +245,8 @@ void loadProjects();
                 @sort="setSort"
               />
               <SortableTh
-                column="taskName"
-                label="Task"
+                column="agentName"
+                label="Agent"
                 :sort="sort"
                 :order="order"
                 @sort="setSort"
@@ -275,7 +275,7 @@ void loadProjects();
                 <VerificationBadge :verification="item.verification" />
               </td>
               <td>{{ item.projectName }}</td>
-              <td>{{ item.taskName }}</td>
+              <td>{{ item.agentName }}</td>
               <td>{{ formatWhen(item.createdAt) }}</td>
               <td>
                 <RouterLink :to="{ name: 'run-detail', params: { id: item.runId } }">

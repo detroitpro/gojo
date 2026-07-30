@@ -118,7 +118,7 @@ function hideTip() {
   <div
     class="run-history-strip"
     :class="{ 'is-live': hasLive }"
-    :aria-label="hasLive ? 'Last five runs — task is running' : 'Last five runs'"
+    :aria-label="hasLive ? 'Last five runs — agent is running' : 'Last five runs'"
   >
     <template v-for="slot in slots" :key="slot.key">
       <span v-if="slot.kind === 'empty'" class="run-strip-cell run-strip-empty" title="No run" />

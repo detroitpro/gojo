@@ -11,11 +11,11 @@ import { describeCron } from "@shared/cron-describe";
 import type { Database } from "@/storage";
 import { createRepositories } from "@/storage";
 import type { DashboardOverviewRun } from "@/storage/dashboard-overview";
-import type { Project, Run, RunTrigger, Schedule, Task } from "@/storage/types";
-import { mapProject, mapRun, mapSchedule, mapTask } from "@/storage/repositories";
+import type { Agent, Project, Run, RunTrigger, Schedule } from "@/storage/types";
+import { mapAgent, mapProject, mapRun, mapSchedule } from "@/storage/repositories";
 
 export const PROJECT_SORT_ALLOWED = ["name", "createdAt", "updatedAt", "defaultBranch"] as const;
-export const TASK_SORT_ALLOWED = [
+export const AGENT_SORT_ALLOWED = [
   "name",
   "projectName",
   "enabled",
@@ -29,7 +29,7 @@ export const RUN_SORT_ALLOWED = [
   "finishedAt",
   "state",
   "trigger",
-  "taskName",
+  "agentName",
   "projectName",
 ] as const;
 export const SCHEDULE_SORT_ALLOWED = [
@@ -47,7 +47,7 @@ export const QUEUE_SORT_ALLOWED = [
   "notBeforeAt",
   "expiresAt",
   "projectName",
-  "taskName",
+  "agentName",
 ] as const;
 export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
 export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
@@ -59,7 +59,7 @@ export const INTEGRATION_SORT_ALLOWED = [
   "mergedAt",
   "createdAt",
   "projectName",
-  "taskName",
+  "agentName",
   "prNumber",
 ] as const;
 
@@ -68,7 +68,7 @@ export const IMPACT_ITEM_SORT_ALLOWED = [
   "category",
   "subject",
   "projectName",
-  "taskName",
+  "agentName",
 ] as const;
 
 export type ListProjectsPageInput = PageParams &
@@ -92,8 +92,8 @@ export type IntegrationListRow = {
   runId: string;
   projectId: string;
   projectName: string | null;
-  taskId: string;
-  taskName: string | null;
+  agentId: string;
+  agentName: string | null;
   prNumber: number | null;
   prUrl: string | null;
   provider: string | null;
@@ -109,7 +109,7 @@ export type IntegrationListRow = {
   runCreatedAt: string;
 };
 
-export type ListTasksPageInput = PageParams &
+export type ListAgentsPageInput = PageParams &
   Partial<SortParams> & {
     projectId?: string | null;
     enabled?: boolean | null;
@@ -119,7 +119,7 @@ export type ListTasksPageInput = PageParams &
 export type ListRunsPageInput = PageParams &
   Partial<SortParams> & {
     projectId?: string | null;
-    taskId?: string | null;
+    agentId?: string | null;
     state?: string | null;
     trigger?: string | null;
     q?: string | null;
@@ -144,8 +144,8 @@ export type ImpactItemListRow = {
   runId: string;
   projectId: string;
   projectName: string;
-  taskId: string;
-  taskName: string;
+  agentId: string;
+  agentName: string;
   category: string;
   subject: string;
   summary: string;
@@ -158,21 +158,21 @@ export type ImpactItemListRow = {
 export type ListSchedulesPageInput = PageParams &
   Partial<SortParams> & {
     projectId?: string | null;
-    taskId?: string | null;
+    agentId?: string | null;
     enabled?: boolean | null;
     q?: string | null;
   };
 
-export type TaskSourceInfo = {
+export type AgentSourceInfo = {
   repoPath: string;
   manifestPath: string | null;
   promptFile: string | null;
   promptAbsolutePath: string | null;
 };
 
-/** Task detail: list enrichments + YAML/prompt provenance for ops (not an editor). */
-export type TaskDetailRow = TaskListRow & {
-  source: TaskSourceInfo;
+/** Agent detail: list enrichments + YAML/prompt provenance for ops (not an editor). */
+export type AgentDetailRow = AgentListRow & {
+  source: AgentSourceInfo;
 };
 
 /** Map whitelist sort key → SQL expression (never pass raw client strings). */
@@ -192,12 +192,12 @@ function sqlOrderBy(
 
 export type RunListRow = Run & {
   projectName: string | null;
-  taskName: string | null;
+  agentName: string | null;
 };
 
-export type TaskListRow = Task & {
+export type AgentListRow = Agent & {
   projectName: string | null;
-  agentProfileName: string | null;
+  profileName: string | null;
   lastRunId: string | null;
   lastRunState: string | null;
   lastRunCreatedAt: string | null;
@@ -206,15 +206,15 @@ export type TaskListRow = Task & {
 };
 
 export type ScheduleListRow = Schedule & {
-  taskName: string | null;
+  agentName: string | null;
   projectId: string | null;
   projectName: string | null;
   cronDescription: string;
 };
 
 export type ProjectSummaryCounts = {
-  taskCount: number;
-  enabledTaskCount: number;
+  agentCount: number;
+  enabledAgentCount: number;
   scheduleCount: number;
   enabledScheduleCount: number;
   hasManifest: boolean;
@@ -258,7 +258,7 @@ export type ProjectDetailRow = Project & ProjectSummaryCounts;
 type SqlRunRow = {
   id: string;
   project_id: string;
-  task_id: string;
+  agent_id: string;
   schedule_id: string | null;
   state: string;
   idempotency_key: string;
@@ -273,16 +273,16 @@ type SqlRunRow = {
   priority: number;
   work_item_id: string | null;
   project_name: string | null;
-  task_name: string | null;
+  agent_name: string | null;
 };
 
-type SqlTaskRow = {
+type SqlAgentRow = {
   id: string;
   project_id: string;
   name: string;
   description: string | null;
   prompt: string;
-  agent_profile_id: string | null;
+  profile_id: string | null;
   validation_profile_json: string;
   integration_json: string;
   failure_policy_json: string;
@@ -291,7 +291,7 @@ type SqlTaskRow = {
   enabled: number;
   created_at: string;
   project_name: string | null;
-  agent_profile_name: string | null;
+  profile_name: string | null;
   last_run_id: string | null;
   last_run_state: string | null;
   last_run_created_at: string | null;
@@ -299,7 +299,7 @@ type SqlTaskRow = {
 
 type SqlScheduleRow = {
   id: string;
-  task_id: string;
+  agent_id: string;
   name: string;
   cron_expr: string;
   timezone: string;
@@ -312,7 +312,7 @@ type SqlScheduleRow = {
   next_run_at: string | null;
   last_run_at: string | null;
   created_at: string;
-  task_name: string | null;
+  agent_name: string | null;
   project_id: string | null;
   project_name: string | null;
 };
@@ -345,8 +345,8 @@ export function projectSummaryFor(
     .query<
       {
         manifest_json: string;
-        task_count: number;
-        enabled_task_count: number;
+        agent_count: number;
+        enabled_agent_count: number;
         schedule_count: number;
         enabled_schedule_count: number;
         open_pr_count: number;
@@ -355,14 +355,14 @@ export function projectSummaryFor(
     >(
       `SELECT
          p.manifest_json AS manifest_json,
-         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count,
-         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.enabled = 1) AS enabled_task_count,
+         (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id) AS agent_count,
+         (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id AND a.enabled = 1) AS enabled_agent_count,
          (SELECT COUNT(*) FROM schedules s
-            INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id) AS schedule_count,
+            INNER JOIN agents a ON a.id = s.agent_id
+            WHERE a.project_id = p.id) AS schedule_count,
          (SELECT COUNT(*) FROM schedules s
-            INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
+            INNER JOIN agents a ON a.id = s.agent_id
+            WHERE a.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
          ${OPEN_PR_COUNT_SQL} AS open_pr_count
        FROM projects p
        WHERE p.id = ?`,
@@ -372,8 +372,8 @@ export function projectSummaryFor(
     return null;
   }
   return {
-    taskCount: row.task_count,
-    enabledTaskCount: row.enabled_task_count,
+    agentCount: row.agent_count,
+    enabledAgentCount: row.enabled_agent_count,
     scheduleCount: row.schedule_count,
     enabledScheduleCount: row.enabled_schedule_count,
     hasManifest: manifestIsPresent(row.manifest_json),
@@ -386,8 +386,8 @@ export function toProjectDetailRow(
   project: Project,
 ): ProjectDetailRow {
   const summary = projectSummaryFor(db, project.id) ?? {
-    taskCount: 0,
-    enabledTaskCount: 0,
+    agentCount: 0,
+    enabledAgentCount: 0,
     scheduleCount: 0,
     enabledScheduleCount: 0,
     hasManifest: manifestIsPresent(project.manifestJson),
@@ -425,8 +425,8 @@ export function listProjectsPage(
       .get(...params)?.count ?? 0;
 
   type ProjectListSqlRow = Parameters<typeof mapProject>[0] & {
-    task_count: number;
-    enabled_task_count: number;
+    agent_count: number;
+    enabled_agent_count: number;
     schedule_count: number;
     enabled_schedule_count: number;
     open_pr_count: number;
@@ -453,14 +453,14 @@ export function listProjectsPage(
       `SELECT
          p.id, p.name, p.repo_path, p.remote_url, p.default_branch,
          p.manifest_json, p.created_at, p.updated_at,
-         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count,
-         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.enabled = 1) AS enabled_task_count,
+         (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id) AS agent_count,
+         (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id AND a.enabled = 1) AS enabled_agent_count,
          (SELECT COUNT(*) FROM schedules s
-            INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id) AS schedule_count,
+            INNER JOIN agents a ON a.id = s.agent_id
+            WHERE a.project_id = p.id) AS schedule_count,
          (SELECT COUNT(*) FROM schedules s
-            INNER JOIN tasks t ON t.id = s.task_id
-            WHERE t.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
+            INNER JOIN agents a ON a.id = s.agent_id
+            WHERE a.project_id = p.id AND s.enabled = 1) AS enabled_schedule_count,
          ${OPEN_PR_COUNT_SQL} AS open_pr_count
        FROM projects p
        ${where}
@@ -480,8 +480,8 @@ export function listProjectsPage(
         defaultBranch: project.defaultBranch,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
-        taskCount: row.task_count,
-        enabledTaskCount: row.enabled_task_count,
+        agentCount: row.agent_count,
+        enabledAgentCount: row.enabled_agent_count,
         scheduleCount: row.schedule_count,
         enabledScheduleCount: row.enabled_schedule_count,
         hasManifest: manifestIsPresent(row.manifest_json),
@@ -524,12 +524,12 @@ export function listIntegrationsPage(
   const from = `FROM run_integrations ri
     INNER JOIN runs r ON r.id = ri.run_id
     LEFT JOIN projects p ON p.id = r.project_id
-    LEFT JOIN tasks t ON t.id = r.task_id
+    LEFT JOIN agents a ON a.id = r.agent_id
     LEFT JOIN (
       SELECT run_id, branch_name,
              ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY attempt_number DESC) AS rn
       FROM attempts
-    ) a ON a.run_id = r.id AND a.rn = 1`;
+    ) att ON att.run_id = r.id AND att.rn = 1`;
 
   const total =
     sqlite
@@ -560,7 +560,7 @@ export function listIntegrationsPage(
       mergedAt: "ri.merged_at",
       createdAt: "r.created_at",
       projectName: "p.name COLLATE NOCASE",
-      taskName: "t.name COLLATE NOCASE",
+      agentName: "a.name COLLATE NOCASE",
       prNumber: "ri.pr_number",
     },
     "ri.id DESC",
@@ -570,8 +570,8 @@ export function listIntegrationsPage(
     run_id: string;
     project_id: string;
     project_name: string | null;
-    task_id: string;
-    task_name: string | null;
+    agent_id: string;
+    agent_name: string | null;
     pr_number: number | null;
     pr_url: string | null;
     provider: string | null;
@@ -592,8 +592,8 @@ export function listIntegrationsPage(
          r.id AS run_id,
          r.project_id AS project_id,
          p.name AS project_name,
-         r.task_id AS task_id,
-         t.name AS task_name,
+         r.agent_id AS agent_id,
+         a.name AS agent_name,
          ri.pr_number AS pr_number,
          ri.pr_url AS pr_url,
          ri.provider AS provider,
@@ -604,7 +604,7 @@ export function listIntegrationsPage(
          ri.merged_at AS merged_at,
          ri.last_checked_at AS last_checked_at,
          ri.last_error AS last_error,
-         a.branch_name AS branch_name,
+         att.branch_name AS branch_name,
          r.created_at AS run_created_at
        ${from}
        ${where}
@@ -618,8 +618,8 @@ export function listIntegrationsPage(
       runId: row.run_id,
       projectId: row.project_id,
       projectName: row.project_name,
-      taskId: row.task_id,
-      taskName: row.task_name,
+      agentId: row.agent_id,
+      agentName: row.agent_name,
       prNumber: row.pr_number,
       prUrl: row.pr_url,
       provider: row.provider,
@@ -664,7 +664,7 @@ export function listImpactItemsPage(
   const from = `FROM run_impact_items ii
     INNER JOIN runs r ON r.id = ii.run_id
     INNER JOIN projects p ON p.id = r.project_id
-    INNER JOIN tasks t ON t.id = r.task_id`;
+    INNER JOIN agents a ON a.id = r.agent_id`;
 
   const total =
     sqlite
@@ -689,7 +689,7 @@ export function listImpactItemsPage(
       category: "ii.category",
       subject: "ii.subject COLLATE NOCASE",
       projectName: "p.name COLLATE NOCASE",
-      taskName: "t.name COLLATE NOCASE",
+      agentName: "a.name COLLATE NOCASE",
     },
     "ii.id DESC",
   );
@@ -699,8 +699,8 @@ export function listImpactItemsPage(
     run_id: string;
     project_id: string;
     project_name: string;
-    task_id: string;
-    task_name: string;
+    agent_id: string;
+    agent_name: string;
     category: string;
     subject: string;
     summary: string;
@@ -713,7 +713,7 @@ export function listImpactItemsPage(
   const rows = sqlite
     .query<ImpactSqlRow, SQLQueryBindings[]>(
       `SELECT ii.id, ii.run_id, r.project_id, p.name AS project_name,
-              r.task_id, t.name AS task_name,
+              r.agent_id, a.name AS agent_name,
               ii.category, ii.subject, ii.summary, ii.source, ii.verification,
               ii.confidence, ii.created_at
        ${from}
@@ -729,8 +729,8 @@ export function listImpactItemsPage(
       runId: row.run_id,
       projectId: row.project_id,
       projectName: row.project_name,
-      taskId: row.task_id,
-      taskName: row.task_name,
+      agentId: row.agent_id,
+      agentName: row.agent_name,
       category: row.category,
       subject: row.subject,
       summary: row.summary,
@@ -745,88 +745,88 @@ export function listImpactItemsPage(
   };
 }
 
-export function listTasksPage(
+export function listAgentsPage(
   db: Database,
-  input: ListTasksPageInput,
-): PaginatedList<TaskListRow> {
+  input: ListAgentsPageInput,
+): PaginatedList<AgentListRow> {
   const sqlite = db.connection();
   const clauses: string[] = [];
   const params: SQLQueryBindings[] = [];
 
   if (input.projectId) {
-    buildWhere(clauses, params, "t.project_id = ?", input.projectId);
+    buildWhere(clauses, params, "a.project_id = ?", input.projectId);
   }
   if (input.enabled === true) {
-    buildWhere(clauses, params, "t.enabled = ?", 1);
+    buildWhere(clauses, params, "a.enabled = ?", 1);
   } else if (input.enabled === false) {
-    buildWhere(clauses, params, "t.enabled = ?", 0);
+    buildWhere(clauses, params, "a.enabled = ?", 0);
   }
   const q = input.q?.trim();
   if (q) {
     const pattern = likePattern(q);
     clauses.push(
-      `(t.name LIKE ? ESCAPE '\\' OR t.id LIKE ? ESCAPE '\\' OR IFNULL(t.description,'') LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\')`,
+      `(a.name LIKE ? ESCAPE '\\' OR a.id LIKE ? ESCAPE '\\' OR IFNULL(a.description,'') LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\')`,
     );
     params.push(pattern, pattern, pattern, pattern);
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const from = `FROM tasks t
-    LEFT JOIN projects p ON p.id = t.project_id
-    LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
+  const from = `FROM agents a
+    LEFT JOIN projects p ON p.id = a.project_id
+    LEFT JOIN profiles pr ON pr.id = a.profile_id
     LEFT JOIN (
-      SELECT id, task_id, state, created_at,
-             ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY created_at DESC) AS rn
+      SELECT id, agent_id, state, created_at,
+             ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY created_at DESC) AS rn
       FROM runs
-    ) lr ON lr.task_id = t.id AND lr.rn = 1
+    ) lr ON lr.agent_id = a.id AND lr.rn = 1
     LEFT JOIN (
-      SELECT task_id,
+      SELECT agent_id,
              CAST(SUM(CASE WHEN state = 'Succeeded' THEN 1 ELSE 0 END) AS REAL)
                / COUNT(*) AS success_rate
       FROM (
-        SELECT task_id, state,
-               ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY created_at DESC) AS rn
+        SELECT agent_id, state,
+               ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY created_at DESC) AS rn
         FROM runs
       )
       WHERE rn <= 5
-      GROUP BY task_id
-    ) sr ON sr.task_id = t.id`;
+      GROUP BY agent_id
+    ) sr ON sr.agent_id = a.id`;
 
   const total =
     sqlite
       .query<{ count: number }, SQLQueryBindings[]>(
-        `SELECT COUNT(*) AS count FROM tasks t
-         LEFT JOIN projects p ON p.id = t.project_id
+        `SELECT COUNT(*) AS count FROM agents a
+         LEFT JOIN projects p ON p.id = a.project_id
          ${where}`,
       )
       .get(...params)?.count ?? 0;
 
   const { sort, order } = parseSortParams(
     { sort: input.sort, order: input.order },
-    { allowed: TASK_SORT_ALLOWED, defaultSort: "name", defaultOrder: "asc" },
+    { allowed: AGENT_SORT_ALLOWED, defaultSort: "name", defaultOrder: "asc" },
   );
   const orderBy =
     sort === "successRate"
-      ? // Nulls (no runs) last in both directions — ops triage cares about tasks with history.
+      ? // Nulls (no runs) last in both directions — ops triage cares about agents with history.
         `ORDER BY (sr.success_rate IS NULL) ASC, sr.success_rate ${
           order === "asc" ? "ASC" : "DESC"
-        }, t.id ASC`
+        }, a.id ASC`
       : sqlOrderBy(
           sort,
           order,
           {
-            name: "t.name COLLATE NOCASE",
+            name: "a.name COLLATE NOCASE",
             projectName: "IFNULL(p.name, '') COLLATE NOCASE",
-            enabled: "t.enabled",
-            createdAt: "t.created_at",
+            enabled: "a.enabled",
+            createdAt: "a.created_at",
             lastRunAt: "lr.created_at",
           },
-          "t.id ASC",
+          "a.id ASC",
         );
 
   const rows = sqlite
-    .query<SqlTaskRow, SQLQueryBindings[]>(
-      `SELECT t.*, p.name AS project_name, a.name AS agent_profile_name,
+    .query<SqlAgentRow, SQLQueryBindings[]>(
+      `SELECT a.*, p.name AS project_name, pr.name AS profile_name,
               lr.id AS last_run_id, lr.state AS last_run_state, lr.created_at AS last_run_created_at
        ${from} ${where}
        ${orderBy}
@@ -834,20 +834,20 @@ export function listTasksPage(
     )
     .all(...params, input.limit, input.offset);
 
-  const recentByTask = loadRecentRunsForTasks(
+  const recentByAgent = loadRecentRunsForAgents(
     db,
     rows.map((row) => row.id),
   );
 
   return {
     items: rows.map((row) => ({
-      ...mapTask({ ...row, description: row.description ?? "" }),
+      ...mapAgent({ ...row, description: row.description ?? "" }),
       projectName: row.project_name,
-      agentProfileName: row.agent_profile_name,
+      profileName: row.profile_name,
       lastRunId: row.last_run_id,
       lastRunState: row.last_run_state,
       lastRunCreatedAt: row.last_run_created_at,
-      recentRuns: recentByTask.get(row.id) ?? [],
+      recentRuns: recentByAgent.get(row.id) ?? [],
     })),
     total,
     limit: input.limit,
@@ -855,7 +855,7 @@ export function listTasksPage(
   };
 }
 
-function resolveTaskSource(project: Project, taskName: string): TaskSourceInfo {
+function resolveAgentSource(project: Project, agentName: string): AgentSourceInfo {
   const repoPath = project.repoPath;
   const gojoYaml = join(repoPath, "gojo.yaml");
   const legacyYaml = join(repoPath, ".gojo", "project.yaml");
@@ -866,9 +866,9 @@ function resolveTaskSource(project: Project, taskName: string): TaskSourceInfo {
   let inSyncedManifest = false;
   try {
     const parsed = JSON.parse(project.manifestJson) as {
-      tasks?: Record<string, { promptFile?: unknown }>;
+      agents?: Record<string, { promptFile?: unknown }>;
     };
-    const entry = parsed.tasks?.[taskName];
+    const entry = parsed.agents?.[agentName];
     if (entry) {
       inSyncedManifest = true;
       if (typeof entry.promptFile === "string" && entry.promptFile.trim()) {
@@ -890,29 +890,29 @@ function resolveTaskSource(project: Project, taskName: string): TaskSourceInfo {
   };
 }
 
-/** Single-task detail for ops inspect (enriched row + YAML/prompt paths). */
-export function getTaskDetail(db: Database, taskId: string): TaskDetailRow | null {
+/** Single-agent detail for ops inspect (enriched row + YAML/prompt paths). */
+export function getAgentDetail(db: Database, agentId: string): AgentDetailRow | null {
   const repos = createRepositories(db);
-  const task = repos.tasks.findById(taskId);
-  if (!task) {
+  const agent = repos.agents.findById(agentId);
+  if (!agent) {
     return null;
   }
 
-  const project = repos.projects.findById(task.projectId);
-  const agent = task.agentProfileId ? repos.agentProfiles.findById(task.agentProfileId) : null;
-  const recentRuns = loadRecentRunsForTasks(db, [task.id]).get(task.id) ?? [];
+  const project = repos.projects.findById(agent.projectId);
+  const profile = agent.profileId ? repos.profiles.findById(agent.profileId) : null;
+  const recentRuns = loadRecentRunsForAgents(db, [agent.id]).get(agent.id) ?? [];
   const last = recentRuns.at(-1) ?? null;
 
   return {
-    ...task,
+    ...agent,
     projectName: project?.name ?? null,
-    agentProfileName: agent?.name ?? null,
+    profileName: profile?.name ?? null,
     lastRunId: last?.id ?? null,
     lastRunState: last?.state ?? null,
     lastRunCreatedAt: last?.createdAt ?? null,
     recentRuns,
     source: project
-      ? resolveTaskSource(project, task.name)
+      ? resolveAgentSource(project, agent.name)
       : {
           repoPath: "",
           manifestPath: null,
@@ -924,7 +924,7 @@ export function getTaskDetail(db: Database, taskId: string): TaskDetailRow | nul
 
 type RecentRunRow = {
   id: string;
-  task_id: string;
+  agent_id: string;
   state: string;
   trigger: string;
   created_at: string;
@@ -932,36 +932,36 @@ type RecentRunRow = {
   rn: number;
 };
 
-/** Last 5 runs per task (oldest → newest), scoped to the given task ids. */
-function loadRecentRunsForTasks(
+/** Last 5 runs per agent (oldest → newest), scoped to the given agent ids. */
+function loadRecentRunsForAgents(
   db: Database,
-  taskIds: string[],
+  agentIds: string[],
 ): Map<string, DashboardOverviewRun[]> {
-  const byTask = new Map<string, DashboardOverviewRun[]>();
-  if (taskIds.length === 0) {
-    return byTask;
+  const byAgent = new Map<string, DashboardOverviewRun[]>();
+  if (agentIds.length === 0) {
+    return byAgent;
   }
 
-  const placeholders = taskIds.map(() => "?").join(", ");
+  const placeholders = agentIds.map(() => "?").join(", ");
   const rows = db
     .connection()
     .query<RecentRunRow, SQLQueryBindings[]>(
-      `SELECT id, task_id, state, trigger, created_at, finished_at, rn
+      `SELECT id, agent_id, state, trigger, created_at, finished_at, rn
        FROM (
-         SELECT id, task_id, state, trigger, created_at, finished_at,
+         SELECT id, agent_id, state, trigger, created_at, finished_at,
                 ROW_NUMBER() OVER (
-                  PARTITION BY task_id ORDER BY created_at DESC
+                  PARTITION BY agent_id ORDER BY created_at DESC
                 ) AS rn
          FROM runs
-         WHERE task_id IN (${placeholders})
+         WHERE agent_id IN (${placeholders})
        )
        WHERE rn <= 5
-       ORDER BY task_id, rn DESC`,
+       ORDER BY agent_id, rn DESC`,
     )
-    .all(...taskIds);
+    .all(...agentIds);
 
   for (const row of rows) {
-    const list = byTask.get(row.task_id) ?? [];
+    const list = byAgent.get(row.agent_id) ?? [];
     list.push({
       id: row.id,
       state: row.state as RunState,
@@ -969,10 +969,10 @@ function loadRecentRunsForTasks(
       createdAt: row.created_at,
       finishedAt: row.finished_at,
     });
-    byTask.set(row.task_id, list);
+    byAgent.set(row.agent_id, list);
   }
 
-  return byTask;
+  return byAgent;
 }
 
 export function listRunsPage(
@@ -986,8 +986,8 @@ export function listRunsPage(
   if (input.projectId) {
     buildWhere(clauses, params, "r.project_id = ?", input.projectId);
   }
-  if (input.taskId) {
-    buildWhere(clauses, params, "r.task_id = ?", input.taskId);
+  if (input.agentId) {
+    buildWhere(clauses, params, "r.agent_id = ?", input.agentId);
   }
   if (input.state) {
     buildWhere(clauses, params, "r.state = ?", input.state);
@@ -1005,7 +1005,7 @@ export function listRunsPage(
   if (q) {
     const pattern = likePattern(q);
     clauses.push(
-      `(r.id LIKE ? ESCAPE '\\' OR r.project_id LIKE ? ESCAPE '\\' OR r.task_id LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\' OR IFNULL(t.name,'') LIKE ? ESCAPE '\\')`,
+      `(r.id LIKE ? ESCAPE '\\' OR r.project_id LIKE ? ESCAPE '\\' OR r.agent_id LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\' OR IFNULL(a.name,'') LIKE ? ESCAPE '\\')`,
     );
     params.push(pattern, pattern, pattern, pattern, pattern);
   }
@@ -1013,7 +1013,7 @@ export function listRunsPage(
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const from = `FROM runs r
     LEFT JOIN projects p ON p.id = r.project_id
-    LEFT JOIN tasks t ON t.id = r.task_id`;
+    LEFT JOIN agents a ON a.id = r.agent_id`;
 
   const total =
     sqlite
@@ -1032,7 +1032,7 @@ export function listRunsPage(
       finishedAt: "r.finished_at",
       state: "r.state",
       trigger: "r.trigger",
-      taskName: "IFNULL(t.name, '') COLLATE NOCASE",
+      agentName: "IFNULL(a.name, '') COLLATE NOCASE",
       projectName: "IFNULL(p.name, '') COLLATE NOCASE",
     },
     "r.id ASC",
@@ -1040,7 +1040,7 @@ export function listRunsPage(
 
   const rows = sqlite
     .query<SqlRunRow, SQLQueryBindings[]>(
-      `SELECT r.*, p.name AS project_name, t.name AS task_name
+      `SELECT r.*, p.name AS project_name, a.name AS agent_name
        ${from} ${where}
        ${orderBy}
        LIMIT ? OFFSET ?`,
@@ -1055,7 +1055,7 @@ export function listRunsPage(
         trigger: row.trigger as RunTrigger,
       }),
       projectName: row.project_name,
-      taskName: row.task_name,
+      agentName: row.agent_name,
     })),
     total,
     limit: input.limit,
@@ -1072,10 +1072,10 @@ export function listSchedulesPage(
   const params: SQLQueryBindings[] = [];
 
   if (input.projectId) {
-    buildWhere(clauses, params, "t.project_id = ?", input.projectId);
+    buildWhere(clauses, params, "a.project_id = ?", input.projectId);
   }
-  if (input.taskId) {
-    buildWhere(clauses, params, "s.task_id = ?", input.taskId);
+  if (input.agentId) {
+    buildWhere(clauses, params, "s.agent_id = ?", input.agentId);
   }
   if (input.enabled === true) {
     buildWhere(clauses, params, "s.enabled = ?", 1);
@@ -1086,15 +1086,15 @@ export function listSchedulesPage(
   if (q) {
     const pattern = likePattern(q);
     clauses.push(
-      `(s.name LIKE ? ESCAPE '\\' OR s.id LIKE ? ESCAPE '\\' OR IFNULL(t.name,'') LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\' OR s.cron_expr LIKE ? ESCAPE '\\')`,
+      `(s.name LIKE ? ESCAPE '\\' OR s.id LIKE ? ESCAPE '\\' OR IFNULL(a.name,'') LIKE ? ESCAPE '\\' OR IFNULL(p.name,'') LIKE ? ESCAPE '\\' OR s.cron_expr LIKE ? ESCAPE '\\')`,
     );
     params.push(pattern, pattern, pattern, pattern, pattern);
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const from = `FROM schedules s
-    LEFT JOIN tasks t ON t.id = s.task_id
-    LEFT JOIN projects p ON p.id = t.project_id`;
+    LEFT JOIN agents a ON a.id = s.agent_id
+    LEFT JOIN projects p ON p.id = a.project_id`;
 
   const total =
     sqlite
@@ -1122,7 +1122,7 @@ export function listSchedulesPage(
 
   const rows = sqlite
     .query<SqlScheduleRow, SQLQueryBindings[]>(
-      `SELECT s.*, t.name AS task_name, t.project_id AS project_id, p.name AS project_name
+      `SELECT s.*, a.name AS agent_name, a.project_id AS project_id, p.name AS project_name
        ${from} ${where}
        ${orderBy}
        LIMIT ? OFFSET ?`,
@@ -1134,7 +1134,7 @@ export function listSchedulesPage(
       const schedule = mapSchedule(row);
       return {
         ...schedule,
-        taskName: row.task_name,
+        agentName: row.agent_name,
         projectId: row.project_id,
         projectName: row.project_name,
         cronDescription: describeCron(schedule.cronExpr),

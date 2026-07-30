@@ -4,7 +4,7 @@
 
 ## Responsibility
 
-Orchestrates a single run end-to-end: prepare workspace, invoke agent adapter (with retries), validate, integrate, persist events/artifacts, emit notification hooks, optionally enqueue a project healer.
+Orchestrates a single run end-to-end: prepare workspace, invoke adapter (with retries), validate, integrate, persist events/artifacts, emit notification hooks, optionally enqueue a project healer.
 
 Primary type: run **coordinator** (`coordinator.ts`). Related:
 
@@ -12,7 +12,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 |------|------|
 | `admission.ts` | Pure `selectAdmissions` — caps, priority, fairness, stagger, load guard, expiry |
 | `dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; calls `executeRun` for admits |
-| `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + task prompt + validation gate |
+| `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + agent prompt + validation gate |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
 | `events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
 | `event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
@@ -29,32 +29,32 @@ All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — 
 
 ## List APIs (paging + sort)
 
-Unbounded admin lists (`/runs`, `/tasks`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Task lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing tasks surface first.
+Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
 
 Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged|committed` (and `gojo integration list --open|--merged|--committed`) as a compatibility/specialist view. Project summaries and the command center derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
 
-Task enable/disable mirrors schedules: `POST /api/v1/tasks/:id/enable|disable`, `gojo task enable|disable <id>`, and the Tasks UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable tasks absent from `gojo.yaml`.
+Agent enable/disable mirrors schedules: `POST /api/v1/agents/:id/enable|disable`, `gojo agent enable|disable <id>`, and the Agents UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable agents absent from `gojo.yaml`.
 
-Task detail (`GET /api/v1/tasks/:id`, `gojo task inspect <id>`, UI `/tasks/:id`) is **ops/inspect only**: prompt and policy JSON are read-only snapshots from the last Sync. Edit `gojo.yaml` + `promptFile` in the repo (or via an agent), then Project Sync. The response includes a `source` block (`repoPath`, `manifestPath`, `promptFile`, `promptAbsolutePath`) when the task appears in the project’s synced manifest. Schedules lists accept `taskId` for linked schedules.
+Agent detail (`GET /api/v1/agents/:id`, `gojo agent inspect <id>`, UI `/agents/:id`) is **ops/inspect only**: prompt and policy JSON are read-only snapshots from the last Sync. Edit `gojo.yaml` + `promptFile` in the repo (or via another agent), then Project Sync. The response includes a `source` block (`repoPath`, `manifestPath`, `promptFile`, `promptAbsolutePath`) when the agent appears in the project’s synced manifest. Schedules lists accept `agentId` for linked schedules.
 
 ## Prompt assembly
 
-For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the task `promptFile` body, validation commands, and the run-scoped progress reporting contract (fleet-wide: progress `title` = current focus, not work identity). Shell adapters skip instructions (script must stay executable) and only comment-append validation. Project `.gojo/instructions.md` is per-repo shared guidance via the manifest — it does not replace the injected progress contract.
+For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the agent `promptFile` body, validation commands, and the run-scoped progress reporting contract (fleet-wide: progress `title` = current focus, not work identity). Shell adapters skip instructions (script must stay executable) and only comment-append validation. Project `.gojo/instructions.md` is per-repo shared guidance via the manifest — it does not replace the injected progress contract.
 
 ## Self-healing plumbing
 
-- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_TASK_ID`, and `GOJO_PROJECT_ID` into agent env. `agent-run-*` tokens are short-lived, restricted to `POST /runs/:id/progress` for that run, and revoked when the attempt finishes. Progress `title` is the operator **current focus** line (not the durable work identity); the platform keeps run work `title` as the task name. Healers diagnose failed runs via `gojo run list|inspect|artifacts` (or `$GOJO_HOME/artifacts/<runId>/`) — not via the agent token.
-- Enqueue atomically creates a Work item and immutable `run_context` snapshot (task/prompt/manifest hash/agent profile/policies/base/schedule). State transitions, progress, validation, artifacts, and heal lineage remain attributable after restart or later manifest edits.
-- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts tasks/schedules by name and **soft-disables** tasks and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
-- Workspace branch/worktree names are `gojo/<task>/<project>/<date>/run-<fullRunId>` (optional `-aN` attempt suffix) under `$GOJO_HOME/worktrees`. Full ULID + project slug avoids collisions when many schedules fire in the same millisecond; task stays second so allowlists like `gojo/maintain-quality` still match. Orphan paths under the worktrees root are reclaimed before `git worktree add`.
-- On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if task policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer task itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
+- Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_AGENT_ID`, and `GOJO_PROJECT_ID` into the adapter env. `agent-run-*` tokens are short-lived, restricted to `POST /runs/:id/progress` for that run, and revoked when the attempt finishes. Progress `title` is the operator **current focus** line (not the durable work identity); the platform keeps run work `title` as the agent name. Healers diagnose failed runs via `gojo run list|inspect|artifacts` (or `$GOJO_HOME/artifacts/<runId>/`) — not via the run-scoped API token.
+- Enqueue atomically creates a Work item and immutable `run_context` snapshot (agent/prompt/manifest hash/profile/policies/base/schedule). State transitions, progress, validation, artifacts, and heal lineage remain attributable after restart or later manifest edits.
+- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts agents/schedules by name and **soft-disables** agents and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
+- Workspace branch/worktree names are `gojo/<agent>/<project>/<date>/run-<fullRunId>` (optional `-aN` attempt suffix) under `$GOJO_HOME/worktrees`. Full ULID + project slug avoids collisions when many schedules fire in the same millisecond; agent stays second so allowlists like `gojo/maintain-quality` still match. Orphan paths under the worktrees root are reclaimed before `git worktree add`.
+- On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if agent policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer agent itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).
 
 ## Integration
 
-`pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the task manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
+`pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the agent manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
 
-When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo’s pulls merge API with `merge_when_checks_succeed: true` (requires `prApiUrl`, `prRepo`, and daemon env `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN`). Auto-merge failures do **not** fail the run; they are recorded on the handoff as `unresolvedIssues` (`prAutoMerge: …`).
+When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo's pulls merge API with `merge_when_checks_succeed: true` (requires `prApiUrl`, `prRepo`, and daemon env `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN`). Auto-merge failures do **not** fail the run; they are recorded on the handoff as `unresolvedIssues` (`prAutoMerge: …`).
 
 ## Impact accounting
 

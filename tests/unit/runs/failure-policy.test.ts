@@ -14,12 +14,12 @@ describe('parseFailurePolicy', () => {
         maxAttemptsPerRun: 3,
         backoff: 'exponential',
         disableAfterConsecutiveFailedRuns: 2,
-        selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 1 },
+        selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 1 },
       }),
     );
     expect(policy.maxAttemptsPerRun).toBe(3);
     expect(policy.backoff).toBe('exponential');
-    expect(policy.selfHeal?.task).toBe('self-heal');
+    expect(policy.selfHeal?.agent).toBe('self-heal');
     expect(policy.selfHeal?.afterConsecutiveFailedRuns).toBe(1);
   });
 

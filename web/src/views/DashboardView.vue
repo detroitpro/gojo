@@ -40,7 +40,7 @@ const paused = ref(false);
 const runningRuns = ref(0);
 const waitingRuns = ref(0);
 const projectCount = ref(0);
-const taskCount = ref(0);
+const agentCount = ref(0);
 const scheduleCount = ref(0);
 const runsTotal = ref(0);
 const dashboardPrevious = ref<DashboardPreviousStats | null>(null);
@@ -89,8 +89,8 @@ function impactWindowQuery(base: Record<string, string> = {}): Record<string, st
 }
 
 const projectsRoute = computed(() => ({ name: "projects" as const }));
-const tasksRoute = computed(() => ({
-  name: "tasks" as const,
+const agentsRoute = computed(() => ({
+  name: "agents" as const,
   query: withProjectQuery(),
 }));
 const schedulesRoute = computed(() => ({
@@ -168,7 +168,7 @@ async function load() {
     runningRuns.value = dashboard.runningRuns ?? 0;
     waitingRuns.value = dashboard.waitingRuns ?? 0;
     projectCount.value = dashboard.projects;
-    taskCount.value = dashboard.tasks;
+    agentCount.value = dashboard.agents;
     scheduleCount.value = dashboard.schedules;
     runsTotal.value = dashboard.runs;
     dashboardPrevious.value = dashboard.previous ?? null;
@@ -289,7 +289,7 @@ useLiveRefresh({
             :value="projectCount"
             :to="projectsRoute"
           />
-          <StatTile metric-key="dashboard.tasks" :value="taskCount" :to="tasksRoute" />
+          <StatTile metric-key="dashboard.agents" :value="agentCount" :to="agentsRoute" />
           <StatTile
             metric-key="dashboard.schedules"
             :value="scheduleCount"
@@ -405,10 +405,10 @@ useLiveRefresh({
               </RouterLink>
             </h2>
             <span class="list-section__meta">
-              {{ project.tasks.length }} task{{ project.tasks.length === 1 ? "" : "s" }}
+              {{ project.agents.length }} agent{{ project.agents.length === 1 ? "" : "s" }}
             </span>
           </div>
-          <div v-if="project.tasks.length === 0" class="muted">No enabled tasks</div>
+          <div v-if="project.agents.length === 0" class="muted">No enabled agents</div>
           <div v-else class="table-wrap">
             <table class="data dashboard-task-table">
               <colgroup>
@@ -418,27 +418,27 @@ useLiveRefresh({
               </colgroup>
               <thead>
                 <tr>
-                  <th class="dashboard-col-task">Task</th>
+                  <th class="dashboard-col-task">Agent</th>
                   <th class="dashboard-col-runs">Recent runs</th>
                   <th class="dashboard-col-rate">Success</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="task in project.tasks" :key="task.id">
+                <tr v-for="agent in project.agents" :key="agent.id">
                   <td class="dashboard-col-task">
                     <RouterLink
-                      :to="{ name: 'task-detail', params: { id: task.id } }"
+                      :to="{ name: 'agent-detail', params: { id: agent.id } }"
                       class="entity-name"
                     >
-                      {{ task.name }}
+                      {{ agent.name }}
                     </RouterLink>
-                    <div v-if="task.description" class="muted text-sm">{{ task.description }}</div>
+                    <div v-if="agent.description" class="muted text-sm">{{ agent.description }}</div>
                   </td>
                   <td class="dashboard-col-runs">
-                    <RunHistoryStrip :runs="task.recentRuns" />
+                    <RunHistoryStrip :runs="agent.recentRuns" />
                   </td>
                   <td class="dashboard-col-rate mono">
-                    {{ formatRunSuccessRate(task.recentRuns) }}
+                    {{ formatRunSuccessRate(agent.recentRuns) }}
                   </td>
                 </tr>
               </tbody>

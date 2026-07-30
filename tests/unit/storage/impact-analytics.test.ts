@@ -9,17 +9,17 @@ function setup() {
   db.migrate();
   const repos = createRepositories(db);
   const project = repos.projects.create({ name: 'alpha', repoPath: '/tmp/alpha' });
-  const task = repos.tasks.create({ projectId: project.id, name: 'deps', prompt: 'x' });
-  return { db, repos, project, task };
+  const agent = repos.agents.create({ projectId: project.id, name: 'deps', prompt: 'x' });
+  return { db, repos, project, agent };
 }
 
 function makeRun(
   ctx: ReturnType<typeof setup>,
-  input: { state?: string; createdAt?: string; projectId?: string; taskId?: string } = {},
+  input: { state?: string; createdAt?: string; projectId?: string; agentId?: string } = {},
 ) {
   const run = ctx.repos.runs.create({
     projectId: input.projectId ?? ctx.project.id,
-    taskId: input.taskId ?? ctx.task.id,
+    agentId: input.agentId ?? ctx.agent.id,
     idempotencyKey: `k-${Math.random()}`,
     trigger: 'schedule',
   });
@@ -113,7 +113,7 @@ describe('getDashboardImpact', () => {
 
     expect(impact.recentItems).toHaveLength(2);
     expect(impact.recentItems[0]?.projectName).toBe('alpha');
-    expect(impact.recentItems[0]?.taskName).toBe('deps');
+    expect(impact.recentItems[0]?.agentName).toBe('deps');
     ctx.db.close();
   });
 
@@ -121,7 +121,7 @@ describe('getDashboardImpact', () => {
     const ctx = setup();
     const { repos } = ctx;
     const other = repos.projects.create({ name: 'beta', repoPath: '/tmp/beta' });
-    const otherTask = repos.tasks.create({ projectId: other.id, name: 'docs', prompt: 'y' });
+    const otherAgent = repos.agents.create({ projectId: other.id, name: 'docs', prompt: 'y' });
 
     const inRange = makeRun(ctx, { createdAt: '2026-07-10T00:00:00.000Z' });
     repos.runIntegrations.upsertForRun({
@@ -150,7 +150,7 @@ describe('getDashboardImpact', () => {
 
     const otherProjectRun = makeRun(ctx, {
       projectId: other.id,
-      taskId: otherTask.id,
+      agentId: otherAgent.id,
       createdAt: '2026-07-11T00:00:00.000Z',
     });
     repos.runIntegrations.upsertForRun({
@@ -283,7 +283,7 @@ describe('getDashboardImpact', () => {
     const ctx = setup();
     const { repos } = ctx;
     const other = repos.projects.create({ name: 'beta', repoPath: '/tmp/beta' });
-    const otherTask = repos.tasks.create({ projectId: other.id, name: 'docs', prompt: 'y' });
+    const otherAgent = repos.agents.create({ projectId: other.id, name: 'docs', prompt: 'y' });
 
     const inRange = makeRun(ctx, { createdAt: '2026-07-10T00:00:00.000Z' });
     repos.runImpactItems.replaceForRun(inRange.id, null, [
@@ -298,7 +298,7 @@ describe('getDashboardImpact', () => {
     makeRun(ctx, { createdAt: '2026-01-01T00:00:00.000Z' });
     const otherProjectRun = makeRun(ctx, {
       projectId: other.id,
-      taskId: otherTask.id,
+      agentId: otherAgent.id,
       createdAt: '2026-07-11T00:00:00.000Z',
     });
     repos.runImpactItems.replaceForRun(otherProjectRun.id, null, [

@@ -13,22 +13,22 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
       failurePolicyJson: JSON.stringify({
-        selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 1 },
+        selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 1 },
       }),
     });
-    const healer = repos.tasks.create({
+    const healer = repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'k1',
       trigger: 'manual',
       state: RunState.Failed,
@@ -42,14 +42,14 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
+      failedAgent: failing,
       policy: {
-        selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 1 },
+        selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 1 },
       },
     });
 
     expect(decision.shouldEnqueue).toBe(true);
-    expect(decision.healerTaskId).toBe(healer.id);
+    expect(decision.healerAgentId).toBe(healer.id);
     db.close();
   });
 
@@ -61,17 +61,17 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const healer = repos.tasks.create({
+    const healer = repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
       failurePolicyJson: JSON.stringify({
-        selfHeal: { task: 'self-heal' },
+        selfHeal: { agent: 'self-heal' },
       }),
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: healer.id,
+      agentId: healer.id,
       idempotencyKey: 'k2',
       trigger: 'manual',
       state: RunState.Failed,
@@ -85,8 +85,8 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: healer,
-      policy: { selfHeal: { task: 'self-heal' } },
+      failedAgent: healer,
+      policy: { selfHeal: { agent: 'self-heal' } },
     });
 
     expect(decision.shouldEnqueue).toBe(false);
@@ -102,14 +102,14 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'k4',
       trigger: 'manual',
       state: RunState.Failed,
@@ -123,13 +123,13 @@ describe('decideHealEnqueue', () => {
     const missingHealer = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 2 } },
     });
     expect(missingHealer.shouldEnqueue).toBe(false);
     expect(missingHealer.reason).toContain('not found');
 
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
@@ -138,8 +138,8 @@ describe('decideHealEnqueue', () => {
     const belowThreshold = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 2 } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 2 } },
     });
     expect(belowThreshold.shouldEnqueue).toBe(false);
     expect(belowThreshold.reason).toContain('consecutive failures');
@@ -155,19 +155,19 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'k-never-started',
       trigger: 'schedule',
       state: RunState.Failed,
@@ -180,8 +180,8 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal' } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal' } },
     });
 
     expect(decision.shouldEnqueue).toBe(false);
@@ -197,19 +197,19 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'k-bad-transition',
       trigger: 'schedule',
       state: RunState.Failed,
@@ -223,8 +223,8 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal' } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal' } },
     });
 
     expect(decision.shouldEnqueue).toBe(false);
@@ -240,12 +240,12 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
     });
-    const healer = repos.tasks.create({
+    const healer = repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
@@ -254,7 +254,7 @@ describe('decideHealEnqueue', () => {
     for (let i = 0; i < 3; i++) {
       repos.runs.create({
         projectId: project.id,
-        taskId: healer.id,
+        agentId: healer.id,
         idempotencyKey: `heal-cap-${i}`,
         trigger: 'heal',
         state: RunState.Succeeded,
@@ -263,7 +263,7 @@ describe('decideHealEnqueue', () => {
 
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'heal-cap-fail',
       trigger: 'manual',
       state: RunState.Failed,
@@ -277,8 +277,8 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal', afterConsecutiveFailedRuns: 1 } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 1 } },
     });
 
     expect(decision.shouldEnqueue).toBe(false);
@@ -294,19 +294,19 @@ describe('decideHealEnqueue', () => {
       name: 'demo',
       repoPath: '/tmp/demo',
     });
-    const failing = repos.tasks.create({
+    const failing = repos.agents.create({
       projectId: project.id,
       name: 'deps',
       prompt: 'do work',
     });
-    repos.tasks.create({
+    repos.agents.create({
       projectId: project.id,
       name: 'self-heal',
       prompt: 'heal',
     });
     const created = repos.runs.create({
       projectId: project.id,
-      taskId: failing.id,
+      agentId: failing.id,
       idempotencyKey: 'k3',
       trigger: 'heal',
       state: RunState.Failed,
@@ -320,8 +320,8 @@ describe('decideHealEnqueue', () => {
     const decision = decideHealEnqueue({
       repos,
       failedRun: run,
-      failedTask: failing,
-      policy: { selfHeal: { task: 'self-heal' } },
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal' } },
     });
 
     expect(decision.shouldEnqueue).toBe(false);

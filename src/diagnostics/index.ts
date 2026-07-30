@@ -4,7 +4,7 @@ export {
   primaryValidationTool,
   projectDoctor,
   resolveTool,
-  validationToolsForTasks,
+  validationToolsForAgents,
 } from "./doctor";
 export type {
   DoctorToolCheck,

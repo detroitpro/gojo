@@ -18,7 +18,7 @@ export interface UpcomingSchedulesInput {
 export interface UpcomingScheduleSeries {
   id: string;
   name: string;
-  taskName: string | null;
+  agentName: string | null;
   timezone: string;
   enabled: boolean;
   color: string;
@@ -74,7 +74,7 @@ export function listUpcomingSchedules(
     return {
       id: schedule.id,
       name: schedule.name,
-      taskName: schedule.taskName,
+      agentName: schedule.agentName,
       timezone: schedule.timezone,
       enabled: schedule.enabled,
       color: scheduleColorFromId(schedule.id),

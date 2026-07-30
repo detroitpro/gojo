@@ -8,7 +8,7 @@ import {
   primaryValidationTool,
   projectDoctor,
   resolveTool,
-  validationToolsForTasks,
+  validationToolsForAgents,
 } from "@/diagnostics/doctor";
 import {
   commitAll,
@@ -16,7 +16,7 @@ import {
   execGit,
   initRepo,
 } from "@/git/git";
-import type { Task } from "@/storage/types";
+import type { Agent } from "@/storage/types";
 
 describe("diagnostics/doctor helpers", () => {
   test("firstCommandToken extracts the binary", () => {
@@ -59,8 +59,8 @@ describe("diagnostics/doctor helpers", () => {
     }
   });
 
-  test("validationToolsForTasks reports missing binaries", () => {
-    const tasks = [
+  test("validationToolsForAgents reports missing binaries", () => {
+    const agents = [
       {
         id: "t1",
         projectId: "p1",
@@ -84,14 +84,14 @@ describe("diagnostics/doctor helpers", () => {
           steps: [{ name: "x", command: "bun test" }],
         }),
       },
-    ] as Task[];
+    ] as Agent[];
 
-    const tools = validationToolsForTasks(tasks, process.cwd());
+    const tools = validationToolsForAgents(agents, process.cwd());
     expect(tools).toHaveLength(4);
     expect(tools[0]?.binary).toBe("bun");
     expect(tools[0]?.found).toBe(true);
     expect(tools[1]?.found).toBe(false);
-    expect(tools[1]?.task).toBe("maintain-tests");
+    expect(tools[1]?.agent).toBe("maintain-tests");
     expect(tools[2]?.binary).toBe("yarn");
     expect(tools[3]?.binary).toBe("test");
     expect(tools[3]?.found).toBe(true);
@@ -125,7 +125,7 @@ describe("diagnostics/projectDoctor", () => {
       };
 
       const repos = {
-        tasks: {
+        agents: {
           listByProject: () =>
             [
               {
@@ -137,7 +137,7 @@ describe("diagnostics/projectDoctor", () => {
                   steps: [{ name: "typecheck", command: "bun run typecheck" }],
                 }),
               },
-            ] as Task[],
+            ] as Agent[],
         },
       };
 

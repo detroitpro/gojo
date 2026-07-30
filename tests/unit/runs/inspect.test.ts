@@ -69,14 +69,14 @@ describe("runs/inspect", () => {
       name: "demo",
       repoPath: workspace,
     });
-    const task = ctx.repos.tasks.create({
+    const task = ctx.repos.agents.create({
       projectId: project.id,
       name: "task",
       prompt: "work",
     });
     const run = ctx.repos.runs.create({
       projectId: project.id,
-      taskId: task.id,
+      agentId: task.id,
       idempotencyKey: "inspect-diff",
       trigger: "manual",
       state: RunState.Succeeded,

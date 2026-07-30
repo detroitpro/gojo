@@ -17,7 +17,7 @@ instructions:
   scheduledRunNotice: |
     Unattended scheduled gojo run. Prefer small diffs. Write .gojo/handoff.json before exiting.
 
-agents:
+profiles:
   shell:
     adapter: shell
     timeout: 5m
@@ -79,11 +79,11 @@ validationProfiles:
         command: test -f .gojo/handoff.json
         timeout: 30s
 
-tasks:
+agents:
   self-heal:
     description: Diagnose failed gojo runs and open a reviewable fix PR
-    agent: cursor
-    promptFile: .gojo/tasks/self-heal.md
+    profile: cursor
+    promptFile: .gojo/agents/self-heal.md
     validationProfile: self-heal
     concurrency:
       projectLimit: 1
@@ -100,8 +100,8 @@ tasks:
 
   maintain-quality:
     description: Refactor for module boundaries, low complexity, and expert TypeScript quality
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-quality.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-quality.md
     validationProfile: daemon-unit
     concurrency:
       projectLimit: 1
@@ -116,13 +116,13 @@ tasks:
       disableAfterConsecutiveFailedRuns: 3
       backoff: exponential
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1
 
   maintain-tests:
     description: Raise daemon/CLI test coverage toward 95% without product features
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-tests.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-tests.md
     validationProfile: daemon-test
     concurrency:
       projectLimit: 1
@@ -137,13 +137,13 @@ tasks:
       disableAfterConsecutiveFailedRuns: 3
       backoff: exponential
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1
 
   maintain-deps:
     description: Update dependencies including majors; keep build and tests green
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-deps.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-deps.md
     validationProfile: full-check
     concurrency:
       projectLimit: 1
@@ -158,13 +158,13 @@ tasks:
       disableAfterConsecutiveFailedRuns: 3
       backoff: exponential
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1
 
   maintain-docs:
     description: Keep site/ and docs/ aligned with implemented behavior
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-docs.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-docs.md
     validationProfile: docs-build
     concurrency:
       projectLimit: 1
@@ -179,13 +179,13 @@ tasks:
       disableAfterConsecutiveFailedRuns: 3
       backoff: exponential
     selfHeal:
-      task: self-heal
+      agent: self-heal
       afterConsecutiveFailedRuns: 1
 
   maintain-merge:
     description: Babysit and merge open maintenance PRs from gojo scheduled agents
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-merge.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-merge.md
     validationProfile: noop
     concurrency:
       projectLimit: 1
@@ -201,8 +201,8 @@ tasks:
 
   maintain-issue-tags:
     description: Ensure GitHub label taxonomy and triage issue tags (no code changes)
-    agent: cursor
-    promptFile: .gojo/tasks/maintain-issue-tags.md
+    profile: cursor
+    promptFile: .gojo/agents/maintain-issue-tags.md
     validationProfile: noop
     concurrency:
       projectLimit: 1
@@ -214,8 +214,8 @@ tasks:
 
   activity-digest:
     description: Daily executive brief on what shipped in the last 24h and why it matters
-    agent: cursor
-    promptFile: .gojo/tasks/activity-digest.md
+    profile: cursor
+    promptFile: .gojo/agents/activity-digest.md
     validationProfile: handoff
     concurrency:
       projectLimit: 1
@@ -232,38 +232,38 @@ tasks:
 
 schedules:
   self-heal:
-    task: self-heal
+    agent: self-heal
     cron: "0 7 * * *"
     timezone: America/Detroit
   maintain-quality:
-    task: maintain-quality
+    agent: maintain-quality
     cron: "0 2 * * *"
     timezone: America/Detroit
   maintain-tests:
-    task: maintain-tests
+    agent: maintain-tests
     cron: "0 3 * * *"
     timezone: America/Detroit
   maintain-deps:
-    task: maintain-deps
+    agent: maintain-deps
     cron: "0 2 * * 0"
     timezone: America/Detroit
   maintain-docs:
-    task: maintain-docs
+    agent: maintain-docs
     cron: "0 4 * * *"
     timezone: America/Detroit
   maintain-merge:
-    task: maintain-merge
+    agent: maintain-merge
     cron: "0 6 * * *"
     timezone: America/Detroit
   maintain-issue-tags:
-    task: maintain-issue-tags
+    agent: maintain-issue-tags
     cron: "30 5 * * *"
     timezone: America/Detroit
   activity-digest:
-    task: activity-digest
+    agent: activity-digest
     cron: "0 8 * * *"
     timezone: America/Detroit
 
 # Project-wide routing stays empty on purpose: only activity-digest notifies,
-# via its own task-level notifications block.
+# via its own agent-level notifications block.
 notifications: {}

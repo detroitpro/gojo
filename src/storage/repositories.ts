@@ -4,32 +4,32 @@ import { RunState } from "@shared/run-states";
 
 import type { Database } from "./db";
 import type {
+  Agent,
   Attempt,
   AuditEvent,
-  AgentProfile,
-  CreateAgentProfileInput,
+  Profile,
+  CreateAgentInput,
   CreateAttemptInput,
   CreateAuditEventInput,
+  CreateProfileInput,
   CreateProjectInput,
+  CreateRunInput,
+  CreateScheduleInput,
+  Project,
+  Run,
   RunImpactItem,
   RunImpactItemDraft,
   RunIntegration,
-  SecretRecord,
-  UpsertRunIntegrationInput,
-  UpsertSecretInput,
-  CreateRunInput,
-  CreateScheduleInput,
-  CreateTaskInput,
-  Project,
-  Run,
   Schedule,
-  Task,
+  SecretRecord,
+  UpdateAgentInput,
   UpdateAttemptInput,
   UpdateProjectInput,
   UpdateRunInput,
   UpdateRunIntegrationInput,
   UpdateScheduleInput,
-  UpdateTaskInput,
+  UpsertRunIntegrationInput,
+  UpsertSecretInput,
 } from "./types";
 
 function nowIso(): string {
@@ -55,12 +55,12 @@ interface ProjectRow {
   updated_at: string;
 }
 
-interface TaskRow {
+interface AgentRow {
   id: string;
   project_id: string;
   name: string;
   description: string;
-  agent_profile_id: string | null;
+  profile_id: string | null;
   prompt: string;
   validation_profile_json: string;
   integration_json: string;
@@ -73,7 +73,7 @@ interface TaskRow {
 
 interface ScheduleRow {
   id: string;
-  task_id: string;
+  agent_id: string;
   name: string;
   cron_expr: string;
   timezone: string;
@@ -91,7 +91,7 @@ interface ScheduleRow {
 interface RunRow {
   id: string;
   project_id: string;
-  task_id: string;
+  agent_id: string;
   schedule_id: string | null;
   state: Run["state"];
   idempotency_key: string;
@@ -157,7 +157,7 @@ interface SecretRow {
   updated_at: string;
 }
 
-interface AgentProfileRow {
+interface ProfileRow {
   id: string;
   project_id: string | null;
   name: string;
@@ -179,13 +179,13 @@ export function mapProject(row: ProjectRow): Project {
   };
 }
 
-export function mapTask(row: TaskRow): Task {
+export function mapAgent(row: AgentRow): Agent {
   return {
     id: row.id,
     projectId: row.project_id,
     name: row.name,
     description: row.description,
-    agentProfileId: row.agent_profile_id,
+    profileId: row.profile_id,
     prompt: row.prompt,
     validationProfileJson: row.validation_profile_json,
     integrationJson: row.integration_json,
@@ -200,7 +200,7 @@ export function mapTask(row: TaskRow): Task {
 export function mapSchedule(row: ScheduleRow): Schedule {
   return {
     id: row.id,
-    taskId: row.task_id,
+    agentId: row.agent_id,
     name: row.name,
     cronExpr: row.cron_expr,
     timezone: row.timezone,
@@ -220,7 +220,7 @@ export function mapRun(row: RunRow): Run {
   return {
     id: row.id,
     projectId: row.project_id,
-    taskId: row.task_id,
+    agentId: row.agent_id,
     scheduleId: row.schedule_id,
     state: row.state,
     idempotencyKey: row.idempotency_key,
@@ -293,7 +293,7 @@ function mapSecret(row: SecretRow): SecretRecord {
   };
 }
 
-function mapAgentProfile(row: AgentProfileRow): AgentProfile {
+function mapProfile(row: ProfileRow): Profile {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -392,21 +392,21 @@ export interface ProjectRepository {
   delete(id: string): boolean;
 }
 
-export interface TaskRepository {
-  create(input: CreateTaskInput): Task;
-  findById(id: string): Task | null;
-  findEnabledByProjectAndName(projectId: string, name: string): Task | null;
-  listByProject(projectId: string): Task[];
-  listAll(): Task[];
+export interface AgentRepository {
+  create(input: CreateAgentInput): Agent;
+  findById(id: string): Agent | null;
+  findEnabledByProjectAndName(projectId: string, name: string): Agent | null;
+  listByProject(projectId: string): Agent[];
+  listAll(): Agent[];
   count(): number;
-  update(id: string, input: UpdateTaskInput): Task | null;
+  update(id: string, input: UpdateAgentInput): Agent | null;
   delete(id: string): boolean;
 }
 
 export interface ScheduleRepository {
   create(input: CreateScheduleInput): Schedule;
   findById(id: string): Schedule | null;
-  listByTask(taskId: string): Schedule[];
+  listByAgent(agentId: string): Schedule[];
   listDue(nowIso: string): Schedule[];
   count(): number;
   update(id: string, input: UpdateScheduleInput): Schedule | null;
@@ -435,8 +435,8 @@ export interface RunRepository {
   countRunningByProject(): Record<string, number>;
   /** Most recent admission timestamp across all runs. */
   latestAdmittedAt(): string | null;
-  /** Count trailing failed/timed-out/infra-failure runs for a task (stops at first success). */
-  countConsecutiveFailuresForTask(taskId: string, lookback: number): number;
+  /** Count trailing failed/timed-out/infra-failure runs for an agent (stops at first success). */
+  countConsecutiveFailuresForAgent(agentId: string, lookback: number): number;
   countByProjectTriggerSince(
     projectId: string,
     trigger: Run["trigger"],
@@ -449,9 +449,9 @@ export interface RunRepository {
   delete(id: string): boolean;
 }
 
-export interface AgentProfileRepository {
-  create(input: CreateAgentProfileInput): AgentProfile;
-  findById(id: string): AgentProfile | null;
+export interface ProfileRepository {
+  create(input: CreateProfileInput): Profile;
+  findById(id: string): Profile | null;
 }
 
 export interface AttemptRepository {
@@ -496,13 +496,13 @@ export interface RunIntegrationRepository {
 
 export interface Repositories {
   projects: ProjectRepository;
-  tasks: TaskRepository;
+  agents: AgentRepository;
   schedules: ScheduleRepository;
   runs: RunRepository;
   attempts: AttemptRepository;
   audit: AuditRepository;
   secrets: SecretRepository;
-  agentProfiles: AgentProfileRepository;
+  profiles: ProfileRepository;
   runImpactItems: RunImpactItemRepository;
   runIntegrations: RunIntegrationRepository;
 }
@@ -601,15 +601,15 @@ export function createRepositories(db: Database): Repositories {
     },
   };
 
-  const tasks: TaskRepository = {
+  const agents: AgentRepository = {
     create(input) {
       const id = ulid();
       const createdAt = nowIso();
 
       sqlite
         .query(
-          `INSERT INTO tasks (
-            id, project_id, name, description, agent_profile_id, prompt,
+          `INSERT INTO agents (
+            id, project_id, name, description, profile_id, prompt,
             validation_profile_json, integration_json, failure_policy_json,
             concurrency_json, notifications_json, enabled, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -619,7 +619,7 @@ export function createRepositories(db: Database): Repositories {
           input.projectId,
           input.name,
           input.description ?? "",
-          input.agentProfileId ?? null,
+          input.profileId ?? null,
           input.prompt,
           input.validationProfileJson ?? "{}",
           input.integrationJson ?? "{}",
@@ -630,12 +630,12 @@ export function createRepositories(db: Database): Repositories {
           createdAt,
         );
 
-      return mapTask({
+      return mapAgent({
         id,
         project_id: input.projectId,
         name: input.name,
         description: input.description ?? "",
-        agent_profile_id: input.agentProfileId ?? null,
+        profile_id: input.profileId ?? null,
         prompt: input.prompt,
         validation_profile_json: input.validationProfileJson ?? "{}",
         integration_json: input.integrationJson ?? "{}",
@@ -648,37 +648,37 @@ export function createRepositories(db: Database): Repositories {
     },
 
     findById(id) {
-      const row = sqlite.query<TaskRow, [string]>("SELECT * FROM tasks WHERE id = ?").get(id);
-      return row ? mapTask(row) : null;
+      const row = sqlite.query<AgentRow, [string]>("SELECT * FROM agents WHERE id = ?").get(id);
+      return row ? mapAgent(row) : null;
     },
 
     findEnabledByProjectAndName(projectId, name) {
       const row = sqlite
-        .query<TaskRow, [string, string]>(
-          "SELECT * FROM tasks WHERE project_id = ? AND name = ? AND enabled = 1",
+        .query<AgentRow, [string, string]>(
+          "SELECT * FROM agents WHERE project_id = ? AND name = ? AND enabled = 1",
         )
         .get(projectId, name);
-      return row ? mapTask(row) : null;
+      return row ? mapAgent(row) : null;
     },
 
     listByProject(projectId) {
       const rows = sqlite
-        .query<TaskRow, [string]>(
-          "SELECT * FROM tasks WHERE project_id = ? ORDER BY name ASC, project_id ASC",
+        .query<AgentRow, [string]>(
+          "SELECT * FROM agents WHERE project_id = ? ORDER BY name ASC, project_id ASC",
         )
         .all(projectId);
-      return rows.map(mapTask);
+      return rows.map(mapAgent);
     },
 
     listAll() {
       const rows = sqlite
-        .query<TaskRow, []>("SELECT * FROM tasks ORDER BY name ASC, project_id ASC")
+        .query<AgentRow, []>("SELECT * FROM agents ORDER BY name ASC, project_id ASC")
         .all();
-      return rows.map(mapTask);
+      return rows.map(mapAgent);
     },
 
     count() {
-      const row = sqlite.query<{ count: number }, []>("SELECT COUNT(*) as count FROM tasks").get();
+      const row = sqlite.query<{ count: number }, []>("SELECT COUNT(*) as count FROM agents").get();
       return row?.count ?? 0;
     },
 
@@ -688,12 +688,12 @@ export function createRepositories(db: Database): Repositories {
         return null;
       }
 
-      const next: Task = {
+      const next: Agent = {
         ...existing,
         name: input.name ?? existing.name,
         description: input.description ?? existing.description,
-        agentProfileId:
-          input.agentProfileId !== undefined ? input.agentProfileId : existing.agentProfileId,
+        profileId:
+          input.profileId !== undefined ? input.profileId : existing.profileId,
         prompt: input.prompt ?? existing.prompt,
         validationProfileJson: input.validationProfileJson ?? existing.validationProfileJson,
         integrationJson: input.integrationJson ?? existing.integrationJson,
@@ -705,8 +705,8 @@ export function createRepositories(db: Database): Repositories {
 
       sqlite
         .query(
-          `UPDATE tasks SET
-            name = ?, description = ?, agent_profile_id = ?, prompt = ?,
+          `UPDATE agents SET
+            name = ?, description = ?, profile_id = ?, prompt = ?,
             validation_profile_json = ?, integration_json = ?, failure_policy_json = ?,
             concurrency_json = ?, notifications_json = ?, enabled = ?
           WHERE id = ?`,
@@ -714,7 +714,7 @@ export function createRepositories(db: Database): Repositories {
         .run(
           next.name,
           next.description,
-          next.agentProfileId,
+          next.profileId,
           next.prompt,
           next.validationProfileJson,
           next.integrationJson,
@@ -729,7 +729,7 @@ export function createRepositories(db: Database): Repositories {
     },
 
     delete(id) {
-      const result = sqlite.query("DELETE FROM tasks WHERE id = ?").run(id);
+      const result = sqlite.query("DELETE FROM agents WHERE id = ?").run(id);
       return result.changes > 0;
     },
   };
@@ -742,14 +742,14 @@ export function createRepositories(db: Database): Repositories {
       sqlite
         .query(
           `INSERT INTO schedules (
-            id, task_id, name, cron_expr, timezone, enabled, overlap_policy,
+            id, agent_id, name, cron_expr, timezone, enabled, overlap_policy,
             missed_run_policy, retry_json, consecutive_failures, disable_after,
             next_run_at, last_run_at, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)`,
         )
         .run(
           id,
-          input.taskId,
+          input.agentId,
           input.name,
           input.cronExpr,
           input.timezone ?? "UTC",
@@ -764,7 +764,7 @@ export function createRepositories(db: Database): Repositories {
 
       return mapSchedule({
         id,
-        task_id: input.taskId,
+        agent_id: input.agentId,
         name: input.name,
         cron_expr: input.cronExpr,
         timezone: input.timezone ?? "UTC",
@@ -785,10 +785,10 @@ export function createRepositories(db: Database): Repositories {
       return row ? mapSchedule(row) : null;
     },
 
-    listByTask(taskId) {
+    listByAgent(agentId) {
       const rows = sqlite
-        .query<ScheduleRow, [string]>("SELECT * FROM schedules WHERE task_id = ? ORDER BY created_at")
-        .all(taskId);
+        .query<ScheduleRow, [string]>("SELECT * FROM schedules WHERE agent_id = ? ORDER BY created_at")
+        .all(agentId);
       return rows.map(mapSchedule);
     },
 
@@ -914,7 +914,7 @@ export function createRepositories(db: Database): Repositories {
       sqlite
         .query(
           `INSERT INTO runs (
-            id, project_id, task_id, schedule_id, state, idempotency_key,
+            id, project_id, agent_id, schedule_id, state, idempotency_key,
             trigger, created_at, started_at, finished_at, error_message,
             not_before_at, expires_at, admitted_at, priority, work_item_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, NULL, ?, ?)`,
@@ -922,7 +922,7 @@ export function createRepositories(db: Database): Repositories {
         .run(
           id,
           input.projectId,
-          input.taskId,
+          input.agentId,
           input.scheduleId ?? null,
           state,
           input.idempotencyKey,
@@ -937,7 +937,7 @@ export function createRepositories(db: Database): Repositories {
       return mapRun({
         id,
         project_id: input.projectId,
-        task_id: input.taskId,
+        agent_id: input.agentId,
         schedule_id: input.scheduleId ?? null,
         state,
         idempotency_key: input.idempotencyKey,
@@ -1042,15 +1042,15 @@ export function createRepositories(db: Database): Repositories {
       return row?.admitted_at ?? null;
     },
 
-    countConsecutiveFailuresForTask(taskId, lookback) {
+    countConsecutiveFailuresForAgent(agentId, lookback) {
       const rows = sqlite
         .query<{ state: Run["state"] }, [string, number]>(
           `SELECT state FROM runs
-           WHERE task_id = ?
+           WHERE agent_id = ?
            ORDER BY created_at DESC
            LIMIT ?`,
         )
-        .all(taskId, Math.max(lookback * 5, 10));
+        .all(agentId, Math.max(lookback * 5, 10));
 
       let consecutive = 0;
       for (const row of rows) {
@@ -1433,7 +1433,7 @@ export function createRepositories(db: Database): Repositories {
     },
   };
 
-  const agentProfiles: AgentProfileRepository = {
+  const profiles: ProfileRepository = {
     create(input) {
       const createdAt = nowIso();
       const configJson = input.configJson ?? "{}";
@@ -1441,20 +1441,20 @@ export function createRepositories(db: Database): Repositories {
       const existing =
         projectId === null
           ? sqlite
-              .query<AgentProfileRow, [string]>(
-                "SELECT * FROM agent_profiles WHERE project_id IS NULL AND name = ? ORDER BY created_at LIMIT 1",
+              .query<ProfileRow, [string]>(
+                "SELECT * FROM profiles WHERE project_id IS NULL AND name = ? ORDER BY created_at LIMIT 1",
               )
               .get(input.name)
           : sqlite
-              .query<AgentProfileRow, [string, string]>(
-                "SELECT * FROM agent_profiles WHERE project_id = ? AND name = ? ORDER BY created_at LIMIT 1",
+              .query<ProfileRow, [string, string]>(
+                "SELECT * FROM profiles WHERE project_id = ? AND name = ? ORDER BY created_at LIMIT 1",
               )
               .get(projectId, input.name);
       if (existing) {
         sqlite
-          .query("UPDATE agent_profiles SET adapter = ?, config_json = ? WHERE id = ?")
+          .query("UPDATE profiles SET adapter = ?, config_json = ? WHERE id = ?")
           .run(input.adapter, configJson, existing.id);
-        return mapAgentProfile({
+        return mapProfile({
           ...existing,
           adapter: input.adapter,
           config_json: configJson,
@@ -1464,12 +1464,12 @@ export function createRepositories(db: Database): Repositories {
       const id = ulid();
       sqlite
         .query(
-          `INSERT INTO agent_profiles (id, project_id, name, adapter, config_json, created_at)
+          `INSERT INTO profiles (id, project_id, name, adapter, config_json, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .run(id, projectId, input.name, input.adapter, configJson, createdAt);
 
-      return mapAgentProfile({
+      return mapProfile({
         id,
         project_id: projectId,
         name: input.name,
@@ -1481,9 +1481,9 @@ export function createRepositories(db: Database): Repositories {
 
     findById(id) {
       const row = sqlite
-        .query<AgentProfileRow, [string]>("SELECT * FROM agent_profiles WHERE id = ?")
+        .query<ProfileRow, [string]>("SELECT * FROM profiles WHERE id = ?")
         .get(id);
-      return row ? mapAgentProfile(row) : null;
+      return row ? mapProfile(row) : null;
     },
   };
 
@@ -1685,13 +1685,13 @@ export function createRepositories(db: Database): Repositories {
 
   return {
     projects,
-    tasks,
+    agents,
     schedules,
     runs,
     attempts,
     audit,
     secrets,
-    agentProfiles,
+    profiles,
     runImpactItems,
     runIntegrations,
   };

@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 import { checkSession } from "./api";
-import AppShell from "./components/AppShell.vue";
+import AdaptersView from "./views/AdaptersView.vue";
+import AgentDetailView from "./views/AgentDetailView.vue";
 import AgentsView from "./views/AgentsView.vue";
+import AppShell from "./components/AppShell.vue";
 import DashboardView from "./views/DashboardView.vue";
 import ImpactView from "./views/ImpactView.vue";
 import IntegrationsView from "./views/IntegrationsView.vue";
@@ -14,8 +16,6 @@ import RunDetailView from "./views/RunDetailView.vue";
 import RunsView from "./views/RunsView.vue";
 import SchedulesView from "./views/SchedulesView.vue";
 import SettingsView from "./views/SettingsView.vue";
-import TaskDetailView from "./views/TaskDetailView.vue";
-import TasksView from "./views/TasksView.vue";
 import { gojoSocket } from "./lib/ws-client";
 
 const router = createRouter({
@@ -34,15 +34,15 @@ const router = createRouter({
         { path: "", name: "dashboard", component: DashboardView },
         { path: "projects", name: "projects", component: ProjectsView },
         { path: "projects/:id", name: "project-detail", component: ProjectDetailView },
-        { path: "tasks", name: "tasks", component: TasksView },
-        { path: "tasks/:id", name: "task-detail", component: TaskDetailView },
+        { path: "agents", name: "agents", component: AgentsView },
+        { path: "agents/:id", name: "agent-detail", component: AgentDetailView },
         { path: "runs", name: "runs", component: RunsView },
         { path: "runs/:id", name: "run-detail", component: RunDetailView },
         { path: "integrations", name: "integrations", component: IntegrationsView },
         { path: "impact", name: "impact", component: ImpactView },
         { path: "queue", name: "queue", component: QueueView },
         { path: "schedules", name: "schedules", component: SchedulesView },
-        { path: "agents", name: "agents", component: AgentsView },
+        { path: "adapters", name: "adapters", component: AdaptersView },
         { path: "settings", name: "settings", component: SettingsView },
       ],
     },

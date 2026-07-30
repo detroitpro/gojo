@@ -11,7 +11,7 @@ export type PlatformEventTopic =
   | "impact"
   | "queue"
   | "runs"
-  | "tasks"
+  | "agents"
   | "schedules"
   | "projects"
   | "work"

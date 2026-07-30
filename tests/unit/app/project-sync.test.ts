@@ -19,7 +19,7 @@ repository:
   requireCleanBase: true
   submodules: false
   gitLfs: false
-agents:
+profiles:
   cursor:
     adapter: cursor
     timeout: 5m
@@ -29,11 +29,11 @@ validationProfiles:
       - name: ok
         command: "true"
         timeout: 30s
-tasks:
+agents:
   demo:
-    description: Demo task
-    agent: cursor
-    promptFile: .gojo/tasks/demo.md
+    description: Demo agent
+    profile: cursor
+    promptFile: .gojo/agents/demo.md
     validationProfile: handoff
     integration:
       mode: commit-only
@@ -65,8 +65,8 @@ describe('app/project-sync', () => {
 
   function createRepoWithManifest(schedulesYaml: string): string {
     repoPath = mkdtempSync(join(tmpdir(), 'gojo-sync-'));
-    mkdirSync(join(repoPath, '.gojo', 'tasks'), { recursive: true });
-    writeFileSync(join(repoPath, '.gojo', 'tasks', 'demo.md'), 'do the thing\n', 'utf8');
+    mkdirSync(join(repoPath, '.gojo', 'agents'), { recursive: true });
+    writeFileSync(join(repoPath, '.gojo', 'agents', 'demo.md'), 'do the thing\n', 'utf8');
     writeGojoYaml(repoPath, schedulesYaml);
     return repoPath;
   }
@@ -74,7 +74,7 @@ describe('app/project-sync', () => {
   test('soft-disables schedules removed or renamed in the manifest', () => {
     const path = createRepoWithManifest(`schedules:
   demo-daily:
-    task: demo
+    agent: demo
     cron: "0 6 * * *"
     timezone: UTC
 `);
@@ -82,22 +82,22 @@ describe('app/project-sync', () => {
     const project = repos.projects.create({ name: 'sync-demo', repoPath: path });
 
     expect(syncProjectFromManifest(repos, project).schedules).toBe(1);
-    const taskId = repos.tasks.listByProject(project.id).find((t) => t.name === 'demo')!.id;
-    expect(repos.schedules.listByTask(taskId)[0]?.name).toBe('demo-daily');
-    expect(repos.schedules.listByTask(taskId)[0]?.enabled).toBe(true);
+    const agentId = repos.agents.listByProject(project.id).find((a) => a.name === 'demo')!.id;
+    expect(repos.schedules.listByAgent(agentId)[0]?.name).toBe('demo-daily');
+    expect(repos.schedules.listByAgent(agentId)[0]?.enabled).toBe(true);
 
     writeGojoYaml(
       path,
       `schedules:
   demo:
-    task: demo
+    agent: demo
     cron: "0 6 * * *"
     timezone: UTC
 `,
     );
 
     expect(syncProjectFromManifest(repos, project).schedules).toBe(1);
-    const schedules = repos.schedules.listByTask(taskId);
+    const schedules = repos.schedules.listByAgent(agentId);
     expect(schedules).toHaveLength(2);
     expect(schedules.find((s) => s.name === 'demo-daily')?.enabled).toBe(false);
     expect(schedules.find((s) => s.name === 'demo')?.enabled).toBe(true);
@@ -106,7 +106,7 @@ describe('app/project-sync', () => {
   test('soft-disables all project schedules when manifest omits schedules', () => {
     const path = createRepoWithManifest(`schedules:
   demo:
-    task: demo
+    agent: demo
     cron: "0 6 * * *"
     timezone: UTC
 `);
@@ -117,8 +117,8 @@ describe('app/project-sync', () => {
     writeGojoYaml(path, '');
     expect(syncProjectFromManifest(repos, project).schedules).toBe(0);
 
-    const taskId = repos.tasks.listByProject(project.id).find((t) => t.name === 'demo')!.id;
-    expect(repos.schedules.listByTask(taskId).every((s) => !s.enabled)).toBe(true);
+    const agentId = repos.agents.listByProject(project.id).find((a) => a.name === 'demo')!.id;
+    expect(repos.schedules.listByAgent(agentId).every((s) => !s.enabled)).toBe(true);
   });
 
   test('returns empty counts when no manifest exists', () => {
@@ -128,16 +128,16 @@ describe('app/project-sync', () => {
 
     expect(syncProjectFromManifest(repos, project)).toEqual({
       manifestPath: null,
-      agentProfiles: 0,
-      tasks: 0,
+      profiles: 0,
+      agents: 0,
       schedules: 0,
     });
   });
 
   test('resolves .gojo/project.yaml when gojo.yaml is absent', () => {
     repoPath = mkdtempSync(join(tmpdir(), 'gojo-sync-alt-'));
-    mkdirSync(join(repoPath, '.gojo', 'tasks'), { recursive: true });
-    writeFileSync(join(repoPath, '.gojo', 'tasks', 'demo.md'), 'alternate manifest prompt\n', 'utf8');
+    mkdirSync(join(repoPath, '.gojo', 'agents'), { recursive: true });
+    writeFileSync(join(repoPath, '.gojo', 'agents', 'demo.md'), 'alternate manifest prompt\n', 'utf8');
     writeFileSync(
       join(repoPath, '.gojo', 'project.yaml'),
       `version: 1
@@ -150,7 +150,7 @@ repository:
   requireCleanBase: true
   submodules: false
   gitLfs: false
-agents:
+profiles:
   cursor:
     adapter: cursor
     timeout: 5m
@@ -160,11 +160,11 @@ validationProfiles:
       - name: ok
         command: "true"
         timeout: 30s
-tasks:
+agents:
   demo:
-    description: Alt task
-    agent: cursor
-    promptFile: .gojo/tasks/demo.md
+    description: Alt agent
+    profile: cursor
+    promptFile: .gojo/agents/demo.md
     validationProfile: handoff
     integration:
       mode: commit-only
@@ -178,8 +178,8 @@ tasks:
     const result = syncProjectFromManifest(repos, project);
 
     expect(result.manifestPath).toBe(join(repoPath, '.gojo', 'project.yaml'));
-    expect(result.tasks).toBe(1);
-    expect(repos.tasks.listByProject(project.id).find((t) => t.name === 'demo')?.prompt).toBe(
+    expect(result.agents).toBe(1);
+    expect(repos.agents.listByProject(project.id).find((a) => a.name === 'demo')?.prompt).toBe(
       'alternate manifest prompt\n',
     );
   });
@@ -187,7 +187,7 @@ tasks:
   test('does not resurrect disabled schedule names absent from manifest', () => {
     const path = createRepoWithManifest(`schedules:
   demo-daily:
-    task: demo
+    agent: demo
     cron: "0 6 * * *"
     timezone: UTC
 `);
@@ -199,7 +199,7 @@ tasks:
       path,
       `schedules:
   demo:
-    task: demo
+    agent: demo
     cron: "0 6 * * *"
     timezone: UTC
 `,
@@ -207,8 +207,8 @@ tasks:
     syncProjectFromManifest(repos, project);
     syncProjectFromManifest(repos, project);
 
-    const taskId = repos.tasks.listByProject(project.id).find((t) => t.name === 'demo')!.id;
-    const stale = repos.schedules.listByTask(taskId).find((s) => s.name === 'demo-daily');
+    const agentId = repos.agents.listByProject(project.id).find((a) => a.name === 'demo')!.id;
+    const stale = repos.schedules.listByAgent(agentId).find((s) => s.name === 'demo-daily');
     expect(stale?.enabled).toBe(false);
     // Sanity: file still on disk for debugging flaky path issues
     expect(readFileSync(join(path, 'gojo.yaml'), 'utf8')).toContain('schedules:');
