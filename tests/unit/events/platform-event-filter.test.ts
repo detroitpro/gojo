@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { matchesPlatformEvent } from "@/events/platform-event-filter";
+import {
+  matchesPlatformEvent,
+  sequenceFromRequest,
+} from "@/events/platform-event-filter";
 import type { PlatformChangeEvent } from "@shared/events";
 
 function event(overrides: Partial<PlatformChangeEvent> = {}): PlatformChangeEvent {
@@ -29,5 +32,19 @@ describe("matchesPlatformEvent", () => {
     expect(
       matchesPlatformEvent(e, { projectId: "project-1", topics: ["queue"] }),
     ).toBe(false);
+  });
+});
+
+describe("sequenceFromRequest", () => {
+  test("uses the greater of Last-Event-ID and after query, ignoring non-finite values", () => {
+    const request = new Request("https://gojo.local/events?after=12", {
+      headers: { "Last-Event-ID": "42" },
+    });
+    expect(sequenceFromRequest(request)).toBe(42);
+
+    const invalid = new Request("https://gojo.local/events?after=not-a-number", {
+      headers: { "Last-Event-ID": "7" },
+    });
+    expect(sequenceFromRequest(invalid)).toBe(7);
   });
 });
