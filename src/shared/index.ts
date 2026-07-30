@@ -200,6 +200,11 @@ export {
   WorkStatusSchema,
   compareWindowToMs,
   parseCompareWindow,
+  parseWorkAttention,
+  parseWorkDelivery,
+  parseWorkExecution,
+  parseWorkOutcome,
+  parseWorkProvenance,
 } from './work';
 export type {
   SourceCapabilities,
