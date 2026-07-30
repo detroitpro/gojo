@@ -17,16 +17,34 @@ Two related concepts you'll see across commands:
 - **Adapter** — the installed CLI (shell / cursor / claude-code). Managed by `gojo adapter …`.
 - **Agent** — a work unit defined in `gojo.yaml`'s `agents:` map. Managed by `gojo agent …`.
 
-## Setup & server
+## Help
+
+```bash
+gojo --help
+gojo auth --help
+gojo auth password --help
+```
+
+Text mode is colorful on a TTY (`NO_COLOR=1` to disable). Use `--output json` or `--output yaml` for scripts — those stay machine-pure.
+
+Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup already done) · `4` auth failure.
+
+## Setup, auth & server
 
 | Command | Purpose |
 | --- | --- |
-| `gojo setup --username … --password …` | Create the first admin |
+| `gojo setup` | Create the **first** admin (interactive on TTY, or `--username` / `--password`) |
+| `gojo auth whoami` | Show local users |
+| `gojo auth password` | Change the admin password (local DB; daemon optional) |
 | `gojo server start` | API + scheduler + web UI (foreground; blocks until Ctrl+C) |
 | `gojo server start --daemon` | Same, but return immediately (process keeps running) |
 | `gojo server status` | PID / health |
 | `gojo server stop` | Stop via PID file |
-| `gojo server doctor` | Git, disk, DB, adapter detection, daemon PATH tools |
+| `gojo server doctor` | Git, disk, DB, adapter detection, daemon PATH tools, network warnings |
+| `gojo instance show` | Bind, publicBaseUrl, trusted proxies, resolved apiBaseUrl |
+| `gojo instance set …` | Update network fields in `instance.yaml` (restart after) |
+
+`gojo setup` is create-once. If an admin already exists it exits with code `3` and tells you to use `gojo auth password` instead.
 
 ## Service
 

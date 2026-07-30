@@ -1648,12 +1648,28 @@ table.data tr:hover td {
   font-size: 12px;
 }
 
+.network-form .field-wide {
+  flex: 1 1 100%;
+  min-width: 100%;
+}
+
 .inline-form {
   display: flex;
   gap: var(--space-3);
   align-items: flex-end;
   flex-wrap: wrap;
   margin-bottom: var(--space-6);
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 28rem;
+}
+
+.stack-form .field {
+  width: 100%;
 }
 
 .inline-form .field {

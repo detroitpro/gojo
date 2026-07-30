@@ -46,7 +46,15 @@ After that you can type `gojo` from any directory. To run from the checkout with
 gojo setup --username admin --password 'choose-a-strong-password'
 ```
 
-This creates the first user. After setup, mutating API and UI actions require login or an API token.
+On a terminal you can also run `gojo setup` with no flags and enter the username and password interactively.
+
+**Setup is create-once.** It creates the first admin and then refuses forever — it does not change an existing password and does not create a second user. To change the password later:
+
+```bash
+gojo auth password
+```
+
+Or use **Settings → Account** in the UI after signing in. After setup, mutating API and UI actions require login or an API token.
 
 ## Start the server
 
@@ -116,7 +124,11 @@ By default everything is under `~/.gojo` (override with `GOJO_HOME`):
 - `worktrees/` — isolated attempt workspaces
 - `artifacts/` — handoff reports and outputs
 - `secrets/` — encryption key for the secret store
-- `config/instance.yaml` — bind address, pause flag, telemetry
+- `config/instance.yaml` — bind address, publicBaseUrl, trusted proxies, pause, telemetry
+
+Remote access (Cloudflare TLS edge): configure **Settings → Network** or
+`gojo instance set --public-base-url https://… --trusted-proxies cloudflare,127.0.0.1`,
+then restart. Details: [Settings](/settings), [FAQ](/faq).
 
 ## Next steps
 

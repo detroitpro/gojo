@@ -2,6 +2,8 @@ import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AppContext } from "@/app/context";
+import { UserService } from "@/auth/users";
+import { checkNetworkStartGates, resolveApiBaseUrl } from "@/config/instance";
 
 import { createRouter } from "./router";
 import { createWebSocketHandler } from "./ws/handler";
@@ -26,6 +28,16 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   const { ctx } = options;
   const hostname = options.host ?? ctx.instance.bindHost;
   const port = options.port ?? ctx.instance.bindPort;
+
+  const effective = { ...ctx.instance, bindHost: hostname, bindPort: port };
+  const users = new UserService(ctx.db);
+  const gates = checkNetworkStartGates(effective, users.countUsers() > 0);
+  if (!gates.ok) {
+    throw new Error(`Network start gates failed:\n- ${gates.errors.join("\n- ")}`);
+  }
+  // Ensures agent callback URL is resolvable before we listen.
+  resolveApiBaseUrl(effective);
+
   const hub = new WsHub(ctx);
   const handler = createRouter(ctx);
 

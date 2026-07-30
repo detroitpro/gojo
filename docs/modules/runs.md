@@ -13,6 +13,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 | `admission.ts` | Pure `selectAdmissions` — caps, priority, fairness, stagger, load guard, expiry |
 | `dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; calls `executeRun` for admits |
 | `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + agent prompt + validation gate |
+| `agent-env.ts` | Allowlisted dotenv load from the primary checkout; merge + redaction helpers |
 | `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
 | `events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
 | `event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
@@ -40,6 +41,26 @@ Agent detail (`GET /api/v1/agents/:id`, `gojo agent inspect <id>`, UI `/agents/:
 ## Prompt assembly
 
 For non-shell adapters, `assembleAgentPrompt` prepends manifest `instructions.scheduledRunNotice` and each `instructions.files` path (read from the **worktree**, fail-fast if missing or path-escapes), then the agent `promptFile` body, validation commands, and the run-scoped progress reporting contract (fleet-wide: progress `title` = current focus, not work identity). Shell adapters skip instructions (script must stay executable) and only comment-append validation. Project `.gojo/instructions.md` is per-repo shared guidance via the manifest — it does not replace the injected progress contract.
+
+## Per-agent environment
+
+Optional agent manifest `environment` loads allowlisted variables from a dotenv file in the **registered primary checkout** (`project.repoPath`), not the run worktree (gitignored `.env` files are absent there):
+
+```yaml
+environment:
+  file: .env
+  include:
+    - KARAKEEP_API_URL
+    - KARAKEEP_API_KEY
+  required:
+    - KARAKEEP_API_KEY
+```
+
+- `include` is the only set loaded from the file; unlisted keys are never injected.
+- `required` must be a subset of `include`; missing/empty required keys fail during `Preparing` (messages name the key/file, never the value).
+- Merge order: daemon `process.env` → selected project values → Gojo-owned `GOJO_*` (project files cannot override `GOJO_*`).
+- Selected values are injected into the **adapter** and **validation** phases. Short-lived `GOJO_API_TOKEN` remains adapter-only.
+- Durable state (`environment_json` on agents / `run_context`) stores file path + names only — never resolved values. Loaded values are redacted from streamed agent output, validation tails, and failure artifacts.
 
 ## Self-healing plumbing
 

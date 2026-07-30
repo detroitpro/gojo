@@ -35,6 +35,11 @@ describe("backup/backup", () => {
       dataDir: paths.data,
       paused: false,
       telemetryEnabled: true,
+      publicBaseUrl: null,
+      trustedProxies: [],
+      allowedOrigins: [],
+      ipAllowlist: [],
+      cookieSecure: "auto",
     });
     return { paths, dbPath };
   }

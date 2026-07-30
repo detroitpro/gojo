@@ -252,4 +252,86 @@ describe('ProjectManifest', () => {
     const result = ProjectManifestSchema.safeParse(legacy);
     expect(result.success).toBe(false);
   });
+
+  test('accepts optional agent environment with file, include, and required', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          environment: {
+            file: '.env',
+            include: ['KARAKEEP_API_URL', 'KARAKEEP_API_KEY'],
+            required: ['KARAKEEP_API_KEY'],
+          },
+        },
+      },
+    });
+    expect(manifest.agents['dependency-maintenance']?.environment).toEqual({
+      file: '.env',
+      include: ['KARAKEEP_API_URL', 'KARAKEEP_API_KEY'],
+      required: ['KARAKEEP_API_KEY'],
+    });
+  });
+
+  test('rejects environment when required is not a subset of include', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          environment: {
+            file: '.env',
+            include: ['KARAKEEP_API_URL'],
+            required: ['KARAKEEP_API_KEY'],
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects empty environment include list', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          environment: {
+            file: '.env',
+            include: [],
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects absolute environment.file paths', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          environment: {
+            file: '/etc/secrets.env',
+            include: ['KARAKEEP_API_KEY'],
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
 });

@@ -19,7 +19,7 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(11);
+    expect(SCHEMA_VERSION).toBe(13);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 10)).toBe(true);
@@ -307,6 +307,7 @@ describe("storage/work-ledger", () => {
       validationJson: "{}",
       integrationJson: "{}",
       failurePolicyJson: "{}",
+      environmentJson: "{}",
       baseBranch: "main",
       scheduleJson: null,
     });

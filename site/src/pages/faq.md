@@ -39,9 +39,35 @@ Not by default, and not if you follow the model: integration modes are platform-
 
 `~/.gojo` by default (`GOJO_HOME` to override): SQLite database, worktrees, artifacts, secrets key, instance config.
 
+## Can I run setup again to change my password?
+
+No. `gojo setup` creates the **first** admin only. If a user already exists it refuses and does not overwrite anything. Change the password with:
+
+```bash
+gojo auth password
+```
+
+or **Settings → Account** in the UI. That updates the existing user; it does not create a second account.
+
 ## Can I expose gojo on the network?
 
-Yes, but only with intention: change bind host, put TLS/auth in front, and treat the instance as able to run repository commands. Default localhost binding is deliberate.
+Yes. Default bind is localhost on purpose. For remote access:
+
+1. Finish `gojo setup` on `127.0.0.1`.
+2. Set a **public base URL** and **trusted proxies** (Settings → Network, or `gojo instance set`).
+3. Terminate TLS at **Cloudflare** (tunnel or proxied DNS). Gojo itself stays HTTP.
+4. Restart the daemon.
+
+Example (Cloudflare Tunnel):
+
+```bash
+gojo instance set \
+  --public-base-url https://gojo.example.com \
+  --trusted-proxies cloudflare,127.0.0.1
+gojo service restart
+```
+
+LAN-only without Cloudflare is allowed with `publicBaseUrl=http://<lan-ip>:7430` and a non-loopback bind; doctor will warn about cleartext. Treat any exposed instance as able to run repository commands.
 
 ## A schedule keeps failing — why did it disappear?
 

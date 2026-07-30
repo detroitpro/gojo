@@ -95,6 +95,18 @@ Shell ops / digests (no Git integration):
 validationProfile: noop   # or a light smoke profile
 ```
 
+When a shell/AI agent needs project secrets from a gitignored dotenv file (absent from run worktrees), declare an allowlist — never load the whole file into the daemon:
+
+```yaml
+environment:
+  file: .env
+  include:
+    - EXAMPLE_API_URL
+    - EXAMPLE_API_KEY
+  required:
+    - EXAMPLE_API_KEY
+```
+
 ## Naming
 
 - Agent/schedule keys: work identity only (`maintain-deps`, `fleet-digest`)

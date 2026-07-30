@@ -21,9 +21,14 @@ Configured in `~/.gojo/config/instance.yaml` and the **Settings** screen.
 
 | Setting | What it does | When to change |
 | --- | --- | --- |
-| **Bind host / port** | Where the API and web UI listen (default `127.0.0.1:7430`) | Only when exposing behind a reverse proxy or tunnel — never open `0.0.0.0` without auth and TLS |
+| **Bind host / port** | Where the API and web UI listen (default `127.0.0.1:7430`) | LAN bind or origin for a tunnel — run `gojo setup` on loopback first |
+| **Public base URL** | Canonical URL browsers and agents use (`GOJO_API_URL`) | Required when bind is not loopback — e.g. `https://gojo.example.com` or `http://192.168.x.x:7430` |
+| **Trusted proxies** | Who may set `X-Forwarded-*` (token `cloudflare` expands to CF ranges; Tunnel often needs `127.0.0.1`) | When Cloudflare or another reverse proxy terminates TLS |
+| **Allowed origins / IP allowlist / Cookie Secure** | CORS/CSRF origins, optional client IP lock, Secure cookie mode (`auto`/`always`/`never`) | Hardening remote access |
 | **Global pause** | Stops new scheduled work; emergency stop | Incidents, maintenance, runaway agents |
 | **Telemetry** | Structured spans/metrics logging | Enable when shipping logs to a collector |
+
+TLS belongs at Cloudflare (or your reverse proxy). Gojo speaks HTTP on the bind address. After network changes, restart (`gojo service restart`). CLI: `gojo instance show` / `gojo instance set`.
 
 Also use **backup** commands to snapshot database, config, and secret key material:
 
@@ -90,13 +95,14 @@ An **agent** is the unit of work: prompt, profile, validation profile, concurren
 
 ### Agents UI
 
-In the web UI, **Agents** lists synced agents with success rate and last run. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency policy JSON, linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting).
+In the web UI, **Agents** lists synced agents with success rate and last run. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency/environment policy JSON (environment shows file path and variable **names** only), linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting).
 
 | Field | Role |
 | --- | --- |
 | `profile` | Name of a `profiles:` entry (adapter + timeout + model) |
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/agent-prompts) |
 | `validationProfile` | Ordered checks after the adapter exits |
+| `environment` | Optional `{ file, include[], required?[] }` — load allowlisted dotenv vars from the registered primary checkout into the adapter and validation phases (see [Advanced usage](/advanced-usage)) |
 | `concurrency` | Synced onto the agent row (`projectLimit`; manifest `overlapPolicy`: `skip` / `queue` / `cancel`) for intent documentation — **not** the same field as per-schedule overlap (`cancel_replace` / `allow_parallel`). **Starts** are gated by the instance **run admission** policy (Settings → Run admission / `GET /api/v1/instance/scheduling`). Per-schedule `overlapPolicy` still controls whether a cron tick enqueues while that schedule already has work |
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
@@ -146,6 +152,18 @@ Adapter subprocesses should not `git push origin main`. The **merge queue** seri
 Manifest routes name channels (`onSuccess`, `onFailure`, `onDisabled`). Channel endpoints (webhook URLs, Slack hooks) are configured on the instance under **Settings → Notification channels**, not committed to git.
 
 See [Notifications](/notifications) for the guided setup, provider webhook URLs, test sends, delivery retries, and auto-disable routing.
+
+## Account & authentication
+
+After first setup there is a single local admin. Sign in with username/password (session cookie) or use an API token for automation.
+
+| Control | Where | Notes |
+| --- | --- | --- |
+| **Change password** | Settings → Account, or `gojo auth password` | Requires the current password. Invalidates other browser sessions. API tokens keep working. |
+| **API tokens** | Settings → Authentication | Create/revoke Bearer tokens (`gojo_…`). Prefer tokens for CI and scripts. |
+| **Who am I** | `gojo auth whoami` | Lists local users (no password hashes). |
+
+`gojo setup` cannot be re-run to rotate credentials — see [FAQ](/faq#can-i-run-setup-again-to-change-my-password).
 
 ## Security defaults worth keeping
 

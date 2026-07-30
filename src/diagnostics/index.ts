@@ -9,6 +9,7 @@ export {
 export type {
   DoctorToolCheck,
   InstanceDoctorResult,
+  InstanceNetworkDoctor,
   ProjectBaseCheckout,
   ProjectDoctorResult,
   ProjectValidationToolCheck,

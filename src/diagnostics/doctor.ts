@@ -4,6 +4,12 @@ import { isAbsolute, join, resolve } from "node:path";
 import { listAdapters } from "@/agents";
 import type { AppContext } from "@/app/context";
 import {
+  expandTrustedProxies,
+  isLoopbackHost,
+  resolveApiBaseUrl,
+  type CookieSecureMode,
+} from "@/config/instance";
+import {
   inspectRunningBinary,
   type RunningBinaryStatus,
 } from "@/diagnostics/binary-stale";
@@ -62,6 +68,19 @@ export interface ProjectDoctorResult {
   workspaceFiles: ProjectWorkspaceFilesCheck;
 }
 
+export interface InstanceNetworkDoctor {
+  bindHost: string;
+  bindPort: number;
+  loopback: boolean;
+  publicBaseUrl: string | null;
+  publicBaseUrlScheme: "http" | "https" | null;
+  trustedProxiesConfigured: boolean;
+  trustedProxyCidrCount: number;
+  cookieSecure: CookieSecureMode;
+  apiBaseUrl: string | null;
+  ipAllowlistConfigured: boolean;
+}
+
 export interface InstanceDoctorResult {
   git: boolean;
   disk: boolean;
@@ -82,6 +101,7 @@ export interface InstanceDoctorResult {
   binaryStatus: RunningBinaryStatus;
   /** Operator-facing warnings (stale binary, etc.). */
   warnings: string[];
+  network: InstanceNetworkDoctor;
 }
 
 /** Core tools; `gh` and `tea` are optional PR CLIs (`integration.prTool`). */
@@ -364,6 +384,57 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     warnings.push(binaryStatus.detail);
   }
 
+  const { instance } = ctx;
+  let apiBaseUrl: string | null = null;
+  try {
+    apiBaseUrl = resolveApiBaseUrl(instance);
+  } catch {
+    apiBaseUrl = null;
+  }
+  let publicBaseUrlScheme: "http" | "https" | null = null;
+  if (instance.publicBaseUrl) {
+    try {
+      const protocol = new URL(instance.publicBaseUrl).protocol;
+      publicBaseUrlScheme = protocol === "https:" ? "https" : protocol === "http:" ? "http" : null;
+    } catch {
+      publicBaseUrlScheme = null;
+    }
+  }
+
+  const network: InstanceNetworkDoctor = {
+    bindHost: instance.bindHost,
+    bindPort: instance.bindPort,
+    loopback: isLoopbackHost(instance.bindHost),
+    publicBaseUrl: instance.publicBaseUrl,
+    publicBaseUrlScheme,
+    trustedProxiesConfigured: instance.trustedProxies.length > 0,
+    trustedProxyCidrCount: expandTrustedProxies(instance.trustedProxies).length,
+    cookieSecure: instance.cookieSecure,
+    apiBaseUrl,
+    ipAllowlistConfigured: instance.ipAllowlist.length > 0,
+  };
+
+  if (!network.loopback && !instance.publicBaseUrl) {
+    warnings.push(
+      "bindHost is not loopback but publicBaseUrl is unset — set publicBaseUrl before exposing the daemon",
+    );
+  }
+  if (publicBaseUrlScheme === "https" && instance.trustedProxies.length === 0) {
+    warnings.push(
+      "publicBaseUrl is https but trustedProxies is empty — Secure cookies and real client IPs will not honor X-Forwarded-* (add cloudflare or 127.0.0.1 for Tunnel)",
+    );
+  }
+  if (!network.loopback && publicBaseUrlScheme === "http") {
+    warnings.push(
+      "LAN cleartext: publicBaseUrl uses http on a non-loopback bind — use only on a trusted network, or terminate TLS at Cloudflare",
+    );
+  }
+  if (apiBaseUrl == null) {
+    warnings.push(
+      "apiBaseUrl cannot be resolved — agent progress callbacks will be disabled until publicBaseUrl is set",
+    );
+  }
+
   return {
     git,
     disk: existsSync(ctx.paths.data),
@@ -375,5 +446,6 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     binaryStale: binaryStatus.stale,
     binaryStatus,
     warnings,
+    network,
   };
 }

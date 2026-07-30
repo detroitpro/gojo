@@ -25,6 +25,16 @@ export const openApiDocument = {
     "/api/v1/auth/logout": {
       post: { summary: "Clear session cookie" },
     },
+    "/api/v1/auth/me": {
+      get: { summary: "Current authenticated user" },
+    },
+    "/api/v1/auth/password": {
+      post: {
+        summary: "Change password",
+        description:
+          "Requires currentPassword and newPassword. Invalidates session cookies issued before the change; API tokens remain valid.",
+      },
+    },
     "/api/v1/auth/tokens": {
       get: {
         summary: "List API tokens",
@@ -279,14 +289,22 @@ export const openApiDocument = {
       },
     },
     "/api/v1/instance": {
-      get: { summary: "Instance settings" },
-      patch: { summary: "Update instance settings" },
+      get: {
+        summary: "Instance settings",
+        description:
+          "Includes network fields (bindHost, publicBaseUrl, trustedProxies, allowedOrigins, ipAllowlist, cookieSecure) and resolved apiBaseUrl.",
+      },
+      patch: {
+        summary: "Update instance settings",
+        description:
+          "Partial update of telemetry and/or network fields. Network changes persist to instance.yaml and return restartRequired: true.",
+      },
     },
     "/api/v1/instance/doctor": {
       get: {
         summary: "Instance diagnostics",
         description:
-          "Includes daemonPath, tools (git/bun/gh/tea/sh), binaryStale/warnings when the daemon needs a restart after install.",
+          "Includes daemonPath, tools (git/bun/gh/tea/sh), binaryStale/warnings, and network (bind mode, publicBaseUrl, trusted proxies, apiBaseUrl).",
       },
     },
     "/api/v1/instance/pause": {

@@ -202,6 +202,8 @@ export interface RunContextRecord {
   validationJson: string;
   integrationJson: string;
   failurePolicyJson: string;
+  /** Non-secret env config snapshot (file + names); never resolved values. */
+  environmentJson: string;
   baseBranch: string | null;
   scheduleJson: string | null;
   createdAt: string;
@@ -1661,9 +1663,9 @@ export function createWorkRepositories(db: Database) {
           `INSERT OR IGNORE INTO run_context (
             run_id, work_item_id, agent_name, agent_description, prompt,
             manifest_hash, instructions, profile_json, adapter, model,
-            validation_json, integration_json, failure_policy_json, base_branch,
-            schedule_json, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            validation_json, integration_json, failure_policy_json,
+            environment_json, base_branch, schedule_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.runId,
@@ -1679,6 +1681,7 @@ export function createWorkRepositories(db: Database) {
           input.validationJson,
           input.integrationJson,
           input.failurePolicyJson,
+          input.environmentJson,
           input.baseBranch,
           input.scheduleJson,
           createdAt,
@@ -1703,6 +1706,7 @@ export function createWorkRepositories(db: Database) {
             validation_json: string;
             integration_json: string;
             failure_policy_json: string;
+            environment_json: string;
             base_branch: string | null;
             schedule_json: string | null;
             created_at: string;
@@ -1725,6 +1729,7 @@ export function createWorkRepositories(db: Database) {
         validationJson: row.validation_json,
         integrationJson: row.integration_json,
         failurePolicyJson: row.failure_policy_json,
+        environmentJson: row.environment_json ?? "{}",
         baseBranch: row.base_branch,
         scheduleJson: row.schedule_json,
         createdAt: row.created_at,

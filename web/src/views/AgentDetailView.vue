@@ -288,6 +288,10 @@ useLiveRefresh({
             <div class="panel-subheader">Concurrency</div>
             <pre class="task-policy-body">{{ prettyJson(agent.concurrencyJson) }}</pre>
           </div>
+          <div>
+            <div class="panel-subheader">Environment</div>
+            <pre class="task-policy-body">{{ prettyJson(agent.environmentJson) }}</pre>
+          </div>
         </div>
       </section>
 

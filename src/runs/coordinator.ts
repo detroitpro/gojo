@@ -52,6 +52,12 @@ import type {
 import { runValidationProfile, type ValidationStepResult } from '@/validation/engine';
 import { WorkspaceManager } from '@/workspace/manager';
 
+import {
+  buildAgentProcessEnv,
+  loadAgentEnvironment,
+  redactSecretValues,
+  type LoadedAgentEnvironment,
+} from './agent-env';
 import { RunEventBus } from './events';
 import {
   backoffMsFor,
@@ -238,6 +244,7 @@ export class RunCoordinator {
         validationJson: agent.validationProfileJson,
         integrationJson: agent.integrationJson,
         failurePolicyJson: agent.failurePolicyJson,
+        environmentJson: agent.environmentJson,
         baseBranch:
           parseIntegrationConfig(agent.integrationJson).targetBranch ?? project.defaultBranch,
         scheduleJson: schedule ? JSON.stringify(schedule) : null,
@@ -314,6 +321,22 @@ export class RunCoordinator {
       const failurePolicy = parseFailurePolicy(agent.failurePolicyJson);
       const maxAttempts = maxAttemptsFor(failurePolicy);
 
+      let loadedEnvironment: LoadedAgentEnvironment | null = null;
+      try {
+        loadedEnvironment = loadAgentEnvironment({
+          repoPath: project.repoPath,
+          environmentJson: agent.environmentJson,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return this.failRun(run, message, {
+          project,
+          agent,
+          failurePolicy,
+          phase: 'workspace',
+        });
+      }
+
       // #region agent log
       fetch('http://127.0.0.1:7558/ingest/7e236216-3f8d-43b1-a4b3-edfa6170ef77',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6247c'},body:JSON.stringify({sessionId:'b6247c',runId:run.id,hypothesisId:'A',location:'coordinator.ts:runStart',message:'agent run starting',data:{projectId:project.id,projectName:project.name,agentId:agent.id,agentName:agent.name,trigger:run.trigger,integrationMode:integration.mode??null,prAutoMerge:integration.prAutoMerge??false,prTool:integration.prTool??null,targetBranch:integration.targetBranch??null},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
@@ -323,6 +346,7 @@ export class RunCoordinator {
       let workspacePath = '';
       let branchName = '';
       let validationResults: ValidationStepResult[] = [];
+      const secretValues = loadedEnvironment?.secretValues ?? [];
 
       for (let attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber += 1) {
         if (attemptNumber > 1) {
@@ -388,6 +412,8 @@ export class RunCoordinator {
           controller.signal,
           validation.steps ?? [],
           readInstructions(project),
+          loadedEnvironment?.values ?? {},
+          secretValues,
         );
 
         if (controller.signal.aborted || agentResult.canceled) {
@@ -422,20 +448,33 @@ export class RunCoordinator {
 
         run = await this.transitionRun(run, RunState.Validating);
         const runIdForValidation = run.id;
+        const validationEnv = buildAgentProcessEnv({
+          daemonEnv: process.env,
+          projectValues: loadedEnvironment?.values ?? {},
+          platformEnv: {
+            GOJO_AGENT_ID: agent.id,
+            GOJO_PROJECT_ID: agent.projectId,
+            GOJO_RUN_ID: run.id,
+          },
+        });
         const validationResult = await runValidationProfile({
           cwd: workspacePath,
           steps: validation.steps ?? [],
+          env: validationEnv,
           signal: controller.signal,
           onStep: (step) => {
-            this.persistValidation(attempt!.id, step);
-            this.emit('run.validation.step', runIdForValidation, step);
+            const redacted = redactValidationStep(step, secretValues);
+            this.persistValidation(attempt!.id, redacted);
+            this.emit('run.validation.step', runIdForValidation, redacted);
           },
         });
-        validationResults = validationResult.results;
+        validationResults = validationResult.results.map((step) =>
+          redactValidationStep(step, secretValues),
+        );
 
         if (!validationResult.passed) {
-          this.writeValidationArtifact(run.id, validationResult.results);
-          lastFailureMessage = formatValidationFailureMessage(validationResult.results);
+          this.writeValidationArtifact(run.id, validationResults);
+          lastFailureMessage = formatValidationFailureMessage(validationResults);
           await this.cleanupWorkspace(workspacePath, branchName, false);
           if (attemptNumber < maxAttempts) {
             continue;
@@ -445,7 +484,7 @@ export class RunCoordinator {
             agent,
             failurePolicy,
             phase: 'validation',
-            validationResults: validationResult.results,
+            validationResults,
           });
         }
 
@@ -952,6 +991,8 @@ export class RunCoordinator {
     signal: AbortSignal,
     validationSteps: Array<{ name: string; command: string; timeout?: string }> = [],
     instructions?: InstructionsConfig,
+    projectValues: Record<string, string> = {},
+    secretValues: readonly string[] = [],
   ): Promise<AgentExecuteResult> {
     const adapterName = resolveAdapterName(agent, this.repos.profiles);
     const adapter = getAdapter(adapterName);
@@ -961,19 +1002,20 @@ export class RunCoordinator {
 
     const buffers = { stdout: '', stderr: '' };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let redactValues: string[] = [...secretValues];
     const flushOutput = () => {
       flushTimer = null;
       if (buffers.stdout.length > 0) {
         this.emit('run.agent.output', runId, {
           stream: 'stdout',
-          chunk: buffers.stdout,
+          chunk: redactSecretValues(buffers.stdout, redactValues),
         });
         buffers.stdout = '';
       }
       if (buffers.stderr.length > 0) {
         this.emit('run.agent.output', runId, {
           stream: 'stderr',
-          chunk: buffers.stderr,
+          chunk: redactSecretValues(buffers.stderr, redactValues),
         });
         buffers.stderr = '';
       }
@@ -992,18 +1034,25 @@ export class RunCoordinator {
         ...(instructions !== undefined ? { instructions } : {}),
       });
 
-      const agentEnv: Record<string, string> = {
+      const platformEnv: Record<string, string> = {
         GOJO_AGENT_ID: agent.id,
         GOJO_PROJECT_ID: agent.projectId,
         GOJO_RUN_ID: runId,
       };
       if (this.apiBaseUrl) {
-        agentEnv['GOJO_API_URL'] = this.apiBaseUrl;
+        platformEnv['GOJO_API_URL'] = this.apiBaseUrl;
       }
       const issued = this.issueAgentToken?.(runId);
       if (issued?.token) {
-        agentEnv['GOJO_API_TOKEN'] = issued.token;
+        platformEnv['GOJO_API_TOKEN'] = issued.token;
+        redactValues = [...secretValues, issued.token];
       }
+
+      const agentEnv = buildAgentProcessEnv({
+        daemonEnv: process.env,
+        projectValues,
+        platformEnv,
+      });
 
       try {
         const result = await adapter.execute({
@@ -1028,7 +1077,9 @@ export class RunCoordinator {
               phase: event.phase,
               callId: event.callId,
               name: event.name,
-              ...(event.summary !== undefined ? { summary: event.summary } : {}),
+              ...(event.summary !== undefined
+                ? { summary: redactSecretValues(event.summary, redactValues) }
+                : {}),
             });
           },
         });
@@ -1047,7 +1098,11 @@ export class RunCoordinator {
           usage: result.usage ?? null,
         });
 
-        return result;
+        return {
+          ...result,
+          stdout: redactSecretValues(result.stdout, redactValues),
+          stderr: redactSecretValues(result.stderr, redactValues),
+        };
       } finally {
         if (issued?.id) {
           this.revokeAgentToken?.(issued.id);
@@ -1779,4 +1834,18 @@ function resolveAdapterName(
   }
 
   return 'shell';
+}
+
+function redactValidationStep(
+  step: ValidationStepResult,
+  secretValues: readonly string[],
+): ValidationStepResult {
+  if (secretValues.length === 0) {
+    return step;
+  }
+  return {
+    ...step,
+    stdout: redactSecretValues(step.stdout, secretValues),
+    stderr: redactSecretValues(step.stderr, secretValues),
+  };
 }

@@ -5,6 +5,7 @@ import { ulid } from "ulid";
 import type { InstanceConfig } from "@/config/instance";
 import {
   loadInstanceConfig,
+  resolveApiBaseUrl,
   saveInstanceConfig,
 } from "@/config/instance";
 import { ensureLayout, resolvePaths, type GojoPaths } from "@/config/paths";
@@ -119,14 +120,21 @@ export async function createAppContext(home?: string): Promise<AppContext> {
   });
   const users = new UserService(db);
   users.purgeExpiredApiTokens();
-  const apiBaseUrl = `http://${instance.bindHost}:${instance.bindPort}/api/v1`;
+  let apiBaseUrl: string | null = null;
+  try {
+    apiBaseUrl = resolveApiBaseUrl(instance);
+  } catch {
+    // Broken network config (e.g. 0.0.0.0 without publicBaseUrl) — CLI can still
+    // load context to fix instance.yaml; server start gates refuse to listen.
+    apiBaseUrl = null;
+  }
   const coordinator = new RunCoordinator({
     db,
     paths,
     workspace,
     eventBus,
     platformEvents,
-    apiBaseUrl,
+    ...(apiBaseUrl ? { apiBaseUrl } : {}),
     issueAgentToken: (runId) => {
       const admin = users.findFirstAdmin();
       if (!admin) {

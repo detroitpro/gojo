@@ -83,6 +83,23 @@ describe('validation/engine', () => {
     expect(result.passed).toBe(true);
   });
 
+  test('runValidationProfile injects optional env overlay', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'gojo-validation-env-test-'));
+
+    const result = await runValidationProfile({
+      cwd: tempDir,
+      env: { GOJO_TEST_ENV: 'from-gojo' },
+      steps: [
+        {
+          name: 'sees-env',
+          command: 'test "$GOJO_TEST_ENV" = "from-gojo"',
+        },
+      ],
+    });
+
+    expect(result.passed).toBe(true);
+  });
+
   test('empty profile passes', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'gojo-validation-empty-test-'));
 

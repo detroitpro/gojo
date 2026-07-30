@@ -8,6 +8,11 @@ import { listAdapters } from "@/agents";
 import { UserService } from "@/auth/users";
 import { createBackup, restoreBackup, verifyBackup } from "@/backup/backup";
 import { defaultBackupDest } from "@/backup/list";
+import {
+  normalizePublicBaseUrl,
+  resolveApiBaseUrl,
+  type CookieSecureMode,
+} from "@/config/instance";
 import { resolvePaths } from "@/config/paths";
 import { instanceDoctor, projectDoctor } from "@/diagnostics/doctor";
 import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
@@ -22,15 +27,28 @@ import {
   uninstallService,
 } from "@/service/install";
 
+import { ExitCode } from "./errors";
+import {
+  findCommandHelp,
+  findGroup,
+  printCommandHelp,
+  printGroupHelp,
+  printOverviewHelp,
+  suggestCommands,
+} from "./help";
 import {
   getFlagString,
   getHome,
   getOutputFormat,
   hasFlag,
   parseArgv,
+  type OutputFormat,
   type ParsedArgv,
 } from "./parse";
-import { die, printOutput } from "./output";
+import { isInteractive, promptLine, promptSecret } from "./prompt";
+import { die, printOutput, printSection, printSuccess } from "./output";
+import { style } from "./style";
+import { printTable } from "./table";
 
 async function withContext(home: string | undefined, fn: (ctx: Awaited<ReturnType<typeof createAppContext>>) => Promise<void>): Promise<void> {
   const ctx = await createAppContext(home);
@@ -127,21 +145,338 @@ async function runServerDoctor(parsed: ParsedArgv, format: ReturnType<typeof get
   });
 }
 
-async function runSetup(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
-  const username = getFlagString(parsed, "username");
-  const password = getFlagString(parsed, "password");
-  if (!username || !password) {
-    die("setup requires --username and --password", format);
+async function resolveSetupCredentials(
+  parsed: ParsedArgv,
+  format: OutputFormat,
+): Promise<{ username: string; password: string }> {
+  let username = getFlagString(parsed, "username");
+  let password = getFlagString(parsed, "password");
+
+  if ((!username || !password) && isInteractive() && format === "text") {
+    if (!username) {
+      username = (await promptLine("Username:"))?.trim() || undefined;
+    }
+    if (!password) {
+      password = (await promptSecret("Password:")) ?? undefined;
+      const confirm = (await promptSecret("Confirm password:")) ?? undefined;
+      if (password !== confirm) {
+        die("Passwords do not match", format, ExitCode.Usage);
+      }
+    }
   }
+
+  if (!username || !password) {
+    die(
+      "setup requires --username and --password",
+      format,
+      ExitCode.Usage,
+      "On a TTY you can run `gojo setup` and enter them interactively",
+    );
+  }
+  return { username, password };
+}
+
+async function runSetup(parsed: ParsedArgv, format: OutputFormat): Promise<void> {
+  const { username, password } = await resolveSetupCredentials(parsed, format);
 
   await withContext(getHome(parsed), async (ctx) => {
     const users = new UserService(ctx.db);
     if (users.countUsers() > 0) {
-      die("setup already completed", format);
+      die(
+        "Setup already completed — an admin user already exists",
+        format,
+        ExitCode.Conflict,
+        "Change the password with `gojo auth password` (or Settings → Account in the UI). Setup never creates a second user.",
+      );
     }
-    const user = await users.createUser(username, password, "admin");
-    printOutput(format, { user: { id: user.id, username: user.username, role: user.role } });
+    try {
+      const user = await users.createUser(username, password, "admin");
+      printSuccess(`Created admin user ${user.username}`, format);
+      printOutput(format, { user: { id: user.id, username: user.username, role: user.role } });
+      if (format === "text") {
+        console.log(style.dim("Next: gojo service start   # or gojo server start"));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      die(message, format, ExitCode.Usage);
+    }
   });
+}
+
+function parseCsvList(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+async function runInstanceCommand(parsed: ParsedArgv, format: OutputFormat): Promise<void> {
+  const sub = parsed.command[1];
+  switch (sub) {
+    case "show": {
+      await withContext(getHome(parsed), async (ctx) => {
+        let apiBaseUrl: string | null = null;
+        try {
+          apiBaseUrl = resolveApiBaseUrl(ctx.instance);
+        } catch {
+          apiBaseUrl = null;
+        }
+        const view = {
+          bindHost: ctx.instance.bindHost,
+          bindPort: ctx.instance.bindPort,
+          publicBaseUrl: ctx.instance.publicBaseUrl,
+          trustedProxies: ctx.instance.trustedProxies,
+          allowedOrigins: ctx.instance.allowedOrigins,
+          ipAllowlist: ctx.instance.ipAllowlist,
+          cookieSecure: ctx.instance.cookieSecure,
+          paused: ctx.instance.paused,
+          telemetryEnabled: ctx.instance.telemetryEnabled,
+          apiBaseUrl,
+          configPath: ctx.instanceConfigPath,
+        };
+        if (format === "text") {
+          printSection("Instance network", format);
+          console.log(`  bind            ${view.bindHost}:${view.bindPort}`);
+          console.log(`  publicBaseUrl   ${view.publicBaseUrl ?? "(unset)"}`);
+          console.log(`  apiBaseUrl      ${view.apiBaseUrl ?? "(unresolved)"}`);
+          console.log(
+            `  trustedProxies  ${view.trustedProxies.length ? view.trustedProxies.join(", ") : "(none)"}`,
+          );
+          console.log(
+            `  allowedOrigins  ${view.allowedOrigins.length ? view.allowedOrigins.join(", ") : "(default)"}`,
+          );
+          console.log(
+            `  ipAllowlist     ${view.ipAllowlist.length ? view.ipAllowlist.join(", ") : "(any)"}`,
+          );
+          console.log(`  cookieSecure    ${view.cookieSecure}`);
+          console.log(style.dim(`  config          ${view.configPath}`));
+        } else {
+          printOutput(format, view);
+        }
+      });
+      return;
+    }
+    case "set": {
+      await withContext(getHome(parsed), async (ctx) => {
+        let changed = false;
+        const bindHost = getFlagString(parsed, "bind-host");
+        const bindPortRaw = getFlagString(parsed, "bind-port");
+        const publicBaseUrl = getFlagString(parsed, "public-base-url");
+        const clearPublic = hasFlag(parsed, "clear-public-base-url");
+        const trustedProxies = parseCsvList(getFlagString(parsed, "trusted-proxies"));
+        const allowedOrigins = parseCsvList(getFlagString(parsed, "allowed-origins"));
+        const ipAllowlist = parseCsvList(getFlagString(parsed, "ip-allowlist"));
+        const cookieSecureRaw = getFlagString(parsed, "cookie-secure");
+
+        if (bindHost) {
+          ctx.instance.bindHost = bindHost;
+          changed = true;
+        }
+        if (bindPortRaw) {
+          const port = Number(bindPortRaw);
+          if (!Number.isInteger(port) || port < 1 || port > 65535) {
+            die("bind-port must be an integer between 1 and 65535", format, ExitCode.Usage);
+          }
+          ctx.instance.bindPort = port;
+          changed = true;
+        }
+        if (clearPublic) {
+          ctx.instance.publicBaseUrl = null;
+          changed = true;
+        } else if (publicBaseUrl !== undefined) {
+          try {
+            ctx.instance.publicBaseUrl = normalizePublicBaseUrl(publicBaseUrl);
+          } catch (error) {
+            die(
+              error instanceof Error ? error.message : "Invalid public-base-url",
+              format,
+              ExitCode.Usage,
+            );
+          }
+          changed = true;
+        }
+        if (trustedProxies) {
+          ctx.instance.trustedProxies = trustedProxies;
+          changed = true;
+        }
+        if (allowedOrigins) {
+          ctx.instance.allowedOrigins = allowedOrigins;
+          changed = true;
+        }
+        if (ipAllowlist) {
+          ctx.instance.ipAllowlist = ipAllowlist;
+          changed = true;
+        }
+        if (cookieSecureRaw !== undefined) {
+          if (
+            cookieSecureRaw !== "auto" &&
+            cookieSecureRaw !== "always" &&
+            cookieSecureRaw !== "never"
+          ) {
+            die("cookie-secure must be auto, always, or never", format, ExitCode.Usage);
+          }
+          ctx.instance.cookieSecure = cookieSecureRaw as CookieSecureMode;
+          changed = true;
+        }
+
+        if (!changed) {
+          die(
+            "instance set requires at least one flag",
+            format,
+            ExitCode.Usage,
+            "Try `gojo instance set --help`",
+          );
+        }
+
+        ctx.saveInstanceConfig();
+        printSuccess("Updated instance.yaml", format);
+        if (format === "text") {
+          console.log(style.dim("Restart required: gojo service restart  (or gojo server stop/start)"));
+        }
+        printOutput(format, {
+          restartRequired: true,
+          bindHost: ctx.instance.bindHost,
+          bindPort: ctx.instance.bindPort,
+          publicBaseUrl: ctx.instance.publicBaseUrl,
+          trustedProxies: ctx.instance.trustedProxies,
+          allowedOrigins: ctx.instance.allowedOrigins,
+          ipAllowlist: ctx.instance.ipAllowlist,
+          cookieSecure: ctx.instance.cookieSecure,
+        });
+      });
+      return;
+    }
+    default:
+      die(
+        `unknown instance command: ${sub ?? ""}`,
+        format,
+        ExitCode.Usage,
+        "Try `gojo instance --help`",
+      );
+  }
+}
+
+async function runAuthCommand(parsed: ParsedArgv, format: OutputFormat): Promise<void> {
+  const sub = parsed.command[1];
+  switch (sub) {
+    case "whoami": {
+      await withContext(getHome(parsed), async (ctx) => {
+        const users = new UserService(ctx.db);
+        const list = users.listUsers();
+        if (list.length === 0) {
+          die(
+            "No users configured",
+            format,
+            ExitCode.NotFound,
+            "Create the first admin with `gojo setup`",
+          );
+        }
+        if (format === "text") {
+          printSection("Users", format);
+          printTable(list, [
+            { key: "username", header: "USERNAME", value: (u) => u.username },
+            { key: "role", header: "ROLE", value: (u) => u.role },
+            { key: "id", header: "ID", value: (u) => u.id },
+            { key: "created", header: "CREATED", value: (u) => u.createdAt },
+          ]);
+        } else {
+          printOutput(format, { users: list });
+        }
+      });
+      return;
+    }
+    case "password": {
+      await withContext(getHome(parsed), async (ctx) => {
+        const users = new UserService(ctx.db);
+        if (users.countUsers() === 0) {
+          die(
+            "No users configured",
+            format,
+            ExitCode.NotFound,
+            "Create the first admin with `gojo setup`",
+          );
+        }
+        const usernameFlag = getFlagString(parsed, "username");
+        const target =
+          (usernameFlag ? users.findByUsername(usernameFlag) : null) ?? users.findFirstAdmin();
+        if (!target) {
+          die("User not found", format, ExitCode.NotFound, "Try `gojo auth whoami`");
+        }
+
+        let currentPassword = getFlagString(parsed, "current-password");
+        let newPassword = getFlagString(parsed, "new-password");
+
+        if (format === "text" && isInteractive()) {
+          if (!currentPassword) {
+            currentPassword = (await promptSecret("Current password:")) ?? undefined;
+          }
+          if (!newPassword) {
+            newPassword = (await promptSecret("New password:")) ?? undefined;
+            const confirm = (await promptSecret("Confirm new password:")) ?? undefined;
+            if (newPassword !== confirm) {
+              die("Passwords do not match", format, ExitCode.Usage);
+            }
+          }
+        }
+
+        if (!currentPassword || !newPassword) {
+          die(
+            "auth password requires current and new passwords",
+            format,
+            ExitCode.Usage,
+            "On a TTY run `gojo auth password` and enter them interactively, or pass --current-password and --new-password",
+          );
+        }
+
+        try {
+          await users.updatePassword(target.id, currentPassword, newPassword);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const code = /current password/i.test(message) ? ExitCode.Auth : ExitCode.Usage;
+          die(message, format, code);
+        }
+
+        printSuccess(`Password updated for ${target.username}`, format);
+        printOutput(format, {
+          ok: true,
+          username: target.username,
+          note: "Session cookies are invalid; API tokens still work. Sign in again in the UI.",
+        });
+      });
+      return;
+    }
+    default:
+      die(
+        `unknown auth command: ${sub ?? ""}`,
+        format,
+        ExitCode.Usage,
+        "Try `gojo auth --help`",
+      );
+  }
+}
+
+function showHelp(parsed: ParsedArgv): void {
+  const [group, sub] = parsed.command;
+  if (!group) {
+    printOverviewHelp();
+    return;
+  }
+  const cmd = findCommandHelp(group, sub);
+  if (cmd && sub) {
+    printCommandHelp(cmd);
+    return;
+  }
+  if (cmd && !sub) {
+    printCommandHelp(cmd);
+    return;
+  }
+  const g = findGroup(group);
+  if (g) {
+    printGroupHelp(g);
+    return;
+  }
+  printOverviewHelp();
 }
 
 async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
@@ -174,7 +509,18 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         break;
       }
       case "list": {
-        printOutput(format, { projects: ctx.repos.projects.list() });
+        const projects = ctx.repos.projects.list();
+        if (format === "text") {
+          printSection("Projects", format);
+          printTable(projects, [
+            { key: "name", header: "NAME", value: (p) => p.name },
+            { key: "id", header: "ID", value: (p) => p.id },
+            { key: "branch", header: "BRANCH", value: (p) => p.defaultBranch },
+            { key: "path", header: "PATH", width: 40, value: (p) => p.repoPath },
+          ]);
+        } else {
+          printOutput(format, { projects });
+        }
         break;
       }
       case "inspect": {
@@ -184,7 +530,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         }
         const project = ctx.repos.projects.findById(id);
         if (!project) {
-          die("project not found", format);
+          die("project not found", format, ExitCode.NotFound, "Try `gojo project list`");
         }
         printOutput(format, { project });
         break;
@@ -196,7 +542,7 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         }
         const project = ctx.repos.projects.findById(id);
         if (!project) {
-          die("project not found", format);
+          die("project not found", format, ExitCode.NotFound, "Try `gojo project list`");
         }
         const sync = syncProjectFromManifest(ctx.repos, project);
         ensureProjectRepositorySource(ctx.db, project.id);
@@ -377,7 +723,16 @@ async function runAdapterCommand(parsed: ParsedArgv, format: ReturnType<typeof g
 
   switch (sub) {
     case "list": {
-      printOutput(format, { adapters: adapters.map((adapter) => adapter.name) });
+      const names = adapters.map((adapter) => adapter.name);
+      if (format === "text") {
+        printSection("Adapters", format);
+        printTable(
+          names.map((name) => ({ name })),
+          [{ key: "name", header: "NAME", value: (a) => a.name }],
+        );
+      } else {
+        printOutput(format, { adapters: names });
+      }
       break;
     }
     case "detect": {
@@ -387,14 +742,27 @@ async function runAdapterCommand(parsed: ParsedArgv, format: ReturnType<typeof g
           ...(await adapter.detect()),
         })),
       );
-      printOutput(format, { adapters: detected });
+      if (format === "text") {
+        printSection("Adapters", format);
+        printTable(detected, [
+          { key: "name", header: "NAME", value: (a) => a.name },
+          {
+            key: "installed",
+            header: "INSTALLED",
+            value: (a) => (a.installed ? "yes" : "no"),
+          },
+          { key: "version", header: "VERSION", value: (a) => a.version ?? "—" },
+        ]);
+      } else {
+        printOutput(format, { adapters: detected });
+      }
       break;
     }
     case "inspect": {
       const name = parsed.positional[0];
       const adapter = adapters.find((item) => item.name === name);
       if (!adapter) {
-        die("adapter not found", format);
+        die("adapter not found", format, ExitCode.NotFound, "Try `gojo adapter list`");
       }
       printOutput(format, { name: adapter.name, ...(await adapter.detect()) });
       break;
@@ -427,9 +795,24 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
       case "list": {
         const projectId = getFlagString(parsed, "project") ?? parsed.positional[0];
         if (!projectId) {
-          die("usage: gojo agent list --project <id>", format);
+          die(
+            "usage: gojo agent list --project <id>",
+            format,
+            ExitCode.Usage,
+            "List projects with `gojo project list`",
+          );
         }
-        printOutput(format, { agents: ctx.repos.agents.listByProject(projectId) });
+        const agents = ctx.repos.agents.listByProject(projectId);
+        if (format === "text") {
+          printSection("Agents", format);
+          printTable(agents, [
+            { key: "name", header: "NAME", value: (a) => a.name },
+            { key: "enabled", header: "ON", value: (a) => (a.enabled ? "yes" : "no") },
+            { key: "id", header: "ID", value: (a) => a.id },
+          ]);
+        } else {
+          printOutput(format, { agents });
+        }
         break;
       }
       case "inspect": {
@@ -459,7 +842,9 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
           trigger: "manual",
         });
         if (format === "text") {
-          process.stderr.write(`queued ${run.id}; waiting for admission slot…\n`);
+          process.stderr.write(
+            `${style.dim(`queued ${run.id}; waiting for admission slot…`)}\n`,
+          );
         }
         await ctx.dispatcher.waitForTerminal(run.id);
         const finished = ctx.repos.runs.findById(run.id);
@@ -512,7 +897,9 @@ async function runAgentCommand(parsed: ParsedArgv, format: ReturnType<typeof get
           trigger: "manual",
         });
         if (format === "text") {
-          process.stderr.write(`queued ${run.id}; waiting for admission slot…\n`);
+          process.stderr.write(
+            `${style.dim(`queued ${run.id}; waiting for admission slot…`)}\n`,
+          );
         }
         await ctx.dispatcher.waitForTerminal(run.id);
         const finished = ctx.repos.runs.findById(run.id);
@@ -536,7 +923,25 @@ async function runScheduleCommand(parsed: ParsedArgv, format: ReturnType<typeof 
 
     switch (sub) {
       case "list": {
-        printOutput(format, { schedules: listAll() });
+        const schedules = listAll() as Array<{
+          id: string;
+          agent_id: string;
+          cron_expr: string;
+          enabled: number;
+          next_run_at: string | null;
+        }>;
+        if (format === "text") {
+          printSection("Schedules", format);
+          printTable(schedules, [
+            { key: "id", header: "ID", value: (s) => s.id },
+            { key: "agent", header: "AGENT", value: (s) => s.agent_id },
+            { key: "cron", header: "CRON", value: (s) => s.cron_expr },
+            { key: "on", header: "ON", value: (s) => (s.enabled ? "yes" : "no") },
+            { key: "next", header: "NEXT", value: (s) => s.next_run_at ?? "—" },
+          ]);
+        } else {
+          printOutput(format, { schedules });
+        }
         break;
       }
       case "enable": {
@@ -594,7 +999,18 @@ async function runRunCommand(parsed: ParsedArgv, format: ReturnType<typeof getOu
           projectId && projectId.length > 0
             ? ctx.repos.runs.listByProject(projectId)
             : ctx.repos.runs.listAll();
-        printOutput(format, { runs });
+        if (format === "text") {
+          printSection("Runs", format);
+          printTable(runs, [
+            { key: "id", header: "ID", value: (r) => r.id },
+            { key: "state", header: "STATE", value: (r) => r.state },
+            { key: "trigger", header: "TRIGGER", value: (r) => r.trigger },
+            { key: "agent", header: "AGENT", value: (r) => r.agentId },
+            { key: "created", header: "CREATED", value: (r) => r.createdAt },
+          ]);
+        } else {
+          printOutput(format, { runs });
+        }
         break;
       }
       case "inspect": {
@@ -734,25 +1150,6 @@ async function runServiceCommand(parsed: ParsedArgv, format: ReturnType<typeof g
   }
 }
 
-function printHelp(): void {
-  console.log(`gojo — scheduled software-agent orchestration
-
-Usage:
-  gojo [--home <path>] [--output json|text|yaml] <command> ...
-
-Commands:
-  setup                         Create admin user
-  server start|status|stop|doctor
-  service install|uninstall|start|stop|restart|status|logs
-  project add|list|inspect|sync|doctor|work|status|sources|refresh-source|migrate-vocab|remove
-  adapter detect|list|inspect|test
-  agent list|inspect|run|enable|disable|cancel|retry
-  schedule list|enable|disable|pause|next
-  run list|inspect|logs|diff|approve|reject|artifacts
-  integration list --open|--merged|--committed [--project <id>]
-  backup create|verify|restore
-`);
-}
 
 async function runIntegrationCommand(
   parsed: ParsedArgv,
@@ -780,12 +1177,36 @@ async function runIntegrationCommand(
           status,
           ...(projectId ? { projectId } : {}),
         });
-        printOutput(format, {
-          integrations: result.items,
-          total: result.total,
-          limit: result.limit,
-          offset: result.offset,
-        });
+        if (format === "text") {
+          printSection(`Integrations (${status}) · ${result.total}`, format);
+          printTable(result.items, [
+            { key: "run", header: "RUN", value: (i) => i.runId },
+            {
+              key: "project",
+              header: "PROJECT",
+              value: (i) => i.projectName ?? i.projectId,
+            },
+            {
+              key: "pr",
+              header: "PR",
+              value: (i) => (i.prNumber != null ? String(i.prNumber) : "—"),
+            },
+            { key: "status", header: "STATUS", value: (i) => i.status },
+            {
+              key: "url",
+              header: "URL",
+              width: 40,
+              value: (i) => i.prUrl ?? "—",
+            },
+          ]);
+        } else {
+          printOutput(format, {
+            integrations: result.items,
+            total: result.total,
+            limit: result.limit,
+            offset: result.offset,
+          });
+        }
         break;
       }
       default:
@@ -798,20 +1219,36 @@ async function main(argv: string[]): Promise<void> {
   const parsed = parseArgv(argv);
   const format = getOutputFormat(parsed);
 
-  if (hasFlag(parsed, "help") || parsed.command.length === 0) {
-    printHelp();
+  if (parsed.command.length === 0 && !hasFlag(parsed, "help")) {
+    printOverviewHelp();
+    return;
+  }
+
+  if (hasFlag(parsed, "help")) {
+    showHelp(parsed);
     return;
   }
 
   const [group, sub] = parsed.command;
   if (!group) {
-    printHelp();
+    printOverviewHelp();
+    return;
+  }
+
+  // `gojo project` with no subcommand → group help
+  if (!sub && group !== "setup" && findGroup(group)) {
+    printGroupHelp(findGroup(group)!);
     return;
   }
 
   try {
     if (group === "setup") {
       await runSetup(parsed, format);
+      return;
+    }
+
+    if (group === "auth") {
+      await runAuthCommand(parsed, format);
       return;
     }
 
@@ -830,7 +1267,12 @@ async function main(argv: string[]): Promise<void> {
           await runServerDoctor(parsed, format);
           return;
         default:
-          die(`unknown server command: ${sub ?? ""}`, format);
+          die(
+            `unknown server command: ${sub ?? ""}`,
+            format,
+            ExitCode.Usage,
+            "Try `gojo server --help`",
+          );
       }
     }
 
@@ -874,9 +1316,19 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    if (group === "instance") {
+      await runInstanceCommand(parsed, format);
+      return;
+    }
+
     if (group === "work-status") {
       if (sub !== "rebuild") {
-        die("usage: gojo work-status rebuild [--project <id>] [--from <iso>]", format);
+        die(
+          "usage: gojo work-status rebuild [--project <id>] [--from <iso>]",
+          format,
+          ExitCode.Usage,
+          "Try `gojo work-status --help`",
+        );
       }
       await withContext(getHome(parsed), async (ctx) => {
         const projectId = getFlagString(parsed, "project");
@@ -885,12 +1337,21 @@ async function main(argv: string[]): Promise<void> {
           ...(projectId ? { projectId } : {}),
           ...(from ? { from } : {}),
         });
+        printSuccess("Work status rollup rebuilt", format);
         printOutput(format, { rebuilt: true, deleted });
       });
       return;
     }
 
-    die(`unknown command group: ${group}`, format);
+    const suggestions = suggestCommands(group);
+    die(
+      `unknown command group: ${group}`,
+      format,
+      ExitCode.Usage,
+      suggestions.length > 0
+        ? `Did you mean: ${suggestions.map((s) => `gojo ${s}`).join(", ")}? See \`gojo --help\``
+        : "See `gojo --help`",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     die(message, format);

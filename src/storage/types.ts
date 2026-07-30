@@ -53,6 +53,8 @@ export interface Agent {
   failurePolicyJson: string;
   concurrencyJson: string;
   notificationsJson: string;
+  /** Non-secret env config (file + include/required names); never resolved values. */
+  environmentJson: string;
   enabled: boolean;
   createdAt: string;
 }
@@ -68,6 +70,7 @@ export interface CreateAgentInput {
   failurePolicyJson?: string;
   concurrencyJson?: string;
   notificationsJson?: string;
+  environmentJson?: string;
   enabled?: boolean;
 }
 
@@ -81,6 +84,7 @@ export interface UpdateAgentInput {
   failurePolicyJson?: string;
   concurrencyJson?: string;
   notificationsJson?: string;
+  environmentJson?: string;
   enabled?: boolean;
 }
 

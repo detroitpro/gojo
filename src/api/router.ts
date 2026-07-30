@@ -30,6 +30,15 @@ import {
   success,
   type AuthContext,
 } from "./http";
+import {
+  checkAuthRateLimit,
+  corsHeaders,
+  csrfOk,
+  ipInList,
+  recordAuthFailure,
+  resolveClient,
+  shouldSetSecureCookie,
+} from "./network";
 import { isScopedAgentToken, resolveAuth, scopedTokenAllows } from "./auth";
 import type { WsConnectionData } from "./ws/types";
 import { browseRoots, listDirectory } from "@/filesystem/browse";
@@ -42,6 +51,12 @@ import {
   setInstanceSetting,
   setSchedulingPolicy,
 } from "@/app/instance-settings";
+import {
+  normalizePublicBaseUrl,
+  resolveApiBaseUrl,
+  type CookieSecureMode,
+  type InstanceConfig,
+} from "@/config/instance";
 import { openApiDocument } from "./openapi";
 import { listUpcomingSchedules } from "@/scheduler/upcoming";
 import { getDashboardOverview } from "@/storage/dashboard-overview";
@@ -86,13 +101,50 @@ import {
 import { parseImpactRange } from "@/storage/impact-analytics";
 import { createWorkStatusRollup } from "@/storage/work-status-rollup";
 
-/** Minimal Bun.Server surface needed for WebSocket upgrades. */
+/** Minimal Bun.Server surface needed for WebSocket upgrades + client IP. */
 export type UpgradeServer = {
   upgrade(
     request: Request,
     options: { data: WsConnectionData; headers?: HeadersInit },
   ): boolean;
+  requestIP?(request: Request): { address: string; family: string; port: number } | null;
 };
+
+function peerIpFromServer(request: Request, server?: UpgradeServer): string {
+  const info = server?.requestIP?.(request);
+  if (info?.address) {
+    return info.address.replace(/^::ffff:/, "");
+  }
+  return "127.0.0.1";
+}
+
+function instancePublicView(ctx: AppContext, restartRequired = false) {
+  let apiBaseUrl: string | null = null;
+  try {
+    apiBaseUrl = resolveApiBaseUrl(ctx.instance);
+  } catch {
+    apiBaseUrl = null;
+  }
+  return {
+    bindHost: ctx.instance.bindHost,
+    bindPort: ctx.instance.bindPort,
+    paused: ctx.isPaused(),
+    telemetryEnabled: ctx.instance.telemetryEnabled,
+    publicBaseUrl: ctx.instance.publicBaseUrl,
+    trustedProxies: ctx.instance.trustedProxies,
+    allowedOrigins: ctx.instance.allowedOrigins,
+    ipAllowlist: ctx.instance.ipAllowlist,
+    cookieSecure: ctx.instance.cookieSecure,
+    apiBaseUrl,
+    restartRequired,
+  };
+}
+
+function parseStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  if (!value.every((item) => typeof item === "string")) return null;
+  return value.map((item) => item.trim()).filter((item) => item.length > 0);
+}
 
 type RunListItem = {
   id: string;
@@ -150,6 +202,9 @@ function publicUser(user: { id: string; username: string; role: string }) {
 }
 
 function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boolean {
+  if (method === "OPTIONS" && pathname.startsWith("/api/v1")) {
+    return true;
+  }
   if (method === "POST" && /^\/api\/v1\/sources\/[^/]+\/events$/.test(pathname)) {
     return true;
   }
@@ -169,6 +224,22 @@ function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boo
     return true;
   }
   return false;
+}
+
+function withCors(response: Response, request: Request, config: InstanceConfig): Response {
+  const extra = corsHeaders(request, config);
+  if (!extra) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(extra)) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function isAuthExemptMutation(pathname: string): boolean {
@@ -217,6 +288,27 @@ export async function handleApiRequest(
   const method = request.method.toUpperCase();
   const users = new UserService(ctx.db);
   const hasUsers = users.countUsers() > 0;
+  const peerIp = peerIpFromServer(request, server);
+  const client = resolveClient(request, ctx.instance, peerIp);
+  const cookieSecure = shouldSetSecureCookie(ctx.instance.cookieSecure, client.proto);
+
+  // IP allowlist (after proxy resolution). Health stays reachable for probes.
+  if (
+    pathname.startsWith("/api/v1") &&
+    !(pathname === "/api/v1/health" && method === "GET") &&
+    ctx.instance.ipAllowlist.length > 0 &&
+    !ipInList(client.ip, ctx.instance.ipAllowlist)
+  ) {
+    return failure("forbidden", "Client IP not allowlisted", 403);
+  }
+
+  if (method === "OPTIONS" && pathname.startsWith("/api/v1")) {
+    const headers = corsHeaders(request, ctx.instance);
+    if (!headers) {
+      return failure("forbidden", "Origin not allowed", 403);
+    }
+    return new Response(null, { status: 204, headers });
+  }
 
   if (pathname === WS_PATH && method === "GET") {
     if (!server) {
@@ -267,6 +359,16 @@ export async function handleApiRequest(
     if (hasUsers && isMutating(method) && !resolveAuth(ctx, request) && !isAuthExemptMutation(pathname)) {
       return failure("unauthorized", "Authentication required", 401);
     }
+
+    // CSRF for cookie-authenticated mutations (Bearer tokens are exempt).
+    const mutationAuth = resolveAuth(ctx, request);
+    if (
+      isMutating(method) &&
+      mutationAuth?.authMethod === "session" &&
+      !csrfOk(request, ctx.instance)
+    ) {
+      return failure("forbidden", "CSRF check failed — Origin/Referer not allowed", 403);
+    }
   }
 
   const auth = (request as Request & { auth?: AuthContext }).auth;
@@ -284,12 +386,31 @@ export async function handleApiRequest(
   }
 
   if (method === "POST" && pathname === "/api/v1/setup") {
+    if (!checkAuthRateLimit(client.ip)) {
+      ctx.repos.audit.create({
+        actor: "anonymous",
+        action: "auth.rate_limited",
+        target: "setup",
+        authMethod: "setup",
+        sourceIp: client.ip,
+        success: false,
+      });
+      return failure("rate_limited", "Too many setup attempts; try again later", 429);
+    }
     const body = await readJsonBody<{ username?: string; password?: string }>(request);
     if (!body?.username || !body.password) {
+      recordAuthFailure(client.ip);
       return failure("validation_error", "username and password are required", 400);
     }
 
-    const user = await users.createUser(body.username, body.password, "admin");
+    let user;
+    try {
+      user = await users.createUser(body.username, body.password, "admin");
+    } catch (error) {
+      recordAuthFailure(client.ip);
+      const message = error instanceof Error ? error.message : "Invalid password";
+      return failure("validation_error", message, 400);
+    }
     ctx.repos.audit.create({
       actor: user.username,
       action: "setup.complete",
@@ -301,14 +422,75 @@ export async function handleApiRequest(
     return success({ user: publicUser(user) }, 201);
   }
 
+  if (method === "GET" && pathname === "/api/v1/auth/me") {
+    if (!auth) {
+      return failure("unauthorized", "Authentication required", 401);
+    }
+    const user = users.findById(auth.userId);
+    if (!user) {
+      return failure("unauthorized", "Authentication required", 401);
+    }
+    return success({ user: publicUser(user) });
+  }
+
+  if (method === "POST" && pathname === "/api/v1/auth/password") {
+    if (!auth) {
+      return failure("unauthorized", "Authentication required", 401);
+    }
+    const body = await readJsonBody<{
+      currentPassword?: string;
+      newPassword?: string;
+    }>(request);
+    if (!body?.currentPassword || !body.newPassword) {
+      return failure(
+        "validation_error",
+        "currentPassword and newPassword are required",
+        400,
+      );
+    }
+    try {
+      await users.updatePassword(auth.userId, body.currentPassword, body.newPassword);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Password change failed";
+      const status = /current password/i.test(message) ? 401 : 400;
+      return failure(
+        status === 401 ? "unauthorized" : "validation_error",
+        message,
+        status,
+      );
+    }
+    ctx.repos.audit.create({
+      actor: auth.username,
+      action: "auth.password_changed",
+      target: `user:${auth.userId}`,
+      authMethod: auth.authMethod,
+      success: true,
+    });
+    // Drop the session cookie so browsers must re-login. API tokens stay valid.
+    return success({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(cookieSecure) });
+  }
+
   if (method === "POST" && pathname === "/api/v1/auth/login") {
+    if (!checkAuthRateLimit(client.ip)) {
+      ctx.repos.audit.create({
+        actor: "anonymous",
+        action: "auth.rate_limited",
+        target: "login",
+        authMethod: "session",
+        sourceIp: client.ip,
+        success: false,
+      });
+      return failure("rate_limited", "Too many login attempts; try again later", 429);
+    }
     const body = await readJsonBody<{ username?: string; password?: string }>(request);
     if (!body?.username || !body.password) {
+      recordAuthFailure(client.ip);
       return failure("validation_error", "username and password are required", 400);
     }
 
     const user = await users.verifyCredentials(body.username, body.password);
     if (!user) {
+      recordAuthFailure(client.ip);
       return failure("unauthorized", "Invalid credentials", 401);
     }
 
@@ -316,12 +498,12 @@ export async function handleApiRequest(
     return success(
       { user: publicUser(user) },
       200,
-      { "Set-Cookie": sessionCookie(token, 7 * 24 * 60 * 60) },
+      { "Set-Cookie": sessionCookie(token, 7 * 24 * 60 * 60, cookieSecure) },
     );
   }
 
   if (method === "POST" && pathname === "/api/v1/auth/logout") {
-    return success({ ok: true }, 200, { "Set-Cookie": clearSessionCookie() });
+    return success({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(cookieSecure) });
   }
 
   if (method === "GET" && pathname === "/api/v1/auth/tokens") {
@@ -1253,33 +1435,139 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && pathname === "/api/v1/instance") {
-    return success({
-      bindHost: ctx.instance.bindHost,
-      bindPort: ctx.instance.bindPort,
-      paused: ctx.isPaused(),
-      telemetryEnabled: ctx.instance.telemetryEnabled,
-    });
+    return success(instancePublicView(ctx));
   }
 
   if (method === "PATCH" && pathname === "/api/v1/instance") {
-    const body = await readJsonBody<{ telemetryEnabled?: boolean }>(request);
-    if (body?.telemetryEnabled === undefined || typeof body.telemetryEnabled !== "boolean") {
-      return failure("validation_error", "telemetryEnabled boolean is required", 400);
+    const body = await readJsonBody<{
+      telemetryEnabled?: boolean;
+      bindHost?: string;
+      bindPort?: number;
+      publicBaseUrl?: string | null;
+      trustedProxies?: string[];
+      allowedOrigins?: string[];
+      ipAllowlist?: string[];
+      cookieSecure?: CookieSecureMode;
+    }>(request);
+    if (!body || typeof body !== "object") {
+      return failure("validation_error", "JSON body is required", 400);
     }
-    ctx.setTelemetryEnabled(body.telemetryEnabled);
+
+    const keys = [
+      "telemetryEnabled",
+      "bindHost",
+      "bindPort",
+      "publicBaseUrl",
+      "trustedProxies",
+      "allowedOrigins",
+      "ipAllowlist",
+      "cookieSecure",
+    ] as const;
+    if (!keys.some((key) => key in body)) {
+      return failure(
+        "validation_error",
+        "At least one of telemetryEnabled, bindHost, bindPort, publicBaseUrl, trustedProxies, allowedOrigins, ipAllowlist, cookieSecure is required",
+        400,
+      );
+    }
+
+    let restartRequired = false;
+    const previous = { ...ctx.instance };
+
+    if (body.telemetryEnabled !== undefined) {
+      if (typeof body.telemetryEnabled !== "boolean") {
+        return failure("validation_error", "telemetryEnabled must be a boolean", 400);
+      }
+      ctx.setTelemetryEnabled(body.telemetryEnabled);
+    }
+
+    if (body.bindHost !== undefined) {
+      if (typeof body.bindHost !== "string" || !body.bindHost.trim()) {
+        return failure("validation_error", "bindHost must be a non-empty string", 400);
+      }
+      ctx.instance.bindHost = body.bindHost.trim();
+      restartRequired = true;
+    }
+    if (body.bindPort !== undefined) {
+      if (typeof body.bindPort !== "number" || !Number.isInteger(body.bindPort)) {
+        return failure("validation_error", "bindPort must be an integer", 400);
+      }
+      if (body.bindPort < 1 || body.bindPort > 65535) {
+        return failure("validation_error", "bindPort must be between 1 and 65535", 400);
+      }
+      ctx.instance.bindPort = body.bindPort;
+      restartRequired = true;
+    }
+    if (body.publicBaseUrl !== undefined) {
+      try {
+        ctx.instance.publicBaseUrl =
+          body.publicBaseUrl === null ? null : normalizePublicBaseUrl(body.publicBaseUrl);
+      } catch (error) {
+        return failure(
+          "validation_error",
+          error instanceof Error ? error.message : "Invalid publicBaseUrl",
+          400,
+        );
+      }
+      restartRequired = true;
+    }
+    if (body.trustedProxies !== undefined) {
+      const list = parseStringList(body.trustedProxies);
+      if (!list) {
+        return failure("validation_error", "trustedProxies must be an array of strings", 400);
+      }
+      ctx.instance.trustedProxies = list;
+      restartRequired = true;
+    }
+    if (body.allowedOrigins !== undefined) {
+      const list = parseStringList(body.allowedOrigins);
+      if (!list) {
+        return failure("validation_error", "allowedOrigins must be an array of strings", 400);
+      }
+      ctx.instance.allowedOrigins = list;
+      restartRequired = true;
+    }
+    if (body.ipAllowlist !== undefined) {
+      const list = parseStringList(body.ipAllowlist);
+      if (!list) {
+        return failure("validation_error", "ipAllowlist must be an array of strings", 400);
+      }
+      ctx.instance.ipAllowlist = list;
+      restartRequired = true;
+    }
+    if (body.cookieSecure !== undefined) {
+      if (
+        body.cookieSecure !== "auto" &&
+        body.cookieSecure !== "always" &&
+        body.cookieSecure !== "never"
+      ) {
+        return failure(
+          "validation_error",
+          "cookieSecure must be auto, always, or never",
+          400,
+        );
+      }
+      ctx.instance.cookieSecure = body.cookieSecure;
+      restartRequired = true;
+    }
+
+    if (restartRequired) {
+      ctx.saveInstanceConfig();
+    }
+
     ctx.platformEvents.append({
       type: "instance.updated",
       entityKind: "instance",
       entityId: "instance",
       topics: ["dashboard"],
-      data: { telemetryEnabled: body.telemetryEnabled },
+      data: {
+        telemetryEnabled: ctx.instance.telemetryEnabled,
+        restartRequired,
+        previousBindHost: previous.bindHost,
+        bindHost: ctx.instance.bindHost,
+      },
     });
-    return success({
-      bindHost: ctx.instance.bindHost,
-      bindPort: ctx.instance.bindPort,
-      paused: ctx.isPaused(),
-      telemetryEnabled: ctx.instance.telemetryEnabled,
-    });
+    return success(instancePublicView(ctx, restartRequired));
   }
 
   if (method === "GET" && pathname === "/api/v1/instance/doctor") {
@@ -1447,5 +1735,11 @@ export async function handleApiRequest(
 }
 
 export function createRouter(ctx: AppContext) {
-  return (request: Request, server?: UpgradeServer) => handleApiRequest(ctx, request, server);
+  return async (request: Request, server?: UpgradeServer) => {
+    const response = await handleApiRequest(ctx, request, server);
+    if (response === undefined) {
+      return undefined;
+    }
+    return withCors(response, request, ctx.instance);
+  };
 }

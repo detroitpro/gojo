@@ -44,6 +44,8 @@ Every adapter invocation receives:
 
 `GOJO_API_TOKEN` may call **only** `POST $GOJO_API_URL/runs/$GOJO_RUN_ID/progress` (structured focus updates while the run is active). It cannot list runs, read artifacts, or call other API routes — use the CLI or artifact files for diagnosis.
 
+Agents may also declare an allowlisted dotenv file under `environment:` in `gojo.yaml` (loaded from the registered primary checkout, because worktrees omit gitignored `.env` files). Selected values are injected into the adapter and validation phases; `GOJO_*` platform vars always win. See [Settings → Agents](/settings) and [Advanced usage → Secrets](/advanced-usage).
+
 Typical healer diagnostics (same machine as the daemon; `gojo` on `PATH`):
 
 ```bash

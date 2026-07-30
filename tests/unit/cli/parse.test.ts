@@ -51,15 +51,17 @@ describe("cli/parse", () => {
 });
 
 describe("cli help", () => {
-  test("documents gojo service status", async () => {
+  test("documents gojo service group", async () => {
     const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "--help"], {
       cwd: join(import.meta.dir, "../../.."),
       stdout: "pipe",
       stderr: "pipe",
+      env: { ...process.env, NO_COLOR: "1" },
     });
     const text = await new Response(proc.stdout).text();
     await proc.exited;
-    expect(text).toContain("service install|uninstall|start|stop|restart|status|logs");
+    expect(text).toContain("service");
+    expect(text).toMatch(/systemd|launchd/i);
   });
 });
 

@@ -49,11 +49,29 @@ Use `pull-request` in `gojo.yaml` so merges wait on review or CI. Set `prTool: t
 
 ## Secrets without committing them
 
-1. Store tokens in gojo's encrypted secret store (CLI/API — values never go in `gojo.yaml`).
-2. Reference them by name from the instance/profile environment at execution time.
-3. Rely on redaction in logs and handoffs.
+Prefer per-agent allowlisted dotenv loading from the project's primary checkout (gitignored `.env` files are not present in run worktrees):
 
-Manifests should contain **references**, not raw API keys.
+```yaml
+agents:
+  karakeep-catalog:
+    # …
+    environment:
+      file: .env
+      include:
+        - KARAKEEP_API_URL
+        - KARAKEEP_API_KEY
+      required:
+        - KARAKEEP_API_KEY
+```
+
+Rules:
+
+1. List only the keys that agent needs under `include` — unlisted file keys are never injected.
+2. Put secrets in the repo's gitignored `.env` (or another relative file under the registered checkout). Never put raw API keys in `gojo.yaml`.
+3. Gojo loads the file at run start from `project.repoPath`, injects selected values into the adapter and validation phases, and redacts those values from streamed output and failure artifacts.
+4. Platform `GOJO_*` variables always win over file values. Short-lived `GOJO_API_TOKEN` is adapter-only.
+
+Do **not** dump an entire project `.env` into the systemd unit — that would share every secret with every agent on the daemon.
 
 ## Overlap and concurrency
 

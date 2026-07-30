@@ -23,6 +23,8 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
   - [platform events](./modules/events.md) (durable invalidation over WebSocket + live UI refresh)
   - [notifications](./modules/notifications.md) (channels, per-agent routing, report delivery)
   - [adapters](./modules/agents.md) (adapter registry — file kept at `modules/agents.md`)
+  - [auth](./modules/auth.md) (setup, sessions, tokens, password change)
+  - [network](./modules/network.md) (bind, publicBaseUrl, Cloudflare TLS edge, CSRF/CORS)
   - [scheduler](./modules/scheduler.md)
 
 User-facing guides (site):

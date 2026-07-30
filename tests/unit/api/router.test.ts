@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { createAppContext } from "@/app/context";
+import { resetRateLimitsForTests } from "@/api/network";
 import { createRouter } from "@/api/router";
 import { UserService } from "@/auth/users";
 
@@ -12,6 +13,7 @@ describe("api/router", () => {
   let server: ReturnType<typeof Bun.serve> | null = null;
 
   afterEach(async () => {
+    resetRateLimitsForTests();
     server?.stop();
     server = null;
     await ctx?.dispose();
@@ -89,6 +91,51 @@ describe("api/router", () => {
       body: JSON.stringify({ username: "other", password: "secret-pass" }),
     });
     expect(again.status).toBe(403);
+  });
+
+  test("auth me and password change", async () => {
+    const { baseUrl, token } = await boot();
+    const auth = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+
+    const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: auth });
+    expect(me.status).toBe(200);
+    const meBody = (await me.json()) as { data: { user: { username: string } } };
+    expect(meBody.data.user.username).toBe("admin");
+
+    const unauth = await fetch(`${baseUrl}/api/v1/auth/password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: "secret-pass", newPassword: "new-secret-99" }),
+    });
+    expect(unauth.status).toBe(401);
+
+    const wrong = await fetch(`${baseUrl}/api/v1/auth/password`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ currentPassword: "wrong-password", newPassword: "new-secret-99" }),
+    });
+    expect(wrong.status).toBe(401);
+
+    const ok = await fetch(`${baseUrl}/api/v1/auth/password`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ currentPassword: "secret-pass", newPassword: "new-secret-99" }),
+    });
+    expect(ok.status).toBe(200);
+
+    // Bearer API tokens remain valid after password change.
+    const meAfter = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: auth });
+    expect(meAfter.status).toBe(200);
+
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "new-secret-99" }),
+    });
+    expect(login.status).toBe(200);
   });
 
   test("creates project with bearer token", async () => {
@@ -277,7 +324,7 @@ describe("api/router", () => {
     ctx = await createAppContext(tempDir);
     const users = new UserService(ctx.db);
     expect(users.countUsers()).toBe(0);
-    await users.createUser("admin", "pw", "admin");
+    await users.createUser("admin", "password-here", "admin");
     expect(users.countUsers()).toBe(1);
   });
 

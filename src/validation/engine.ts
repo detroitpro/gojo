@@ -39,6 +39,8 @@ export function parseTimeout(timeout: string): number {
 export async function runValidationProfile(opts: {
   cwd: string;
   steps: Array<{ name: string; command: string; timeout?: string }>;
+  /** Overlay for allowlisted project env vars (plus optional GOJO_* ids). */
+  env?: Record<string, string>;
   signal?: AbortSignal;
   onStep?: (result: ValidationStepResult) => void;
 }): Promise<{ passed: boolean; results: ValidationStepResult[] }> {
@@ -66,6 +68,7 @@ export async function runValidationProfile(opts: {
       command: 'sh',
       args: ['-c', step.command],
       cwd: opts.cwd,
+      ...(opts.env !== undefined ? { env: opts.env } : {}),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });

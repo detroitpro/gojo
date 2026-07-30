@@ -184,6 +184,65 @@ agents:
     );
   });
 
+  test('persists agent environment config without secret values', () => {
+    repoPath = mkdtempSync(join(tmpdir(), 'gojo-sync-env-'));
+    mkdirSync(join(repoPath, '.gojo', 'agents'), { recursive: true });
+    writeFileSync(join(repoPath, '.gojo', 'agents', 'demo.md'), 'do the thing\n', 'utf8');
+    writeFileSync(
+      join(repoPath, 'gojo.yaml'),
+      `version: 1
+project:
+  name: sync-env
+  defaultBranch: main
+repository:
+  remote: origin
+  syncBeforeRun: true
+  requireCleanBase: true
+  submodules: false
+  gitLfs: false
+profiles:
+  cursor:
+    adapter: cursor
+    timeout: 5m
+validationProfiles:
+  handoff:
+    steps:
+      - name: ok
+        command: "true"
+        timeout: 30s
+agents:
+  demo:
+    description: Demo agent
+    profile: cursor
+    promptFile: .gojo/agents/demo.md
+    validationProfile: handoff
+    environment:
+      file: .env
+      include:
+        - KARAKEEP_API_URL
+        - KARAKEEP_API_KEY
+      required:
+        - KARAKEEP_API_KEY
+    integration:
+      mode: commit-only
+      targetBranch: main
+`,
+      'utf8',
+    );
+
+    const repos = createRepositories(openDb());
+    const project = repos.projects.create({ name: 'sync-env', repoPath });
+    syncProjectFromManifest(repos, project);
+
+    const agent = repos.agents.listByProject(project.id).find((a) => a.name === 'demo');
+    expect(JSON.parse(agent?.environmentJson ?? '{}')).toEqual({
+      file: '.env',
+      include: ['KARAKEEP_API_URL', 'KARAKEEP_API_KEY'],
+      required: ['KARAKEEP_API_KEY'],
+    });
+    expect(agent?.environmentJson).not.toContain('secret');
+  });
+
   test('does not resurrect disabled schedule names absent from manifest', () => {
     const path = createRepoWithManifest(`schedules:
   demo-daily:

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 13;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  password_updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS api_tokens (
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS agents (
   failure_policy_json TEXT NOT NULL DEFAULT '{}',
   concurrency_json TEXT NOT NULL DEFAULT '{}',
   notifications_json TEXT NOT NULL DEFAULT '{}',
+  environment_json TEXT NOT NULL DEFAULT '{}',
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
@@ -413,6 +415,7 @@ CREATE TABLE IF NOT EXISTS run_context (
   validation_json TEXT NOT NULL DEFAULT '{}',
   integration_json TEXT NOT NULL DEFAULT '{}',
   failure_policy_json TEXT NOT NULL DEFAULT '{}',
+  environment_json TEXT NOT NULL DEFAULT '{}',
   base_branch TEXT,
   schedule_json TEXT,
   created_at TEXT NOT NULL
@@ -717,6 +720,20 @@ ALTER TABLE work_items RENAME COLUMN agent_profile_id TO profile_id;
 ALTER TABLE run_context RENAME COLUMN task_name TO agent_name;
 ALTER TABLE run_context RENAME COLUMN task_description TO agent_description;
 ALTER TABLE run_context RENAME COLUMN agent_profile_json TO profile_json;
+`,
+  },
+  {
+    version: 12,
+    sql: `
+ALTER TABLE users ADD COLUMN password_updated_at TEXT;
+UPDATE users SET password_updated_at = created_at WHERE password_updated_at IS NULL;
+`,
+  },
+  {
+    version: 13,
+    sql: `
+ALTER TABLE agents ADD COLUMN environment_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE run_context ADD COLUMN environment_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
 ];

@@ -488,11 +488,33 @@ export interface RunIntegration {
   updatedAt: string;
 }
 
+export type CookieSecureMode = "auto" | "always" | "never";
+
 export interface InstanceInfo {
   bindHost: string;
   bindPort: number;
   paused: boolean;
   telemetryEnabled: boolean;
+  publicBaseUrl: string | null;
+  trustedProxies: string[];
+  allowedOrigins: string[];
+  ipAllowlist: string[];
+  cookieSecure: CookieSecureMode;
+  apiBaseUrl: string | null;
+  restartRequired?: boolean;
+}
+
+export interface InstanceNetworkDoctor {
+  bindHost: string;
+  bindPort: number;
+  loopback: boolean;
+  publicBaseUrl: string | null;
+  publicBaseUrlScheme: "http" | "https" | null;
+  trustedProxiesConfigured: boolean;
+  trustedProxyCidrCount: number;
+  cookieSecure: CookieSecureMode;
+  apiBaseUrl: string | null;
+  ipAllowlistConfigured: boolean;
 }
 
 export interface HealthInfo {
@@ -521,6 +543,8 @@ export interface Agent {
   failurePolicyJson: string;
   concurrencyJson: string;
   notificationsJson: string;
+  /** Non-secret env config (file + include/required names); never resolved values. */
+  environmentJson: string;
   enabled: boolean;
   createdAt: string;
   /** Present on list API responses */
@@ -610,6 +634,8 @@ export interface InstanceDoctorResult {
     exePath: string | null;
   };
   warnings: string[];
+  /** Absent when the daemon predates network doctor checks. */
+  network?: InstanceNetworkDoctor;
 }
 
 export interface AdapterTestResult {

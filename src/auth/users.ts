@@ -11,11 +11,21 @@ import { createApiToken, hashToken, verifyToken } from "./tokens";
 
 const SESSION_SECRET_NAME = "__gojo_session_secret__";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const MIN_PASSWORD_LENGTH = 8;
 
 export interface UserRecord {
   id: string;
   username: string;
   passwordHash: string;
+  role: UserRole;
+  createdAt: string;
+  passwordUpdatedAt: string;
+}
+
+/** Public user fields — never includes password hashes. */
+export interface UserPublic {
+  id: string;
+  username: string;
   role: UserRole;
   createdAt: string;
 }
@@ -36,6 +46,7 @@ interface UserRow {
   password_hash: string;
   role: UserRole;
   created_at: string;
+  password_updated_at: string | null;
 }
 
 interface ApiTokenRow {
@@ -55,11 +66,27 @@ function mapUser(row: UserRow): UserRecord {
     passwordHash: row.password_hash,
     role: row.role,
     createdAt: row.created_at,
+    passwordUpdatedAt: row.password_updated_at ?? row.created_at,
+  };
+}
+
+function toPublic(user: UserRecord): UserPublic {
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    createdAt: user.createdAt,
   };
 }
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function assertPasswordStrength(password: string): void {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
 }
 
 export class UserService {
@@ -73,7 +100,16 @@ export class UserService {
     return row?.count ?? 0;
   }
 
+  listUsers(): UserPublic[] {
+    const rows = this.db
+      .connection()
+      .query<UserRow, []>("SELECT * FROM users ORDER BY created_at ASC")
+      .all();
+    return rows.map((row) => toPublic(mapUser(row)));
+  }
+
   async createUser(username: string, password: string, role: UserRole = "admin"): Promise<UserRecord> {
+    assertPasswordStrength(password);
     const id = ulid();
     const createdAt = nowIso();
     const passwordHash = await hashPassword(password);
@@ -81,9 +117,10 @@ export class UserService {
     this.db
       .connection()
       .query(
-        "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+        `INSERT INTO users (id, username, password_hash, role, created_at, password_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, username, passwordHash, role, createdAt);
+      .run(id, username, passwordHash, role, createdAt, createdAt);
 
     return {
       id,
@@ -91,6 +128,7 @@ export class UserService {
       passwordHash,
       role,
       createdAt,
+      passwordUpdatedAt: createdAt,
     };
   }
 
@@ -119,6 +157,36 @@ export class UserService {
     return valid ? user : null;
   }
 
+  async updatePassword(
+    userId: string,
+    currentPassword: string,
+    nextPassword: string,
+  ): Promise<UserRecord> {
+    assertPasswordStrength(nextPassword);
+    const user = this.findById(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const currentOk = await verifyPassword(currentPassword, user.passwordHash);
+    if (!currentOk) {
+      throw new Error("Current password is incorrect");
+    }
+    const passwordHash = await hashPassword(nextPassword);
+    const passwordUpdatedAt = nowIso();
+    this.db
+      .connection()
+      .query(
+        "UPDATE users SET password_hash = ?, password_updated_at = ? WHERE id = ?",
+      )
+      .run(passwordHash, passwordUpdatedAt, userId);
+
+    const updated = this.findById(userId);
+    if (!updated) {
+      throw new Error("User not found");
+    }
+    return updated;
+  }
+
   getSessionSecret(getSecret: (name: string) => string | null, setSecret: (name: string, value: string) => void): string {
     const existing = getSecret(SESSION_SECRET_NAME);
     if (existing) {
@@ -130,15 +198,28 @@ export class UserService {
   }
 
   createSessionToken(userId: string, secret: string): string {
+    const now = Date.now();
     return buildSessionToken(
-      { userId, expiresAt: Date.now() + SESSION_TTL_MS },
+      { userId, expiresAt: now + SESSION_TTL_MS, issuedAt: now },
       secret,
     );
   }
 
+  /**
+   * Verifies the HMAC cookie and rejects sessions issued before the user's
+   * last password change.
+   */
   verifySessionToken(token: string, secret: string): { userId: string } | null {
     const payload = parseSessionToken(token, secret);
     if (!payload) {
+      return null;
+    }
+    const user = this.findById(payload.userId);
+    if (!user) {
+      return null;
+    }
+    const passwordUpdatedMs = Date.parse(user.passwordUpdatedAt);
+    if (Number.isFinite(passwordUpdatedMs) && payload.issuedAt < passwordUpdatedMs) {
       return null;
     }
     return { userId: payload.userId };

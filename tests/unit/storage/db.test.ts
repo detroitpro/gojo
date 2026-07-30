@@ -135,6 +135,50 @@ describe("storage/db", () => {
     expect(repos.agents.findById(agent.id)?.notificationsJson).toBe('{"onSuccess":["ghost"]}');
   });
 
+  test("migration v13 adds environment_json on agents and run_context", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    sqlite.exec("ALTER TABLE agents DROP COLUMN environment_json;");
+    sqlite.exec("ALTER TABLE run_context DROP COLUMN environment_json;");
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(12, new Date().toISOString());
+
+    database.migrate();
+
+    const agentColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('agents')")
+      .all()
+      .map((row) => row.name);
+    expect(agentColumns).toContain("environment_json");
+
+    const runContextColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('run_context')")
+      .all()
+      .map((row) => row.name);
+    expect(runContextColumns).toContain("environment_json");
+
+    const repos = createRepositories(database);
+    const project = repos.projects.create({ name: "env-demo", repoPath: "/tmp/env-demo" });
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: "karakeep-catalog",
+      prompt: "pipeline",
+      environmentJson: JSON.stringify({
+        file: ".env",
+        include: ["KARAKEEP_API_KEY"],
+        required: ["KARAKEEP_API_KEY"],
+      }),
+    });
+    expect(JSON.parse(repos.agents.findById(agent.id)?.environmentJson ?? "{}")).toEqual({
+      file: ".env",
+      include: ["KARAKEEP_API_KEY"],
+      required: ["KARAKEEP_API_KEY"],
+    });
+  });
+
   test("migration v11 renames tasks/agent_profiles into agents/profiles", () => {
     const database = openInMemory();
     const sqlite = database.connection();

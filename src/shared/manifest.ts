@@ -141,6 +141,40 @@ export function safeParseNotificationsConfig(input: unknown) {
 }
 
 /**
+ * Per-agent dotenv loading from the registered primary repository checkout.
+ * Values are selected by `include` only; `required` must be a subset of
+ * `include`. Paths must be repo-relative (never absolute).
+ */
+export const AgentEnvironmentSchema = z
+  .object({
+    file: z
+      .string()
+      .min(1)
+      .refine((value) => !value.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(value), {
+        message: 'environment.file must be a repository-relative path',
+      }),
+    include: z.array(z.string().min(1)).min(1),
+    required: z.array(z.string().min(1)).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.required) {
+      return;
+    }
+    const include = new Set(value.include);
+    for (const key of value.required) {
+      if (!include.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `environment.required key "${key}" must also appear in environment.include`,
+          path: ['required'],
+        });
+      }
+    }
+  });
+
+export type AgentEnvironment = z.infer<typeof AgentEnvironmentSchema>;
+
+/**
  * A work unit definition. Formerly `TaskConfig` before the Tasks→Agents
  * vocabulary rebrand; `agent` here refers to the profile name (adapter+model)
  * from the top-level `profiles:` map.
@@ -157,6 +191,11 @@ export const AgentConfigSchema = z.object({
   selfHeal: AgentSelfHealSchema.optional(),
   /** Overrides project-level routing for this agent only. */
   notifications: NotificationsConfigSchema.optional(),
+  /**
+   * Load allowlisted variables from a dotenv file in the primary checkout
+   * (worktrees omit gitignored files). Injected into agent + validation only.
+   */
+  environment: AgentEnvironmentSchema.optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;

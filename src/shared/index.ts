@@ -111,6 +111,7 @@ export type { Ulid } from './ids';
 export {
   AgentConcurrencySchema,
   AgentConfigSchema,
+  AgentEnvironmentSchema,
   AgentFailurePolicySchema,
   AgentIntegrationSchema,
   AgentSelfHealSchema,
@@ -132,6 +133,7 @@ export {
 export type {
   AgentConcurrency,
   AgentConfig,
+  AgentEnvironment,
   AgentFailurePolicy,
   AgentIntegration,
   AgentSelfHeal,

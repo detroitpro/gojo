@@ -178,6 +178,25 @@ export async function logout(): Promise<void> {
   }
 }
 
+export async function getMe(): Promise<User> {
+  const { data } = await request<{ user: User }>("/auth/me");
+  rememberSession(data.user);
+  return data.user;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await request<{ ok: boolean }>("/auth/password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  // Server clears the session cookie; force the client through login again.
+  gojoSocket.disconnect();
+  rememberSession(null);
+}
+
 export async function getInstance(): Promise<InstanceInfo> {
   const { data } = await request<InstanceInfo>("/instance");
   return data;
@@ -215,7 +234,14 @@ export async function resumeInstance(): Promise<void> {
 }
 
 export async function updateInstance(input: {
-  telemetryEnabled: boolean;
+  telemetryEnabled?: boolean;
+  bindHost?: string;
+  bindPort?: number;
+  publicBaseUrl?: string | null;
+  trustedProxies?: string[];
+  allowedOrigins?: string[];
+  ipAllowlist?: string[];
+  cookieSecure?: InstanceInfo["cookieSecure"];
 }): Promise<InstanceInfo> {
   const { data } = await request<InstanceInfo>("/instance", {
     method: "PATCH",
@@ -708,11 +734,10 @@ export async function checkSession(options?: { force?: boolean }): Promise<User 
   }
   try {
     // Session probe always uses HTTP so it works before the socket is up.
-    await httpRequest<InstanceInfo>("/instance");
+    const { data } = await httpRequest<{ user: User }>("/auth/me");
     gojoSocket.connect();
-    const user: User = { id: "", username: "session", role: "admin" };
-    rememberSession(user);
-    return user;
+    rememberSession(data.user);
+    return data.user;
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       gojoSocket.disconnect();

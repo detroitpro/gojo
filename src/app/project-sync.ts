@@ -92,6 +92,8 @@ export function syncProjectFromManifest(
       ...(agentConfig.selfHeal ? { selfHeal: agentConfig.selfHeal } : {}),
     });
 
+    const environmentJson = JSON.stringify(agentConfig.environment ?? {});
+
     if (existing) {
       repos.agents.update(existing.id, {
         description: agentConfig.description,
@@ -102,6 +104,7 @@ export function syncProjectFromManifest(
         failurePolicyJson,
         concurrencyJson: JSON.stringify(agentConfig.concurrency ?? {}),
         notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
+        environmentJson,
       });
       agentIds.set(name, existing.id);
     } else {
@@ -116,6 +119,7 @@ export function syncProjectFromManifest(
         failurePolicyJson,
         concurrencyJson: JSON.stringify(agentConfig.concurrency ?? {}),
         notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
+        environmentJson,
       });
       agentIds.set(name, created.id);
     }

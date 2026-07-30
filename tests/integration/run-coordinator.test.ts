@@ -165,6 +165,105 @@ describe('integration/run-coordinator', () => {
     ).toBe(handoffPath);
   });
 
+  test('loads allowlisted primary-repo .env into agent and validation phases', async () => {
+    const { coordinator, repos, project, paths } = await setup();
+    const { writeFileSync } = await import('node:fs');
+    const secret = 'env-secret-value-xyz';
+    writeFileSync(
+      join(project.repoPath, '.env'),
+      [
+        `KARAKEEP_API_KEY=${secret}`,
+        'KARAKEEP_API_URL=http://192.168.5.251:3000',
+        'GOJO_TEST_FILE_ONLY=should-not-be-injected',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const task = repos.agents.create({
+      projectId: project.id,
+      name: 'env-pipeline',
+      prompt: [
+        '#!/bin/sh',
+        'set -eu',
+        'test -n "$KARAKEEP_API_KEY"',
+        'test "$KARAKEEP_API_URL" = "http://192.168.5.251:3000"',
+        // Unlisted file keys must not be injected (daemon inheritance is separate).
+        'test -z "${GOJO_TEST_FILE_ONLY:-}"',
+        // Prove the secret is only on the primary checkout, not the worktree.
+        'test ! -f .env',
+        'echo "saw:$KARAKEEP_API_KEY" > agent-result.txt',
+      ].join('\n'),
+      environmentJson: JSON.stringify({
+        file: '.env',
+        include: ['KARAKEEP_API_URL', 'KARAKEEP_API_KEY'],
+        required: ['KARAKEEP_API_KEY'],
+      }),
+      validationProfileJson: JSON.stringify({
+        steps: [
+          {
+            name: 'validation-sees-env',
+            command: 'test "$KARAKEEP_API_KEY" = "env-secret-value-xyz"',
+          },
+          { name: 'file-exists', command: 'test -f agent-result.txt' },
+        ],
+      }),
+      integrationJson: JSON.stringify({ mode: 'none' }),
+    });
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      agentId: task.id,
+      trigger: 'manual',
+    });
+    expect(
+      JSON.parse(
+        createWorkRepositories(db!).runContexts.findByRun(run.id)?.environmentJson ?? '{}',
+      ),
+    ).toEqual({
+      file: '.env',
+      include: ['KARAKEEP_API_URL', 'KARAKEEP_API_KEY'],
+      required: ['KARAKEEP_API_KEY'],
+    });
+
+    const finished = await coordinator.executeRun(run.id);
+    expect(finished.state).toBe(RunState.Succeeded);
+
+    const handoffPath = join(paths.artifacts, run.id, 'handoff.json');
+    const handoffText = readFileSync(handoffPath, 'utf8');
+    expect(handoffText).not.toContain(secret);
+  });
+
+  test('fails during prepare when required env var is missing', async () => {
+    const { coordinator, repos, project } = await setup();
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(join(project.repoPath, '.env'), 'KARAKEEP_API_URL=http://example\n', 'utf8');
+
+    const task = repos.agents.create({
+      projectId: project.id,
+      name: 'missing-env',
+      prompt: '#!/bin/sh\ntrue\n',
+      environmentJson: JSON.stringify({
+        file: '.env',
+        include: ['KARAKEEP_API_KEY'],
+        required: ['KARAKEEP_API_KEY'],
+      }),
+      validationProfileJson: JSON.stringify({
+        steps: [{ name: 'noop', command: 'true' }],
+      }),
+      integrationJson: JSON.stringify({ mode: 'none' }),
+    });
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      agentId: task.id,
+      trigger: 'manual',
+    });
+    const finished = await coordinator.executeRun(run.id);
+    expect(finished.state).toBe(RunState.Failed);
+    expect(finished.errorMessage).toContain('KARAKEEP_API_KEY');
+    expect(finished.errorMessage).not.toMatch(/super-secret|password/i);
+  });
+
   test('validation failure writes artifact and rich errorMessage', async () => {
     const { coordinator, repos, paths, project } = await setup();
 
