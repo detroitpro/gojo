@@ -37,7 +37,7 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | --- | --- |
 | `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
 | `gojo project list\|inspect\|sync\|doctor\|remove` | Manage projects |
-| `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …]` | Paged work ledger (first page; filters match API enums) |
+| `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …] [--history]` | Paged work ledger (first page; filters match API enums; `--history` includes completed/verified-terminal items) |
 | `gojo project status <id>` | Canonical work counts (verified open, stale, attention, …) |
 | `gojo project sources <id>` | Connected sources and sync health |
 | `gojo project refresh-source <id> <sourceId>` | Reconcile one source immediately |
@@ -62,10 +62,16 @@ Install the CLI onto your `PATH` from a source checkout with `bun run install:cl
 | Command | Purpose |
 | --- | --- |
 | `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `artifacts` returns handoff, validation, and failure JSON) |
-| `gojo integration list --open\|--merged [--project <id>]` | List open or merged gojo-tracked PRs |
+| `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve\|reject [--reason]` | Approve or reject runs in `await-approval` integration |
 
 Failed runs may enqueue a project **self-heal** task when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
+
+## Work status
+
+| Command | Purpose |
+| --- | --- |
+| `gojo work-status rebuild [--project <id>] [--from <iso>]` | Rebuild hourly work-status rollup memoization |
 
 ## Backup
 

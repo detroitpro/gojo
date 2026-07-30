@@ -132,7 +132,7 @@ tasks:
 
 The healer prompt should:
 
-1. List recent failed runs via the API
+1. List recent failed runs via `gojo run list` / `gojo run inspect` (or read `failure.json` under `$GOJO_HOME/artifacts/`)
 2. Read `failure.json` / `validation.json`
 3. Edit in-repo config (or narrowly scoped code)
 4. Re-run the failing validation command when practical
