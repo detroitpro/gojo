@@ -17,6 +17,7 @@ import {
   type PrTool,
 } from '@/integration/pr-create';
 import { runProcess } from '@/process/supervisor';
+import { GENERATED_WORKSPACE_PATHS } from '@shared/workspace-files';
 
 import { MergeQueue } from './queue';
 
@@ -70,8 +71,10 @@ export interface IntegrateResult {
 
 const defaultMergeQueue = new MergeQueue();
 
+const resultCommitPathspec = { exclude: GENERATED_WORKSPACE_PATHS } as const;
+
 async function isDirty(cwd: string): Promise<boolean> {
-  const status = await statusPorcelain(cwd);
+  const status = await statusPorcelain(cwd, resultCommitPathspec);
   return status.trim().length > 0;
 }
 
@@ -83,7 +86,7 @@ async function commitIfDirty(
     return null;
   }
 
-  return commitAll(worktreePath, commitMessage);
+  return commitAll(worktreePath, commitMessage, resultCommitPathspec);
 }
 
 async function hasRemote(cwd: string): Promise<boolean> {
@@ -170,7 +173,8 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
 
   switch (opts.mode) {
     case 'none': {
-      const changed = (await diffNameOnly(opts.worktreePath)).length > 0;
+      const changed =
+        (await diffNameOnly(opts.worktreePath, undefined, resultCommitPathspec)).length > 0;
       if (changed || (await isDirty(opts.worktreePath))) {
         return { commitSha: null, prUrl: null, conflict: false, prCreated: null };
       }

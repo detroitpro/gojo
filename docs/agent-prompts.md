@@ -31,3 +31,5 @@ Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.fi
 - For verbose PR descriptions, add `assets` with `role: "pr-body"` and a workspace-relative `path` (e.g. `.gojo/assets/pr-body.md`), and optionally `role: "pr-title"`. gojo prefers those assets when creating the PR and copies them under `$GOJO_HOME/artifacts/<runId>/assets/`.
 
 Coordinator passes title/body into `gh pr create` or `tea pulls create` (with optional `prLogin` / `prRemote` for tea).
+
+The handoff and its assets are run output, not repository content — the integrator excludes them from the result commit. See [Repository files](./repo-files.md) for the full committed-vs-generated contract.

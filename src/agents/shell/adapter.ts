@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type {
   AgentAdapter,
@@ -8,6 +8,7 @@ import type {
 } from '@/agents/adapter/types';
 import { readHandoffIfPresent } from '@/agents/handoff-file';
 import { runProcess } from '@/process/supervisor';
+import { RUN_SCRIPT_RELATIVE_PATH } from '@shared/workspace-files';
 
 export class ShellAgentAdapter implements AgentAdapter {
   readonly name = 'shell';
@@ -34,9 +35,8 @@ export class ShellAgentAdapter implements AgentAdapter {
   }
 
   async execute(ctx: AgentExecuteContext): Promise<AgentExecuteResult> {
-    const scriptDir = join(ctx.workspacePath, '.gojo');
-    mkdirSync(scriptDir, { recursive: true });
-    const scriptPath = join(scriptDir, 'run.sh');
+    const scriptPath = join(ctx.workspacePath, RUN_SCRIPT_RELATIVE_PATH);
+    mkdirSync(dirname(scriptPath), { recursive: true });
     writeFileSync(scriptPath, ctx.prompt, 'utf8');
 
     const result = await runProcess({

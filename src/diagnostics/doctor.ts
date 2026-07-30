@@ -10,6 +10,11 @@ import {
 import { execGit } from "@/git/git";
 import type { Repositories } from "@/storage";
 import type { Agent, Project } from "@/storage/types";
+import {
+  GENERATED_WORKSPACE_PATHS,
+  gojoGitignoreBlock,
+  REGISTRATION_PATHS,
+} from "@shared/workspace-files";
 
 export interface DoctorToolCheck {
   name: string;
@@ -33,12 +38,28 @@ export interface ProjectValidationToolCheck {
   shellBuiltin?: boolean;
 }
 
+/**
+ * Whether the repo honours the `.gojo/` workspace contract: generated run
+ * files ignored, registration files tracked.
+ */
+export interface ProjectWorkspaceFilesCheck {
+  /** Generated paths committed to the repo — they cause cross-PR conflicts. */
+  trackedGeneratedFiles: string[];
+  /** Generated paths that `.gitignore` does not cover. */
+  unignoredGeneratedFiles: string[];
+  /** Registration paths that exist on disk but are not tracked. */
+  untrackedRegistrationFiles: string[];
+  /** Suggested `.gitignore` block when anything above is non-empty. */
+  suggestedGitignore: string | null;
+}
+
 export interface ProjectDoctorResult {
   projectId: string;
   repoExists: boolean;
   manifest: boolean;
   baseCheckout: ProjectBaseCheckout;
   validationTools: ProjectValidationToolCheck[];
+  workspaceFiles: ProjectWorkspaceFilesCheck;
 }
 
 export interface InstanceDoctorResult {
@@ -247,6 +268,54 @@ async function inspectBaseCheckout(
   };
 }
 
+const EMPTY_WORKSPACE_FILES: ProjectWorkspaceFilesCheck = {
+  trackedGeneratedFiles: [],
+  unignoredGeneratedFiles: [],
+  untrackedRegistrationFiles: [],
+  suggestedGitignore: null,
+};
+
+async function inspectWorkspaceFiles(
+  repoPath: string,
+): Promise<ProjectWorkspaceFilesCheck> {
+  const trackedGeneratedFiles: string[] = [];
+  const unignoredGeneratedFiles: string[] = [];
+
+  for (const path of GENERATED_WORKSPACE_PATHS) {
+    // Works for file and directory entries alike; a directory lists its files.
+    const tracked = await execGit(repoPath, ["ls-files", "--", path]);
+    if (tracked.exitCode === 0 && tracked.stdout.trim().length > 0) {
+      trackedGeneratedFiles.push(path);
+    }
+    // check-ignore exits 0 only when the path is ignored.
+    const ignored = await execGit(repoPath, ["check-ignore", "-q", path]);
+    if (ignored.exitCode !== 0) {
+      unignoredGeneratedFiles.push(path);
+    }
+  }
+
+  const untrackedRegistrationFiles: string[] = [];
+  for (const path of REGISTRATION_PATHS) {
+    if (!existsSync(join(repoPath, path))) {
+      continue;
+    }
+    const tracked = await execGit(repoPath, ["ls-files", path]);
+    if (tracked.exitCode === 0 && tracked.stdout.trim().length === 0) {
+      untrackedRegistrationFiles.push(path);
+    }
+  }
+
+  const needsFix =
+    trackedGeneratedFiles.length > 0 || unignoredGeneratedFiles.length > 0;
+
+  return {
+    trackedGeneratedFiles,
+    unignoredGeneratedFiles,
+    untrackedRegistrationFiles,
+    suggestedGitignore: needsFix ? gojoGitignoreBlock() : null,
+  };
+}
+
 export async function projectDoctor(
   project: Project,
   repos?: Repositories,
@@ -265,12 +334,17 @@ export async function projectDoctor(
     ? validationToolsForAgents(agents, project.repoPath)
     : [];
 
+  const workspaceFiles = repoExists
+    ? await inspectWorkspaceFiles(project.repoPath)
+    : EMPTY_WORKSPACE_FILES;
+
   return {
     projectId: project.id,
     repoExists,
     manifest,
     baseCheckout,
     validationTools,
+    workspaceFiles,
   };
 }
 

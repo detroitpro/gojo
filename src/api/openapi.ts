@@ -106,7 +106,7 @@ export const openApiDocument = {
       get: {
         summary: "Project health checks",
         description:
-          "Includes baseCheckout (dirty files / behind origin) and validationTools resolved under the daemon PATH.",
+          "Includes baseCheckout (dirty files / behind origin), validationTools resolved under the daemon PATH, and workspaceFiles (whether generated .gojo run files are ignored and registration files tracked).",
       },
     },
     "/api/v1/projects/{id}/work": {

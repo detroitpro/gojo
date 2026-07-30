@@ -118,7 +118,7 @@ When `integration.mode` is `pull-request`, **gojo** opens the PR with `integrati
 | `filesChanged` | Files changed (fallback body) |
 | `unresolvedIssues` / `recommendedNextActions` | Follow-ups (fallback body) |
 
-For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Without a rich handoff, reviewers only see an agent name like `maintain-tests`. Prompt the adapter to write the PR story into the handoff, not into a manual `gh pr create` / `tea pulls create`.
+For long PR descriptions, write markdown under `.gojo/assets/` and reference it from `assets` instead of stuffing everything into `summary`. Like the handoff itself, assets are run output: gojo copies them into the run artifacts and keeps them out of the commit, so never `git add` them from a prompt. Without a rich handoff, reviewers only see an agent name like `maintain-tests`. Prompt the adapter to write the PR story into the handoff, not into a manual `gh pr create` / `tea pulls create`.
 
 ## Impact claims feed the dashboard
 

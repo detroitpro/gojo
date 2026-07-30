@@ -101,6 +101,12 @@ async function mountView() {
     manifest: false,
     baseCheckout: { clean: true, dirtyFiles: [], behindOrigin: 0 },
     validationTools: [],
+    workspaceFiles: {
+      trackedGeneratedFiles: [],
+      unignoredGeneratedFiles: [],
+      untrackedRegistrationFiles: [],
+      suggestedGitignore: null,
+    },
   });
   mocks.listAgents.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
   mocks.listProjectWork.mockResolvedValue({

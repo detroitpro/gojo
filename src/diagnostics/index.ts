@@ -12,6 +12,7 @@ export type {
   ProjectBaseCheckout,
   ProjectDoctorResult,
   ProjectValidationToolCheck,
+  ProjectWorkspaceFilesCheck,
 } from "./doctor";
 export {
   inspectRunningBinary,

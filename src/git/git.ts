@@ -203,30 +203,56 @@ export async function removeWorktree(
   );
 }
 
-export async function statusPorcelain(cwd: string): Promise<string> {
+export interface PathspecOptions {
+  /** Repo-relative paths to leave out of the operation. */
+  exclude?: readonly string[];
+}
+
+/**
+ * Builds a `-- . :(exclude)<path>` pathspec suffix, or nothing when there is
+ * nothing to exclude, so callers can share one exclusion contract across
+ * status/diff/add.
+ */
+function pathspecArgs(options: PathspecOptions = {}): string[] {
+  const exclude = options.exclude ?? [];
+  if (exclude.length === 0) {
+    return [];
+  }
+  return ['--', '.', ...exclude.map((path) => `:(exclude)${path}`)];
+}
+
+export async function statusPorcelain(
+  cwd: string,
+  options: PathspecOptions = {},
+): Promise<string> {
   const result = await execGitOrThrow(
     cwd,
-    ['status', '--porcelain'],
+    ['status', '--porcelain', ...pathspecArgs(options)],
     'statusPorcelain',
   );
   return result.stdout;
 }
 
-export async function diffNameOnly(cwd: string, base?: string): Promise<string[]> {
-  const diffArgs = base ? ['diff', '--name-only', base] : ['diff', '--name-only'];
+export async function diffNameOnly(
+  cwd: string,
+  base?: string,
+  options: PathspecOptions = {},
+): Promise<string[]> {
+  const pathspec = pathspecArgs(options);
+  const diffArgs = base
+    ? ['diff', '--name-only', base, ...pathspec]
+    : ['diff', '--name-only', ...pathspec];
   const diffResult = await execGit(cwd, diffArgs);
   throwIfFailed('diffNameOnly', diffResult, diffArgs);
 
-  const untrackedResult = await execGit(cwd, [
+  const untrackedArgs = [
     'ls-files',
     '--others',
     '--exclude-standard',
-  ]);
-  throwIfFailed('diffNameOnly', untrackedResult, [
-    'ls-files',
-    '--others',
-    '--exclude-standard',
-  ]);
+    ...pathspec,
+  ];
+  const untrackedResult = await execGit(cwd, untrackedArgs);
+  throwIfFailed('diffNameOnly', untrackedResult, untrackedArgs);
 
   const names = new Set<string>();
   for (const line of diffResult.stdout.split('\n')) {
@@ -246,8 +272,9 @@ export async function diffNameOnly(cwd: string, base?: string): Promise<string[]
 export async function commitAll(
   cwd: string,
   message: string,
+  options: PathspecOptions = {},
 ): Promise<string> {
-  await execGitOrThrow(cwd, ['add', '-A'], 'commitAll');
+  await execGitOrThrow(cwd, ['add', '-A', ...pathspecArgs(options)], 'commitAll');
   await execGitOrThrow(
     cwd,
     ['commit', '-m', message],

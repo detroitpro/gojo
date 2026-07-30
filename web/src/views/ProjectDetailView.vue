@@ -203,6 +203,19 @@ const health = computed(() =>
     : { score: null, level: "missing" as const, label: "…" },
 );
 
+// Optional at runtime: the UI can be newer than the daemon serving /doctor.
+const workspaceFiles = computed(() => doctor.value?.workspaceFiles ?? null);
+
+const workspaceFilesOk = computed(() => {
+  const files = workspaceFiles.value;
+  if (!files) {
+    return true;
+  }
+  return (
+    files.trackedGeneratedFiles.length === 0 && files.unignoredGeneratedFiles.length === 0
+  );
+});
+
 const agentsByName = computed(() => {
   const map = new Map<string, Agent>();
   for (const agent of projectAgents.value) {
@@ -1124,6 +1137,44 @@ useLiveRefresh({
                 </li>
                 <li v-if="doctor.baseCheckout.dirtyFiles.length > 12">
                   … +{{ doctor.baseCheckout.dirtyFiles.length - 12 }} more
+                </li>
+              </ul>
+            </li>
+            <li v-if="workspaceFiles">
+              <span :class="workspaceFilesOk ? 'ok' : 'bad'">●</span>
+              Generated <span class="mono">.gojo</span> run files
+              {{ workspaceFilesOk ? "are ignored by git" : "are tracked or unignored" }}
+              <ul v-if="!workspaceFilesOk" class="muted mt-2 health-dirty-files">
+                <li
+                  v-for="file in workspaceFiles.trackedGeneratedFiles"
+                  :key="`tracked:${file}`"
+                  class="mono"
+                >
+                  {{ file }} — committed to the repo
+                </li>
+                <li
+                  v-for="file in workspaceFiles.unignoredGeneratedFiles"
+                  :key="`unignored:${file}`"
+                  class="mono"
+                >
+                  {{ file }} — not covered by .gitignore
+                </li>
+              </ul>
+              <pre
+                v-if="workspaceFiles.suggestedGitignore"
+                class="mono mt-2 gitignore-suggestion"
+              >{{ workspaceFiles.suggestedGitignore }}</pre>
+            </li>
+            <li v-if="workspaceFiles?.untrackedRegistrationFiles.length">
+              <span class="bad">●</span>
+              Registration files not tracked by git
+              <ul class="muted mt-2 health-dirty-files">
+                <li
+                  v-for="file in workspaceFiles.untrackedRegistrationFiles"
+                  :key="`registration:${file}`"
+                  class="mono"
+                >
+                  {{ file }}
                 </li>
               </ul>
             </li>

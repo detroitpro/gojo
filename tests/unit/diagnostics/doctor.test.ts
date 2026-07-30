@@ -17,6 +17,7 @@ import {
   initRepo,
 } from "@/git/git";
 import type { Agent } from "@/storage/types";
+import { gojoGitignoreBlock } from "@shared/workspace-files";
 
 describe("diagnostics/doctor helpers", () => {
   test("firstCommandToken extracts the binary", () => {
@@ -156,6 +157,54 @@ describe("diagnostics/projectDoctor", () => {
       const clean = await projectDoctor(project as never, repos as never);
       expect(clean.baseCheckout.clean).toBe(true);
       expect((await execGit(repoPath, ["status", "--porcelain"])).stdout).toBe("");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("flags generated .gojo files that are tracked or unignored", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "gojo-doctor-ignore-"));
+    try {
+      const repoPath = join(tempDir, "repo");
+      mkdirSync(join(repoPath, ".gojo", "agents"), { recursive: true });
+      await initRepo(repoPath);
+      await configLocal(repoPath, "user.email", "test@example.com");
+      await configLocal(repoPath, "user.name", "Gojo Test");
+      writeFileSync(join(repoPath, "gojo.yaml"), "project:\n  name: demo\n");
+      writeFileSync(join(repoPath, ".gojo", "agents", "demo.md"), "# demo\n");
+      writeFileSync(join(repoPath, ".gojo", "handoff.json"), '{"status":"success"}');
+      await commitAll(repoPath, "initial");
+
+      const project = {
+        id: "01PROJECTDOCTORTEST000002",
+        name: "demo",
+        repoPath,
+        defaultBranch: "main",
+        remoteUrl: null,
+        manifestJson: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const repos = { agents: { listByProject: () => [] as Agent[] } };
+
+      const before = await projectDoctor(project as never, repos as never);
+      expect(before.workspaceFiles.trackedGeneratedFiles).toContain(".gojo/handoff.json");
+      expect(before.workspaceFiles.unignoredGeneratedFiles).toContain(".gojo/handoff.json");
+      expect(before.workspaceFiles.suggestedGitignore).toContain(".gojo/*");
+      expect(before.workspaceFiles.suggestedGitignore).toContain("!.gojo/agents/");
+
+      writeFileSync(
+        join(repoPath, ".gitignore"),
+        `${gojoGitignoreBlock()}\n`,
+      );
+      await execGit(repoPath, ["rm", "--cached", "-q", ".gojo/handoff.json"]);
+      await commitAll(repoPath, "ignore generated gojo files");
+
+      const after = await projectDoctor(project as never, repos as never);
+      expect(after.workspaceFiles.trackedGeneratedFiles).toEqual([]);
+      expect(after.workspaceFiles.unignoredGeneratedFiles).toEqual([]);
+      expect(after.workspaceFiles.untrackedRegistrationFiles).toEqual([]);
+      expect(after.workspaceFiles.suggestedGitignore).toBeNull();
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

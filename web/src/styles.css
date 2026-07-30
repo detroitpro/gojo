@@ -1855,6 +1855,18 @@ table.data tr:hover td {
   padding-left: 1.25rem;
 }
 
+.gitignore-suggestion {
+  margin: 0.5rem 0 0;
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre;
+  line-height: 1.45;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+
 .project-meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));

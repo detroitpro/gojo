@@ -93,6 +93,32 @@ Commit the manifest and script to the repo.
 
 > The shell adapter runs the prompt file as a script inside an isolated worktree. If `.gojo/handoff.json` exists afterward, gojo stores it as the structured handoff report. You can use a real ULID for `runId` in production; the platform also records its own run id.
 
+### What to commit, and what to ignore
+
+Your repo ends up with two kinds of gojo files:
+
+| Commit these — registration | Ignore these — generated per run |
+|---|---|
+| `gojo.yaml` | `.gojo/handoff.json` |
+| `.gojo/agents/**` | `.gojo/run.sh` |
+| `.gojo/instructions.md` | `.gojo/assets/` |
+| `.gojo/labels.md` | |
+
+Registration files are your configuration — a fresh clone should describe your agents completely. The generated files are per-run scratch that gojo also stores as run artifacts, so the copies in your repo are disposable.
+
+gojo keeps generated files out of the commits it makes, so you do not have to get this right for agent pull requests to be clean. Add the ignore rules anyway to keep them out of your own `git status` and manual commits:
+
+```gitignore
+# gojo: ignore generated run files, keep registration files
+.gojo/*
+!.gojo/agents/
+!.gojo/agents/**
+!.gojo/instructions.md
+!.gojo/labels.md
+```
+
+Ignoring everything and re-including the registration files means any generated file gojo adds later is ignored automatically. Run `gojo project doctor <project-id>` (or check the project's Health panel) to see whether a repo follows this.
+
 ## 3. Sync and run
 
 In the UI: **Projects → Sync**, then run the **touch-note** agent.

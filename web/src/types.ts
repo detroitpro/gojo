@@ -571,12 +571,21 @@ export interface ProjectValidationToolCheck {
   shellBuiltin?: boolean;
 }
 
+export interface ProjectWorkspaceFilesCheck {
+  trackedGeneratedFiles: string[];
+  unignoredGeneratedFiles: string[];
+  untrackedRegistrationFiles: string[];
+  suggestedGitignore: string | null;
+}
+
 export interface ProjectDoctorResult {
   projectId: string;
   repoExists: boolean;
   manifest: boolean;
   baseCheckout: ProjectBaseCheckout;
   validationTools: ProjectValidationToolCheck[];
+  /** Absent when the daemon predates the workspace-files check. */
+  workspaceFiles?: ProjectWorkspaceFilesCheck;
 }
 
 export interface DoctorToolCheck {

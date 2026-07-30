@@ -88,6 +88,60 @@ describe('integration/integrator', () => {
     expect(await getHead(worktreePath)).toBe(result.commitSha!);
   });
 
+  test('result commit excludes the handoff file', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(worktreePath, '.gojo'), { recursive: true });
+    writeFileSync(join(worktreePath, '.gojo', 'handoff.json'), '{"status":"success"}');
+    writeFileSync(join(worktreePath, 'agent-output.txt'), 'done');
+
+    const result = await integrate({
+      mode: 'commit-only',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: test commit',
+      runId: 'run-1',
+    });
+
+    const committed = await execGit(worktreePath, [
+      'show',
+      '--name-only',
+      '--pretty=format:',
+      result.commitSha!,
+    ]);
+    expect(committed.stdout).toContain('agent-output.txt');
+    expect(committed.stdout).not.toContain('handoff.json');
+  });
+
+  test('handoff-only change is treated as no diff so no PR is opened', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(worktreePath, '.gojo'), { recursive: true });
+    writeFileSync(
+      join(worktreePath, '.gojo', 'handoff.json'),
+      '{"status":"success","summary":"diagnose only"}',
+    );
+
+    const result = await integrate({
+      mode: 'pull-request',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: diagnose only',
+      runId: 'run-diagnose',
+      prTool: 'gh',
+    });
+
+    expect(result.commitSha).toBeNull();
+    expect(result.prUrl).toBeNull();
+    expect(result.prCreated).toBeNull();
+  });
+
   test('pull-request skips push and PR when worktree is clean', async () => {
     const { repoPath, worktreePath, branchName } = await createRepo();
 

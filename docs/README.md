@@ -15,6 +15,7 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 - [Architecture overview](./architecture/overview.md)
 - [Module boundaries](./architecture/boundaries.md)
 - [Agent prompts](./agent-prompts.md) — constrained limits for `.gojo/agents/`
+- [Repository files](./repo-files.md) — which `.gojo/` files are committed vs generated
 - Modules:
   - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [work](./modules/work.md) (cross-source project visibility)

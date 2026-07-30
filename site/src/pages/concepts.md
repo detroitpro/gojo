@@ -54,6 +54,8 @@ Worktrees give each attempt a dedicated filesystem directory linked to the same 
 
 When a run finishes, gojo stores a structured handoff (from the adapter's `.gojo/handoff.json` and/or platform summary): files changed, decisions, unresolved issues, recommended next actions, and (schema v2) `impact.items` for dashboard accounting. Schema v1 remains accepted; prefer v2 for pull-request agents. Future runs should consume that summary — not a raw dump of every prior transcript.
 
+The handoff file is **run output, not repository content**. gojo persists it as a run artifact and excludes it from the commits it creates, along with the shell adapter's generated `.gojo/run.sh`. If a repository committed one of these, every agent branch would rewrite the same path and every merge would leave the remaining open pull requests conflicting. See [what to commit and what to ignore](/first-agent#what-to-commit-and-what-to-ignore).
+
 ## Idempotency and recovery
 
 Schedule triggers use idempotency keys so a restart doesn't double-create the same fire. After a crash, non-terminal runs are reconciled (process still alive? commit present? abandon vs resume) instead of being silently marked successful.

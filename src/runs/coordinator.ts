@@ -25,6 +25,7 @@ import { extractPrNumber, initialNextCheckAt } from '@/integration/status-reconc
 import { PlatformChangeFeed } from '@/events/platform-change-feed';
 import type { PlatformEventTopic } from '@shared/events';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
+import { GENERATED_WORKSPACE_PATHS } from '@shared/workspace-files';
 import { priorityForTrigger } from '@shared/scheduling';
 import {
   extractHandoffImpactItems,
@@ -312,6 +313,10 @@ export class RunCoordinator {
       const validation = parseValidationConfig(agent.validationProfileJson);
       const failurePolicy = parseFailurePolicy(agent.failurePolicyJson);
       const maxAttempts = maxAttemptsFor(failurePolicy);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7558/ingest/7e236216-3f8d-43b1-a4b3-edfa6170ef77',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6247c'},body:JSON.stringify({sessionId:'b6247c',runId:run.id,hypothesisId:'A',location:'coordinator.ts:runStart',message:'agent run starting',data:{projectId:project.id,projectName:project.name,agentId:agent.id,agentName:agent.name,trigger:run.trigger,integrationMode:integration.mode??null,prAutoMerge:integration.prAutoMerge??false,prTool:integration.prTool??null,targetBranch:integration.targetBranch??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       let lastFailureMessage = 'Run failed';
       let attempt: Attempt | null = null;
@@ -1323,7 +1328,9 @@ export class RunCoordinator {
     mkdirSync(artifactDir, { recursive: true });
 
     const filesChanged = attempt.workspacePath
-      ? await diffNameOnly(attempt.workspacePath, attempt.startingCommit ?? undefined)
+      ? await diffNameOnly(attempt.workspacePath, attempt.startingCommit ?? undefined, {
+          exclude: GENERATED_WORKSPACE_PATHS,
+        })
       : [];
 
     let resultCommit = attempt.resultCommit ?? attempt.startingCommit ?? 'unknown';
@@ -1411,6 +1418,17 @@ export class RunCoordinator {
     const artifactPath = join(artifactDir, 'handoff.json');
     writeFileSync(artifactPath, JSON.stringify(handoff, null, 2), 'utf8');
     this.emit('run.artifact_written', run.id, { path: artifactPath });
+
+    // #region agent log
+    {
+      const agentRow = this.repos.agents.findById(run.agentId);
+      const summary = typeof handoff.summary === 'string' ? handoff.summary : '';
+      const mentionsMerge = /merg/i.test(summary);
+      if (agentRow?.name === 'maintain-merge' || mentionsMerge) {
+        fetch('http://127.0.0.1:7558/ingest/7e236216-3f8d-43b1-a4b3-edfa6170ef77',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6247c'},body:JSON.stringify({sessionId:'b6247c',runId:run.id,hypothesisId:'A',location:'coordinator.ts:handoffWritten',message:'handoff mentions merge or maintain-merge agent',data:{agentName:agentRow?.name??null,projectId:run.projectId,summaryHead:summary.slice(0,400),status:handoff.status??null,decisions:(handoff.decisions??[]).slice(0,5)},timestamp:Date.now()})}).catch(()=>{});
+      }
+    }
+    // #endregion
 
     return { handoff, filesChanged: handoff.filesChanged };
   }
