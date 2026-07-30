@@ -169,6 +169,44 @@ export function parseCompareWindow(
   return parsed.success ? parsed.data : fallback;
 }
 
+function parseWorkFilter<T>(
+  schema: z.ZodType<T>,
+  value: string | null | undefined,
+): T | null {
+  if (value == null || value === "") {
+    return null;
+  }
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Parse work-list `provenance` query param; invalid values become `null`. */
+export function parseWorkProvenance(
+  value: string | null | undefined,
+): WorkProvenance | null {
+  return parseWorkFilter(WorkProvenanceSchema, value);
+}
+
+/** Parse work-list `delivery` query param; invalid values become `null`. */
+export function parseWorkDelivery(value: string | null | undefined): WorkDelivery | null {
+  return parseWorkFilter(WorkDeliverySchema, value);
+}
+
+/** Parse work-list `attention` query param; invalid values become `null`. */
+export function parseWorkAttention(value: string | null | undefined): WorkAttention | null {
+  return parseWorkFilter(WorkAttentionSchema, value);
+}
+
+/** Parse work-list `execution` query param; invalid values become `null`. */
+export function parseWorkExecution(value: string | null | undefined): WorkExecution | null {
+  return parseWorkFilter(WorkExecutionSchema, value);
+}
+
+/** Parse work-list `outcome` query param; invalid values become `null`. */
+export function parseWorkOutcome(value: string | null | undefined): WorkOutcome | null {
+  return parseWorkFilter(WorkOutcomeSchema, value);
+}
+
 export const WorkLinkTypeSchema = z.enum([
   "executes",
   "delivers",

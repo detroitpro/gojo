@@ -77,11 +77,11 @@ import { safeParseSchedulingPolicy } from "@shared/scheduling";
 import {
   compareWindowToMs,
   parseCompareWindow,
-  type WorkAttention,
-  type WorkDelivery,
-  type WorkExecution,
-  type WorkOutcome,
-  type WorkProvenance,
+  parseWorkAttention,
+  parseWorkDelivery,
+  parseWorkExecution,
+  parseWorkOutcome,
+  parseWorkProvenance,
 } from "@shared/work";
 import { parseImpactRange } from "@/storage/impact-analytics";
 import { createWorkStatusRollup } from "@/storage/work-status-rollup";
@@ -143,63 +143,6 @@ function parseEnabledParam(value: string | null): boolean | null {
     return false;
   }
   return null;
-}
-
-function parseWorkProvenance(value: string | null): WorkProvenance | null {
-  return value === "gojo-agent" ||
-    value === "human" ||
-    value === "bot" ||
-    value === "external"
-    ? value
-    : null;
-}
-
-function parseWorkDelivery(value: string | null): WorkDelivery | null {
-  return value === "none" ||
-    value === "draft" ||
-    value === "open" ||
-    value === "review" ||
-    value === "blocked" ||
-    value === "merged" ||
-    value === "closed"
-    ? value
-    : null;
-}
-
-function parseWorkAttention(value: string | null): WorkAttention | null {
-  return value === "none" ||
-    value === "approval" ||
-    value === "blocked" ||
-    value === "sync-error" ||
-    value === "stale"
-    ? value
-    : null;
-}
-
-function parseWorkExecution(value: string | null): WorkExecution | null {
-  const allowed: WorkExecution[] = [
-    "queued",
-    "preparing",
-    "running",
-    "validating",
-    "awaiting-approval",
-    "integrating",
-    "reporting",
-    "terminal",
-    "none",
-  ];
-  return allowed.includes(value as WorkExecution) ? (value as WorkExecution) : null;
-}
-
-function parseWorkOutcome(value: string | null): WorkOutcome | null {
-  const allowed: WorkOutcome[] = [
-    "pending",
-    "succeeded",
-    "failed",
-    "no-change",
-    "canceled",
-  ];
-  return allowed.includes(value as WorkOutcome) ? (value as WorkOutcome) : null;
 }
 
 function publicUser(user: { id: string; username: string; role: string }) {
