@@ -485,7 +485,7 @@ async function runSourceCommand(
   format: ReturnType<typeof getOutputFormat>,
 ): Promise<void> {
   const action = parsed.command[1];
-  const sub = parsed.command[2];
+  const sub = parsed.positional[0];
   if (action !== "token" || sub !== "set") {
     die(
       "usage: gojo source token set <sourceId> [--secret-name <name>]",
@@ -494,7 +494,7 @@ async function runSourceCommand(
       "The token is read from GOJO_SOURCE_TOKEN or prompted securely on a TTY",
     );
   }
-  const sourceId = parsed.positional[0];
+  const sourceId = parsed.positional[1];
   if (!sourceId) {
     die("sourceId is required", format, ExitCode.Usage);
   }
