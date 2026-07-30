@@ -66,6 +66,7 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo project refresh-source <id> <sourceId>` | Reconcile one source immediately |
 | `gojo project recheck-work <id> <workItemId>` | Verify one work item against its provider |
 | `gojo project resolve-work <id> <workItemId> [--by …] [--note …]` | Operator-resolve attention without inventing delivery |
+| `GOJO_SOURCE_TOKEN=… gojo source token set <sourceId> [--secret-name <name>]` | Store/rotate a forge API token and attach its secret reference (secure prompt on a TTY) |
 
 ## Adapters (detection)
 
@@ -87,6 +88,8 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `artifacts` returns handoff, validation, and failure JSON) |
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve\|reject [--reason]` | Approve or reject runs in `await-approval` integration |
+| `gojo approval list\|show\|approve\|reject\|hold` | Inspect and decide platform-owned PR approvals |
+| `gojo work claim <workItemId> --agent <agentId>` | Explicitly enqueue an issue against an eligible agent |
 
 Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
 

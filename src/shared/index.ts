@@ -17,6 +17,30 @@ export type {
 } from './api';
 
 export {
+  ApprovalAutonomySchema,
+  ApprovalSchema,
+  ApprovalStateSchema,
+  ApprovalSubjectTypeSchema,
+  ChecksStateSchema,
+  ControlIntentKindSchema,
+  ControlIntentSchema,
+  ControlIntentStateSchema,
+  ControlIntentSurfaceSchema,
+  CreateApprovalSchema,
+  ReviewVerdictSchema,
+  SubmitControlIntentSchema,
+} from './approvals';
+export type {
+  Approval,
+  ApprovalState,
+  ChecksState,
+  ControlIntent,
+  CreateApproval,
+  ReviewVerdict,
+  SubmitControlIntent,
+} from './approvals';
+
+export {
   PlatformChangeEventSchema,
   PlatformEventTopicSchema,
 } from './events';
@@ -76,6 +100,7 @@ export {
   HandoffImpactItemSchema,
   HandoffImpactSchema,
   HandoffStatusSchema,
+  HandoffSubjectActionsSchema,
   HandoffValidationSchema,
   HandoffValidationStepSchema,
   HandoffValidationStepStatusSchema,
@@ -94,6 +119,7 @@ export type {
   HandoffImpactEvidence,
   HandoffImpactItem,
   HandoffStatus,
+  HandoffSubjectActions,
   HandoffValidation,
   HandoffValidationStep,
   HandoffValidationStepStatus,
@@ -115,6 +141,7 @@ export {
   AgentFailurePolicySchema,
   AgentIntegrationSchema,
   AgentSelfHealSchema,
+  AgentTriggerSchema,
   InstructionsConfigSchema,
   ManifestVersionSchema,
   NotificationsConfigSchema,
@@ -137,6 +164,7 @@ export type {
   AgentFailurePolicy,
   AgentIntegration,
   AgentSelfHeal,
+  AgentTrigger,
   InstructionsConfig,
   ManifestVersion,
   NotificationsConfig,
@@ -210,6 +238,12 @@ export {
   parseWorkOutcome,
   parseWorkProvenance,
 } from './work';
+
+export {
+  RunSubjectFeedbackSchema,
+  RunSubjectSchema,
+} from './work-subject';
+export type { RunSubject, RunSubjectFeedback } from './work-subject';
 export type {
   SourceCapabilities,
   SourceSyncState,

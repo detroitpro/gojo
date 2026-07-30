@@ -72,8 +72,17 @@ export const HandoffAssetSchema = z
 
 export type HandoffAsset = z.infer<typeof HandoffAssetSchema>;
 
-/** Latest handoff schema version gojo writes; v1 payloads remain accepted. */
-export const HANDOFF_SCHEMA_VERSION = 2;
+/** Latest handoff schema version gojo writes; v1/v2 payloads remain accepted. */
+export const HANDOFF_SCHEMA_VERSION = 3;
+
+export const HandoffSubjectActionsSchema = z.object({
+  addLabels: z.array(z.string().min(1)).optional(),
+  removeLabels: z.array(z.string().min(1)).optional(),
+  comment: z.string().min(1).optional(),
+  verdict: z.enum(['pass', 'changes-requested', 'reject']).optional(),
+});
+
+export type HandoffSubjectActions = z.infer<typeof HandoffSubjectActionsSchema>;
 
 /** Semantic outcome categories an agent may claim for a run. */
 export const HandoffImpactCategorySchema = z.enum([
@@ -126,9 +135,9 @@ export const HandoffImpactSchema = z.object({
 
 export type HandoffImpact = z.infer<typeof HandoffImpactSchema>;
 
-/** Normalized agent handoff report per PRD §14. Accepts schema v1 and v2. */
+/** Normalized agent handoff report per PRD §14. Accepts schema v1 through v3. */
 export const AgentHandoffReportSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   runId: UlidSchema,
   status: HandoffStatusSchema,
   summary: z.string().min(1),
@@ -144,6 +153,8 @@ export const AgentHandoffReportSchema = z.object({
   impact: HandoffImpactSchema.optional(),
   /** Optional attached files/blobs (e.g. verbose PR body markdown). */
   assets: z.array(HandoffAssetSchema).optional(),
+  /** Requested source mutations; gojo validates and applies them with platform credentials. */
+  subjectActions: HandoffSubjectActionsSchema.optional(),
   /**
    * Set by gojo after pull-request integration: real PR URL, or
    * `local://pr/<branch>` when the PR CLI failed.

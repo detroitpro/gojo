@@ -1,5 +1,14 @@
 export { Database } from "./db";
 export { createRepositories } from "./repositories";
+export {
+  createApprovalRepository,
+  createControlIntentRepository,
+} from "./approval-repositories";
+export type {
+  ApprovalRepository,
+  ControlIntentRepository,
+  UpdateApprovalInput,
+} from "./approval-repositories";
 export type {
   AgentRepository,
   AttemptRepository,

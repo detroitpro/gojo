@@ -72,7 +72,10 @@ function hasRoutes(config: NotificationsConfig | undefined): boolean {
     return false;
   }
   return Boolean(
-    config.onSuccess?.length || config.onFailure?.length || config.onDisabled?.length,
+    config.onSuccess?.length ||
+      config.onFailure?.length ||
+      config.onDisabled?.length ||
+      config.onApprovalNeeded?.length,
   );
 }
 
@@ -109,14 +112,21 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
   let active = true;
 
   const unsubscribe = ctx.eventBus.subscribe((event) => {
-    if (!active || event.type !== "run.finished") {
+    if (
+      !active ||
+      (event.type !== "run.finished" &&
+        event.type !== "run.awaiting_approval")
+    ) {
       return;
     }
 
     let work!: Promise<void>;
     work = (async () => {
       const run = ctx.repos.runs.findById(event.runId);
-      if (!run || !isTerminal(run.state)) {
+      if (
+        !run ||
+        (event.type === "run.finished" && !isTerminal(run.state))
+      ) {
         return;
       }
 
@@ -143,6 +153,38 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
       }
 
       const channels = loadChannels(ctx);
+      if (event.type === "run.awaiting_approval") {
+        const approvalEventData = event.data as
+          | Record<string, unknown>
+          | undefined;
+        await enqueueNamedChannels(
+          ctx,
+          run.id,
+          notifications.onApprovalNeeded ?? [],
+          channels,
+          {
+            project: project.name,
+            agent: agent?.name ?? run.agentId,
+            runId: run.id,
+            state: "approval-needed",
+            approvalId:
+              typeof approvalEventData?.["approvalId"] === "string"
+                ? approvalEventData["approvalId"]
+                : null,
+            approveUrl:
+              typeof approvalEventData?.["approveUrl"] === "string"
+                ? approvalEventData["approveUrl"]
+                : null,
+            prUrl:
+              typeof approvalEventData?.["prUrl"] === "string"
+                ? approvalEventData["prUrl"]
+                : null,
+            reviewerVerdict: approvalEventData?.["reviewerVerdict"] ?? null,
+            checksState: approvalEventData?.["checksState"] ?? null,
+          },
+        );
+        return;
+      }
       const handoff = resolveRunHandoffSummary(ctx, run.id);
       const basePayload = {
         project: project.name,

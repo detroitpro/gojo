@@ -208,6 +208,33 @@ describe('integration/integrator', () => {
     expect(result.prCreated).toBe(false);
   });
 
+  test('update-pull-request commits and pushes the existing branch without opening another PR', async () => {
+    const { repoPath, worktreePath, branchName } = await createRepo();
+    const remotePath = join(tempDir!, 'remote.git');
+    await execGit(tempDir!, ['init', '--bare', remotePath]);
+    await execGit(repoPath, ['remote', 'add', 'origin', remotePath]);
+    await execGit(repoPath, ['push', '-u', 'origin', branchName]);
+    writeFileSync(join(worktreePath, 'review-fix.txt'), 'fixed');
+
+    const result = await integrate({
+      mode: 'update-pull-request',
+      projectId: 'project-1',
+      worktreePath,
+      repoPath,
+      targetBranch: 'main',
+      branchName,
+      commitMessage: 'gojo: address review',
+      runId: 'run-fix',
+    });
+
+    expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(result.prUrl).toBeNull();
+    expect(result.prCreated).toBeNull();
+    expect((await execGit(remotePath, ['rev-parse', branchName])).stdout).toBe(
+      result.commitSha!,
+    );
+  });
+
   test('auto-merge merges branch into target', async () => {
     const { repoPath, worktreePath, branchName } = await createRepo();
     writeFileSync(join(worktreePath, 'merged.txt'), 'merged');

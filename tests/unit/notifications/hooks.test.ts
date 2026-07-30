@@ -398,5 +398,44 @@ describe("notifications/hooks", () => {
     expect(entry?.payload["summary"]).toContain("Merged (1)");
     expect(entry?.payload["handoffStatus"]).toBe("no-change");
   });
+
+  test("routes approval-needed before the run is terminal", async () => {
+    tempDir = mkdtempSync(`${tmpdir()}/gojo-hooks-approval-`);
+    ctx = await createAppContext(tempDir);
+    seedChannels(["ops"]);
+    const project = ctx.repos.projects.create({
+      name: "approval-routed",
+      repoPath: tempDir,
+      manifestJson: manifestJson("approval-routed", {
+        projectNotifications: { onApprovalNeeded: ["ops"] },
+      }),
+    });
+    const agent = ctx.repos.agents.create({
+      projectId: project.id,
+      name: "t",
+      prompt: "#!/bin/sh\ntrue\n",
+    });
+    const run = await ctx.coordinator.createRun({
+      projectId: project.id,
+      agentId: agent.id,
+      trigger: "manual",
+    });
+
+    ctx.eventBus.emit({
+      type: "run.awaiting_approval",
+      runId: run.id,
+      at: new Date().toISOString(),
+      data: { approvalId: "approval-1" },
+    });
+    await Bun.sleep(120);
+
+    expect(channelPayloads(run.id)).toContainEqual({
+      channel: "ops",
+      payload: expect.objectContaining({
+        state: "approval-needed",
+        approvalId: "approval-1",
+      }),
+    });
+  });
 });
 

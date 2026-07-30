@@ -267,6 +267,40 @@ export const openApiDocument = {
     "/api/v1/runs/{id}/retry": {
       post: { summary: "Retry run" },
     },
+    "/api/v1/approvals": {
+      get: {
+        summary: "List approvals",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "projectId", in: "query", schema: { type: "string" } },
+          { name: "state", in: "query", schema: { type: "string" } },
+          { name: "subjectType", in: "query", schema: { type: "string" } },
+        ],
+      },
+    },
+    "/api/v1/approvals/{id}": {
+      get: { summary: "Get approval" },
+    },
+    "/api/v1/approvals/{id}/approve": {
+      post: { summary: "Approve and apply a pending integration" },
+    },
+    "/api/v1/approvals/{id}/approve-link": {
+      get: { summary: "Show single-use approval confirmation" },
+      post: { summary: "Apply a single-use notification approval" },
+    },
+    "/api/v1/approvals/{id}/reject": {
+      post: { summary: "Reject a pending integration" },
+    },
+    "/api/v1/approvals/{id}/hold": {
+      post: { summary: "Hold a pending integration" },
+    },
+    "/api/v1/control/intents": {
+      post: { summary: "Submit an audited control intent" },
+    },
+    "/api/v1/work/{id}/diff": {
+      get: { summary: "Mirror a source pull-request diff through Gojo" },
+    },
     "/api/v1/dashboard": {
       get: {
         summary: "Dashboard summary counts",

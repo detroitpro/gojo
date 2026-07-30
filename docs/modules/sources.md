@@ -21,6 +21,12 @@ Adapters declare capabilities. Unsupported concepts remain absent: a tracker
 ticket is not assigned fake mergeability and a deployment does not need review
 state. Native state and JSON are retained beside normalized Work fields.
 
+GitHub, GitLab, and Forgejo adapters also expose a narrow platform write
+contract: comment, mutate labels, read diffs/checks, inspect label actors, and
+merge a pull request. Agent processes never receive forge write credentials.
+Only the source/control services resolve the connection token and execute these
+mutations.
+
 ## Synchronization truth
 
 Repository identities are normalized from HTTPS or SSH remotes. Sync runs on a
@@ -46,6 +52,13 @@ Credentials resolve from a connection's secret reference, with conventional
 provider environment variables as a compatibility fallback. GitHub also reuses
 the active `gh` CLI login when no explicit token is configured. Secrets are
 never stored in `project_sources` or native work metadata.
+
+`GOJO_SOURCE_TOKEN=… gojo source token set <source-id> [--secret-name <name>]`
+stores or rotates the secret (or prompts on a TTY) and persists only its
+reference on the connection. `gojo server doctor` reports missing source write
+credentials. For pull requests, source sync also
+polls comments from trusted issue-label actors and converts exact
+`/gojo approve|merge|hold|reject` commands into idempotent control intents.
 
 ## Provenance
 

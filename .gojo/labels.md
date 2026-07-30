@@ -1,8 +1,8 @@
 # GitHub issue label taxonomy (gojo)
 
-Owned by the `maintain-issue-tags` task. Reconcile the remote label set to this file; do not invent labels outside it.
+Owned by the `maintain-issue-tags` agent. Reconcile the remote label set to this file; do not invent labels outside it.
 
-**No gojo worker task currently selects work by labels.** Reserved `gojo:*` labels exist so future agents can claim issues safely.
+Issue-driven agents use the `gojo:*` state machine below.
 
 ## Axes
 
@@ -66,12 +66,19 @@ Skip domain labels for pure docs/CI with no module focus.
 | Label | Meaning | Tag agent may set? |
 |-------|---------|--------------------|
 | `gojo:needs-triage` | Missing/unclear area or domain after best effort | Yes |
-| `gojo:ready` | Cleared for automation to claim | **No** (human or future triage only) |
-| `gojo:blocked` | Do not automate | **No** (human only) |
+| `gojo:ready` | Trusted actor authorizes triage | **No** (human only) |
+| `gojo:validated` | Triage confirmed an actionable brief | **No** (triage agent only) |
+| `gojo:in-progress` | Platform holds an active claim | **No** (platform only) |
+| `gojo:blocked` | Missing detail, failed run, or human stop | **No** (triage/platform/human) |
+| `gojo:auto-merge` | Reviewer pass may authorize platform merge | **No** (human only) |
 
-### Future routing contract (not wired into workers yet)
+### Routing contract
 
-A code agent may consider an issue only when it has **`gojo:ready`** and an **`area:*`** matching its slice (e.g. `maintain-quality` → `area:daemon` / `area:api` / `area:cli`). Domain labels refine scope; they do not alone authorize work.
+`issue-triage` claims trusted `gojo:ready` issues. `issue-implement` requires
+both `gojo:ready` and `gojo:validated`. Gojo applies `gojo:in-progress`
+atomically with the claim and removes/releases it through validated handoff
+actions. `gojo:auto-merge` changes authority, never the green-check or
+independent-review requirements.
 
 ## Forbidden / do not create
 
@@ -83,5 +90,6 @@ Do not add overlapping type aliases (`feature`, `idea`) or one-off `phase:*` mil
 2. Scan open issues (respect task cap). Add/correct `area:*` + `domain:*` from title/body/paths.
 3. If type is missing and clearly bug vs docs vs enhancement, add exactly one of `bug` | `documentation` | `enhancement`.
 4. Set `gojo:needs-triage` when classification is uncertain; clear it when area/domain are set confidently.
-5. Never set or clear `gojo:ready` / `gojo:blocked`.
+5. Never set or clear `gojo:ready`, `gojo:validated`, `gojo:in-progress`,
+   `gojo:blocked`, or `gojo:auto-merge`.
 6. Never invent labels outside this file.

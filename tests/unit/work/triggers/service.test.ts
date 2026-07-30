@@ -1,0 +1,127 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
+import { WorkTriggerService } from '@/work/triggers/service';
+import { Database, createRepositories, createWorkRepositories } from '@/storage';
+
+describe('work trigger service', () => {
+  let db: Database | null = null;
+
+  afterEach(() => {
+    db?.close();
+    db = null;
+  });
+
+  test('claims an authorized issue once and applies platform-owned source actions', async () => {
+    db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const work = createWorkRepositories(db);
+    const project = repos.projects.create({ name: 'trigger-demo', repoPath: '/tmp/trigger' });
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: 'implement-issue',
+      prompt: 'implement',
+      triggerJson: JSON.stringify({
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        anyLabels: ['area:api'],
+        excludeLabels: ['gojo:blocked', 'gojo:in-progress'],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 1,
+      }),
+    });
+    const issue = work.items.create({
+      projectId: project.id,
+      kind: 'issue',
+      nativeKey: '42',
+      title: 'Issue 42',
+      delivery: 'open',
+      labels: ['gojo:ready', 'area:api'],
+      syncState: 'current',
+    });
+    const enqueued: Array<{ idempotencyKey?: string; subjectWorkItemId?: string }> = [];
+    const comments: string[] = [];
+    const labels: string[] = [];
+    const service = new WorkTriggerService({
+      db,
+      enqueue: async (input) => {
+        enqueued.push(input);
+        return repos.runs.create({
+          projectId: project.id,
+          agentId: agent.id,
+          idempotencyKey: input.idempotencyKey!,
+          trigger: 'work',
+          state: 'Queued',
+        });
+      },
+      runUrl: (runId) => `https://gojo.example/runs/${runId}`,
+    });
+    const observed = {
+      workItemId: issue.id,
+      previousLabels: ['area:api'],
+      labelActors: [{ label: 'gojo:ready', action: 'add' as const, actor: 'detroitpro' }],
+      comment: async (body: string) => {
+        comments.push(body);
+      },
+      addLabels: async (add: string[]) => {
+        labels.push(...add);
+      },
+    };
+
+    expect(await service.observe(observed)).toHaveLength(1);
+    expect(await service.observe(observed)).toHaveLength(0);
+    expect(enqueued).toEqual([
+      expect.objectContaining({
+        agentId: agent.id,
+        trigger: 'work',
+        idempotencyKey: `implement:${issue.id}:${agent.id}`,
+        subjectWorkItemId: issue.id,
+      }),
+    ]);
+    expect(comments[0]).toContain('https://gojo.example/runs/');
+    expect(labels).toEqual(['gojo:in-progress']);
+  });
+
+  test('does not enqueue when the authorizing label actor is untrusted', async () => {
+    db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const work = createWorkRepositories(db);
+    const project = repos.projects.create({ name: 'trigger-demo', repoPath: '/tmp/trigger' });
+    repos.agents.create({
+      projectId: project.id,
+      name: 'implement-issue',
+      prompt: 'implement',
+      triggerJson: JSON.stringify({
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 1,
+      }),
+    });
+    const issue = work.items.create({
+      projectId: project.id,
+      kind: 'issue',
+      title: 'Untrusted issue',
+      delivery: 'open',
+      labels: ['gojo:ready'],
+    });
+    let enqueues = 0;
+    const service = new WorkTriggerService({
+      db,
+      enqueue: async () => {
+        enqueues += 1;
+        throw new Error('must not enqueue');
+      },
+    });
+
+    expect(
+      await service.observe({
+        workItemId: issue.id,
+        previousLabels: [],
+        labelActors: [{ label: 'gojo:ready', action: 'add', actor: 'outsider' }],
+      }),
+    ).toHaveLength(0);
+    expect(enqueues).toBe(0);
+  });
+});

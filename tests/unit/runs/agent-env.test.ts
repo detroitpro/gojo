@@ -177,6 +177,37 @@ describe('runs/agent-env', () => {
     expect(env['GOJO_HOME']).toBe('/home/gojo');
   });
 
+  test('buildAgentProcessEnv excludes forge write credentials inherited from daemon env', () => {
+    const env = buildAgentProcessEnv({
+      daemonEnv: {
+        PATH: '/usr/bin',
+        FORGEJO_TOKEN: 'daemon-forgejo',
+        GITEA_TOKEN: 'daemon-gitea',
+        GOJO_FORGEJO_TOKEN: 'daemon-gojo-forgejo',
+        GH_TOKEN: 'daemon-gh',
+        GITHUB_TOKEN: 'daemon-github',
+        SOURCE_WRITE_TOKEN: 'daemon-source',
+        GOJO_RUN_ID: 'daemon-run',
+      },
+      projectValues: {
+        GH_TOKEN: 'project-gh',
+      },
+      platformEnv: {
+        GOJO_RUN_ID: 'platform-run',
+      },
+      deniedDaemonEnvKeys: ['SOURCE_WRITE_TOKEN', 'GOJO_RUN_ID'],
+    });
+
+    expect(env['PATH']).toBe('/usr/bin');
+    expect(env['FORGEJO_TOKEN']).toBeUndefined();
+    expect(env['GITEA_TOKEN']).toBeUndefined();
+    expect(env['GOJO_FORGEJO_TOKEN']).toBeUndefined();
+    expect(env['GH_TOKEN']).toBe('project-gh');
+    expect(env['GITHUB_TOKEN']).toBeUndefined();
+    expect(env['SOURCE_WRITE_TOKEN']).toBeUndefined();
+    expect(env['GOJO_RUN_ID']).toBe('platform-run');
+  });
+
   test('redactSecretValues strips loaded values from text', () => {
     expect(
       redactSecretValues('key=super-secret-key url=http://x', [

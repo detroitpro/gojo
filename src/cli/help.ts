@@ -148,6 +148,39 @@ export const COMMAND_GROUPS: CommandGroup[] = [
     ],
   },
   {
+    name: "source",
+    summary: "Configure source-system credentials",
+    commands: [
+      {
+        path: "source token set",
+        summary: "Store a source token in the encrypted secret store",
+        usage: "gojo source token set <sourceId> [--secret-name <name>]",
+      },
+    ],
+  },
+  {
+    name: "approval",
+    summary: "Review and control pending integrations",
+    commands: [
+      { path: "approval list", summary: "List approvals", usage: "gojo approval list [--state <state>] [--project <id>]" },
+      { path: "approval show", summary: "Inspect an approval", usage: "gojo approval show <id>" },
+      { path: "approval approve", summary: "Approve and merge", usage: "gojo approval approve <id> [--note <text>]" },
+      { path: "approval reject", summary: "Reject an approval", usage: "gojo approval reject <id> [--note <text>]" },
+      { path: "approval hold", summary: "Hold an approval", usage: "gojo approval hold <id> [--note <text>]" },
+    ],
+  },
+  {
+    name: "work",
+    summary: "Claim source work for an agent",
+    commands: [
+      {
+        path: "work claim",
+        summary: "Enqueue an agent for a work item",
+        usage: "gojo work claim <workItemId> --agent <name-or-id>",
+      },
+    ],
+  },
+  {
     name: "agent",
     summary: "Work units from gojo.yaml agents:",
     commands: [

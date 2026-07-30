@@ -182,7 +182,6 @@ describe('ProjectManifest', () => {
             prTool: 'tea',
             prLogin: 'home',
             prRemote: 'origin',
-            prAutoMerge: true,
             prApiUrl: 'http://192.168.5.251:3001',
             prRepo: 'detroitpro/rhystic-gaming',
             prMergeStyle: 'squash',
@@ -192,7 +191,7 @@ describe('ProjectManifest', () => {
     });
     expect(manifest.agents['dependency-maintenance']?.integration?.prTool).toBe('tea');
     expect(manifest.agents['dependency-maintenance']?.integration?.prLogin).toBe('home');
-    expect(manifest.agents['dependency-maintenance']?.integration?.prAutoMerge).toBe(true);
+    expect(manifest.agents['dependency-maintenance']?.integration?.prMergeStyle).toBe('squash');
     expect(manifest.agents['dependency-maintenance']?.integration?.prRepo).toBe(
       'detroitpro/rhystic-gaming',
     );
@@ -216,6 +215,133 @@ describe('ProjectManifest', () => {
       },
     });
     expect(result.success).toBe(false);
+  });
+
+  test('accepts issue and pull-request trigger contracts with approval policy', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          trigger: {
+            on: 'issue-label',
+            requireLabels: ['gojo:ready', 'gojo:validated'],
+            anyLabels: ['area:daemon', 'area:api'],
+            excludeLabels: ['gojo:blocked', 'gojo:in-progress'],
+            trustedActors: ['detroitpro'],
+            maxOpenClaims: 1,
+          },
+          integration: {
+            mode: 'await-approval',
+            targetBranch: 'main',
+            postApprovalMode: 'pull-request',
+            approval: 'manual',
+            autonomyLabels: { auto: 'gojo:autonomous' },
+            fixRounds: 2,
+          },
+        },
+        reviewer: {
+          description: 'Review settled agent pull requests.',
+          profile: 'reviewer',
+          promptFile: '.gojo/agents/reviewer.md',
+          validationProfile: 'standard',
+          trigger: {
+            on: 'pull-request-checks-settled',
+            fromAgents: ['dependency-maintenance'],
+          },
+        },
+      },
+    });
+
+    expect(manifest.agents['dependency-maintenance']?.trigger?.on).toBe('issue-label');
+    expect(manifest.agents['dependency-maintenance']?.integration?.fixRounds).toBe(2);
+    expect(manifest.agents['reviewer']?.trigger?.on).toBe(
+      'pull-request-checks-settled',
+    );
+  });
+
+  test('rejects unsafe or unbounded issue trigger contracts', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const baseAgent = agents['dependency-maintenance'];
+    const invalidTriggers = [
+      {
+        on: 'issue-label',
+        requireLabels: [],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 1,
+      },
+      {
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        trustedActors: [],
+        maxOpenClaims: 1,
+      },
+      {
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 0,
+      },
+      {
+        on: 'pull-request-checks-settled',
+        fromAgents: [],
+      },
+    ];
+
+    for (const trigger of invalidTriggers) {
+      const result = ProjectManifestSchema.safeParse({
+        ...parsed,
+        agents: {
+          ...agents,
+          'dependency-maintenance': {
+            ...baseAgent,
+            trigger,
+          },
+        },
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  test('rejects invalid approval and fix-loop policy', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const baseAgent = agents['dependency-maintenance'];
+
+    for (const integration of [
+      {
+        mode: 'pull-request',
+        targetBranch: 'main',
+        approval: 'unreviewed',
+      },
+      {
+        mode: 'pull-request',
+        targetBranch: 'main',
+        approval: 'reviewer',
+        fixRounds: -1,
+      },
+      {
+        mode: 'await-approval',
+        targetBranch: 'main',
+        postApprovalMode: 'await-approval',
+      },
+    ]) {
+      const result = ProjectManifestSchema.safeParse({
+        ...parsed,
+        agents: {
+          ...agents,
+          'dependency-maintenance': {
+            ...baseAgent,
+            integration,
+          },
+        },
+      });
+      expect(result.success).toBe(false);
+    }
   });
 
   test('rejects empty validation profile steps', () => {

@@ -25,6 +25,7 @@ export type ListQuery = {
   status?: string;
   trigger?: string;
   category?: string;
+  subjectType?: string;
   /** Inclusive ISO lower bound (run created_at). */
   from?: string;
   /** Inclusive ISO upper bound (run created_at). */
@@ -78,6 +79,9 @@ export function buildListQuery(params: ListQuery): string {
   }
   if (params.category) {
     sp.set("category", params.category);
+  }
+  if (params.subjectType) {
+    sp.set("subjectType", params.subjectType);
   }
   if (params.from) {
     sp.set("from", params.from);

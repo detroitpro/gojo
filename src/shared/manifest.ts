@@ -81,10 +81,24 @@ export const PrToolSchema = z.enum(['gh', 'tea']);
 
 export type PrTool = z.infer<typeof PrToolSchema>;
 
+const PostApprovalModeSchema = z.enum(['commit-only', 'pull-request', 'auto-merge']);
+
 export const AgentIntegrationSchema = z.object({
-  mode: z.enum(['commit-only', 'pull-request', 'auto-merge']),
+  mode: z.enum(['commit-only', 'pull-request', 'auto-merge', 'await-approval']),
   targetBranch: z.string().min(1),
   requireAllValidations: z.boolean().optional(),
+  /** Integration mode used after an operator approves an await-approval run. */
+  postApprovalMode: PostApprovalModeSchema.optional(),
+  /** Authority required before the platform may merge an agent-authored PR. */
+  approval: z.enum(['manual', 'reviewer', 'auto']).optional(),
+  /** Labels that opt a linked source issue into a stronger authority policy. */
+  autonomyLabels: z
+    .object({
+      auto: z.string().min(1),
+    })
+    .optional(),
+  /** Maximum automated repair rounds after red CI or requested changes. */
+  fixRounds: z.number().int().min(0).optional(),
   /**
    * CLI used when `mode` is `pull-request`.
    * `gh` = GitHub CLI; `tea` = Gitea/Forgejo tea CLI. Default: `gh`.
@@ -94,21 +108,37 @@ export const AgentIntegrationSchema = z.object({
   prLogin: z.string().min(1).optional(),
   /** Tea `--remote` for host discovery. Ignored for `gh`. Default at runtime: `origin`. */
   prRemote: z.string().min(1).optional(),
-  /**
-   * After a successful `tea` PR create, enable Forgejo “merge when checks succeed”
-   * via the pulls merge API. Requires `prApiUrl`, `prRepo`, and
-   * `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN` in the daemon environment.
-   */
-  prAutoMerge: z.boolean().optional(),
   /** Forgejo/Gitea base URL (e.g. `http://192.168.5.251:3001`). */
   prApiUrl: z.string().url().optional(),
   /** Forgejo repo slug `owner/name`. */
   prRepo: z.string().min(3).optional(),
-  /** Merge style for auto-merge (`Do` field). Default: squash. */
+  /** Platform merge style after approval. Default: squash. */
   prMergeStyle: z.enum(['squash', 'merge', 'rebase']).optional(),
 });
 
 export type AgentIntegration = z.infer<typeof AgentIntegrationSchema>;
+
+export const IssueLabelTriggerSchema = z.object({
+  on: z.literal('issue-label'),
+  requireLabels: z.array(z.string().min(1)).min(1),
+  anyLabels: z.array(z.string().min(1)).min(1).optional(),
+  excludeLabels: z.array(z.string().min(1)).optional(),
+  /** Only these source-native actors may apply the authorizing label. */
+  trustedActors: z.array(z.string().min(1)).min(1),
+  maxOpenClaims: z.number().int().positive(),
+});
+
+export const PullRequestChecksSettledTriggerSchema = z.object({
+  on: z.literal('pull-request-checks-settled'),
+  fromAgents: z.array(z.string().min(1)).min(1),
+});
+
+export const AgentTriggerSchema = z.discriminatedUnion('on', [
+  IssueLabelTriggerSchema,
+  PullRequestChecksSettledTriggerSchema,
+]);
+
+export type AgentTrigger = z.infer<typeof AgentTriggerSchema>;
 
 export const AgentFailurePolicySchema = z.object({
   maxAttemptsPerRun: z.number().int().positive().optional(),
@@ -131,6 +161,7 @@ export const NotificationsConfigSchema = z.object({
   onSuccess: z.array(z.string()).optional(),
   onFailure: z.array(z.string()).optional(),
   onDisabled: z.array(z.string()).optional(),
+  onApprovalNeeded: z.array(z.string()).optional(),
 });
 
 export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
@@ -186,6 +217,7 @@ export const AgentConfigSchema = z.object({
   promptFile: z.string().min(1),
   validationProfile: z.string().min(1),
   concurrency: AgentConcurrencySchema.optional(),
+  trigger: AgentTriggerSchema.optional(),
   integration: AgentIntegrationSchema.optional(),
   failurePolicy: AgentFailurePolicySchema.optional(),
   selfHeal: AgentSelfHealSchema.optional(),

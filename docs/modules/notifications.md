@@ -4,7 +4,7 @@
 
 ## Responsibility
 
-Notifications answer "who hears about a finished run, and what do they read." The module owns
+Notifications answer "who hears about a finished run or required approval, and what do they read." The module owns
 routing resolution, payload shape, and delivery with retries. It does not own run outcomes, and a
 delivery failure never turns a successful run into a failed one.
 
@@ -13,14 +13,14 @@ Two layers stay separate:
 | Layer | Where | Contents |
 |-------|-------|----------|
 | Channels (**where**) | `instance_settings.notification_channels` | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token and chat id |
-| Routing (**when**) | Project manifest, per project or per agent | Channel names for `onSuccess`, `onFailure`, `onDisabled` |
+| Routing (**when**) | Project manifest, per project or per agent | Channel names for `onSuccess`, `onFailure`, `onDisabled`, `onApprovalNeeded` |
 
 Channels are instance state so secrets never enter a repository. Routing lives with the project so it
 travels with the manifest.
 
 ## Routing precedence
 
-`run.finished` resolves routing agent-first:
+`run.finished` and `run.awaiting_approval` resolve routing agent-first:
 
 1. `agents.<name>.notifications` in the manifest, persisted to `agents.notifications_json`
 2. Otherwise top-level `notifications`
@@ -53,6 +53,11 @@ before emitting `run.finished`, so the hook always sees a completed handoff.
 The adapter/agent owns this text. The platform delivers it verbatim and only prepends routing context
 (project, agent, run id). Auto-disable payloads add `reason`, `scheduleId`, and `consecutiveFailures`;
 test sends add `test: true`.
+
+Approval-needed payloads use `state: "approval-needed"` and include
+`approvalId`. They are emitted for manual PR approvals as well as
+`await-approval` runs; delivery remains asynchronous and cannot alter approval
+or run state.
 
 ## Delivery
 

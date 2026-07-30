@@ -25,3 +25,17 @@ export {
   type SourceListInput,
   type SourceListResult,
 } from "./types";
+export type {
+  NormalizedSourceCheck,
+  NormalizedSourceComment,
+  NormalizedSourceLabelActor,
+  SourceChecksResult,
+  SourceCheckStatus,
+  SourceCommentInput,
+  SourceItemKind,
+  SourceItemOperationInput,
+  SourceMergePullRequestInput,
+  SourceMergePullRequestResult,
+  SourceMergeStyle,
+  SourceSetLabelsInput,
+} from "./write-types";

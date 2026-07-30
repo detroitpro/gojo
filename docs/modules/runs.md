@@ -22,10 +22,10 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 
 ## Admission / dispatcher
 
-All trigger paths (scheduler, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`src/shared/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
+All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`src/shared/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
 
 - Defaults: `maxConcurrentRuns: 2`, `maxConcurrentRunsPerProject: 1`, `minStartIntervalMs: 30000`, `maxLoadPerCpu: 1.0`
-- Priority: manual/api/web `10`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
+- Priority: manual/api/web `10`, source work `15`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
 - API: `GET /api/v1/queue`, `GET|PATCH /api/v1/instance/scheduling`
 
 ## List APIs (paging + sort)
@@ -59,6 +59,9 @@ environment:
 - `include` is the only set loaded from the file; unlisted keys are never injected.
 - `required` must be a subset of `include`; missing/empty required keys fail during `Preparing` (messages name the key/file, never the value).
 - Merge order: daemon `process.env` → selected project values → Gojo-owned `GOJO_*` (project files cannot override `GOJO_*`).
+- Forge write credentials (`GH_TOKEN`, `GITHUB_TOKEN`, `FORGEJO_TOKEN`,
+  `GITEA_TOKEN`, `GOJO_FORGEJO_TOKEN`, `GITLAB_TOKEN`, and configured source
+  secret names) are removed from adapter and validation environments.
 - Selected values are injected into the **adapter** and **validation** phases. Short-lived `GOJO_API_TOKEN` remains adapter-only.
 - Durable state (`environment_json` on agents / `run_context`) stores file path + names only — never resolved values. Loaded values are redacted from streamed agent output, validation tails, and failure artifacts.
 
@@ -75,7 +78,15 @@ environment:
 
 `pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the agent manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
 
-When `prTool: tea` and `prAutoMerge: true`, gojo POSTs Forgejo's pulls merge API with `merge_when_checks_succeed: true` (requires `prApiUrl`, `prRepo`, and daemon env `GOJO_FORGEJO_TOKEN` or `FORGEJO_TOKEN`). Auto-merge failures do **not** fail the run; they are recorded on the handoff as `unresolvedIssues` (`prAutoMerge: …`).
+PR integration creates a durable approval. The reconciler polls source checks
+without keeping an agent process alive. Once checks settle, a configured
+`pull-request-checks-settled` reviewer runs against the PR branch. Red checks or
+`changes-requested` can resume the implementing agent on that exact branch up to
+`integration.fixRounds`. The platform alone revalidates live checks and invokes
+the source adapter merge operation. `integration.approval` selects manual,
+reviewer, or auto authority; `autonomyLabels.auto` opts a linked issue into auto
+authority. Direct forge auto-merge configuration is not part of PR creation;
+all merges use this control path.
 
 ## Impact accounting
 
@@ -84,7 +95,7 @@ After integration the coordinator persists two canonical record sets (accounting
 - **`run_integrations`** (one compatibility row per run) — mode, provider, PR number/URL, commit SHA, and integration status. The reconciler never abandons a nonterminal PR: current opens are checked every minute and errors back off to at most fifteen minutes. The linked Work resource carries source observation/freshness and provider sync discovers human/bot work as well as gojo-created work.
 - **`run_impact_items`** (unique per `(run, category, subject)`) — built by `impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema. Verification stays an item-level concern (shown on run detail).
 
-The agent handoff is runtime-validated (`normalizeAgentHandoff`, schema v1/v2) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
+The agent handoff is runtime-validated (`normalizeAgentHandoff`, schema v1/v2/v3) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Schema v3 adds bounded `subjectActions` (labels, comment, reviewer verdict); the platform validates and executes them. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
 
 Dashboard tiles drill into list endpoints (gateway, not dead ends):
 

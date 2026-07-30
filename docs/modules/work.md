@@ -38,6 +38,15 @@ daemon restart (`work.stale`, `work.verified_terminal`, `work.resolved`,
 `work.state_changed`, and source observations). Raw agent output remains
 transient/artifact data rather than the lifecycle source of truth.
 
+Issue-driven runs snapshot their untrusted issue or pull-request subject in
+`run_context.subject_json` and link the run to that Work item. Label triggers
+claim eligible issues with a bounded per-agent cap. The implementing agent opens
+a PR; durable `approvals` then track settled checks, an independent reviewer
+verdict, autonomy policy, repair-round count, and the platform merge result.
+`control_intents` deduplicate operator decisions arriving from API, CLI, UI, or
+trusted forge comments. Agents may request comments, labels, and a review
+verdict in handoff schema v3, but cannot merge.
+
 ### State history and trends
 
 `work.state_changed` is the state of record for status axes. Every
@@ -67,9 +76,14 @@ written by any code path.
 - `GET /api/v1/projects/:id/work/status` (`compare=24h|7d|30d`, default `24h`)
 - `gojo work-status rebuild [--project <id>] [--from <iso>]`
 - `GET /api/v1/work/:id`
+- `GET /api/v1/work/:id/diff`
+- `GET|POST /api/v1/approvals` and approval decision endpoints
+- `POST /api/v1/control/intents`
 - `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/work/:id/resolve`
 - `gojo project work|status <id>`
+- `gojo approval list|show|approve|reject|hold`
+- `gojo work claim <work-item-id> --agent <agent-id>`
 - `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale] [--history]` (first page only; API adds paging and more filters)
 
 Kind vocabulary is unchanged: `run` still denotes a gojo agent execution row; the durable identity name on that row is the agent (work-unit) name.

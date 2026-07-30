@@ -21,6 +21,7 @@ export const RUN_PRIORITY = {
   manual: 10,
   api: 10,
   web: 10,
+  work: 15,
   heal: 20,
   schedule: 30,
 } as const satisfies Record<RunTrigger, number>;

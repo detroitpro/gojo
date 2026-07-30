@@ -294,6 +294,8 @@ void loadProjects();
                 <RouterLink :to="{ name: 'run-detail', params: { id: row.runId } }">
                   Open run
                 </RouterLink>
+                <span class="muted"> · </span>
+                <RouterLink :to="{ name: 'approvals' }">Approvals</RouterLink>
               </td>
             </tr>
           </tbody>

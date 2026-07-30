@@ -383,16 +383,21 @@ describe("sources/runtime", () => {
       },
     };
     const registry = new SourceAdapterRegistry([fakeAdapter]);
+    const observedWork: Array<{ nativeKey: string | null; previousLabels: string[] }> = [];
     const service = new SourceSyncService({
       db,
       registry,
       resolveDefaultToken: () => "provider-token",
+      onObserved: async ({ workItem, previousLabels }) => {
+        observedWork.push({ nativeKey: workItem.nativeKey, previousLabels });
+      },
     });
 
     const summary = await service.syncSource(source.id);
 
     expect(summary).toMatchObject({ upserted: 1, errors: 0 });
     expect(observedToken).toBe("provider-token");
+    expect(observedWork).toEqual([{ nativeKey: "OPS-9", previousLabels: [] }]);
     expect(work.sources.findById(source.id)).toMatchObject({
       syncState: "current",
       lastError: null,

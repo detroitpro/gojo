@@ -18,7 +18,45 @@ export type RunState =
   | "Conflict"
   | "InfrastructureFailure";
 
-export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal";
+export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal" | "work";
+
+export type ApprovalState =
+  | "pending-review"
+  | "awaiting-human"
+  | "approved"
+  | "rejected"
+  | "held"
+  | "applying"
+  | "applied"
+  | "failed"
+  | "expired";
+
+export interface Approval {
+  id: string;
+  projectId: string;
+  subjectType: "pull-request" | "run" | "conflict" | "retry";
+  subjectId: string;
+  runId: string | null;
+  workItemId: string | null;
+  reason: string;
+  autonomy: "manual" | "reviewer" | "auto";
+  state: ApprovalState;
+  reviewVerdict: "pass" | "changes-requested" | "reject" | null;
+  checksState: "pending" | "success" | "failure" | "unknown" | null;
+  evidence: Record<string, unknown>;
+  decidedBy: string | null;
+  decidedVia: string | null;
+  note: string | null;
+  attempts: number;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  workTitle?: string | null;
+  workUrl?: string | null;
+  agentName?: string | null;
+  projectName?: string | null;
+}
 
 export interface User {
   id: string;

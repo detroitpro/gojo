@@ -19,6 +19,7 @@ import SortableTh from "@/components/SortableTh.vue";
 import IntegrationStatusBadge from "@/components/status/IntegrationStatusBadge.vue";
 import VerificationBadge from "@/components/status/VerificationBadge.vue";
 import StateBadge from "@/components/StateBadge.vue";
+import StatusBadge from "@/components/StatusBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
 import { useSoftLoading } from "@/composables/useSoftLoading";
@@ -31,10 +32,12 @@ import {
   shortSha,
 } from "@/lib/format";
 import { impactCategoryLabel } from "@/lib/impact-format";
+import { approvalStatus } from "@/lib/status-icons";
 import type { PhaseKey } from "@/lib/run-phases";
 import { ArrowLeft, Ban, Check, RotateCcw, X } from "lucide-vue-next";
 import type {
   Attempt,
+  Approval,
   Run,
   RunArtifactsResult,
   RunEvent,
@@ -49,6 +52,7 @@ const run = ref<Run | null>(null);
 const attempts = ref<Attempt[]>([]);
 const impactItems = ref<RunImpactItem[]>([]);
 const integration = ref<RunIntegration | null>(null);
+const approval = ref<Approval | null>(null);
 const events = ref<RunEvent[]>([]);
 const { loading, begin: beginLoad, end: endLoad, reset: resetLoad } = useSoftLoading();
 const error = ref("");
@@ -343,12 +347,14 @@ async function load() {
     attempts.value = data.attempts;
     impactItems.value = data.impactItems ?? [];
     integration.value = data.integration ?? null;
+    approval.value = data.approval ?? null;
   } catch (err) {
     if (initial) {
       run.value = null;
       attempts.value = [];
       impactItems.value = [];
       integration.value = null;
+      approval.value = null;
     }
     error.value = err instanceof Error ? err.message : "Failed to load run";
   } finally {
@@ -510,6 +516,7 @@ watch(runId, async () => {
   attempts.value = [];
   impactItems.value = [];
   integration.value = null;
+  approval.value = null;
   events.value = [];
   await load();
   startEvents();
@@ -645,7 +652,7 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section v-if="integration || impactItems.length > 0" class="panel">
+      <section v-if="integration || approval || impactItems.length > 0" class="panel">
         <div class="panel-header">Impact &amp; integration</div>
         <div class="panel-body">
           <div v-if="integration" class="integration-summary">
@@ -672,6 +679,14 @@ onUnmounted(() => {
             <span v-if="integration.lastError" class="muted" :title="integration.lastError">
               · last check failed
             </span>
+          </div>
+          <div v-if="approval" class="integration-summary mt-4">
+            <StatusBadge
+              :label="approvalStatus(approval.state).label"
+              :icon="approvalStatus(approval.state).icon"
+              :tone="approvalStatus(approval.state).tone"
+            />
+            <AppButton size="sm" :icon="Check" to="/approvals">Open approval</AppButton>
           </div>
 
           <div v-if="impactItems.length > 0" class="table-wrap" :class="{ 'mt-4': integration }">

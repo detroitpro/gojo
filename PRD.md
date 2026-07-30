@@ -849,6 +849,11 @@ git reset --hard origin/main
 
 The platform should own those operations.
 
+Forge write credentials must remain in platform source/control services and must
+not be inherited by coding or reviewer agent processes. An agent may request a
+review verdict, comment, or label transition through its validated handoff; only
+the platform may execute a merge.
+
 ### 11.3 Integration modes
 
 #### Mode A: Report only
@@ -900,6 +905,20 @@ Configurable choices:
 
 The default should not permit autonomous force-pushing to a protected target branch.
 
+### 11.6 Issue-driven integration
+
+A source issue may authorize work through a trusted label actor. The platform
+must claim it durably, snapshot its body as explicitly untrusted run context,
+and enforce a bounded open-claim count. An implementation run opens a pull
+request and terminates; no agent or worktree waits for CI.
+
+Source checks are reconciled asynchronously. After checks settle, an independent
+reviewer supplies `pass`, `changes-requested`, or `reject`. Red checks or
+requested changes may enqueue a bounded repair run on the existing PR branch.
+The approval row owns loop count, authority, evidence, and escalation. Merge
+requires live green checks, the required reviewer verdict, current-base
+revalidation, and serialized platform execution.
+
 ---
 
 ## 12. Scheduling Requirements
@@ -913,11 +932,11 @@ The initial release must support:
 * One-time execution
 * Manual execution
 
-Later releases may support:
+Additional triggers may support:
 
 * Git push events
 * Pull-request events
-* Issue events
+* Issue events beyond trusted label transitions
 * Webhooks
 * File changes
 * Completion of another task
@@ -1268,12 +1287,17 @@ Allows operators to:
 
 #### Approvals
 
-Shows work awaiting:
+Shows durable approval state, source links or mirrored diff, checks, reviewer
+verdict, repair attempts, and actions for work awaiting:
 
 * Merge approval
 * Permission escalation
 * Conflict resolution
 * Retry approval
+
+Approve, hold, and reject must share one audited control-intent path across UI,
+CLI, API, trusted forge comments, and notification links. Repeated external
+delivery must be idempotent.
 
 #### Settings
 

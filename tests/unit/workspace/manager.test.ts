@@ -186,6 +186,79 @@ describe('workspace/manager', () => {
     expect(await branchExists(repoPath, attempt.branchName)).toBe(true);
   });
 
+  test('prepareAttempt reuses and tracks an exact remote resume branch', async () => {
+    const { repoPath, worktreesRoot, remoteMainSha } =
+      await createDirtyCloneWithRemote();
+    const manager = new WorkspaceManager(worktreesRoot);
+    const resumeBranch = 'feature/resume-pr';
+
+    await execGit(repoPath, ['fetch', 'origin']);
+    await execGit(repoPath, ['branch', resumeBranch, 'origin/main']);
+    await execGit(repoPath, ['push', 'origin', resumeBranch]);
+
+    const attempt = await manager.prepareAttempt({
+      repoPath,
+      baseBranch: 'main',
+      runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
+      agentName: 'resume-agent',
+      resumeBranch,
+    });
+
+    expect(attempt.branchName).toBe(resumeBranch);
+    expect(attempt.startingCommit).toBe(remoteMainSha);
+    expect(await getHead(attempt.worktreePath)).toBe(remoteMainSha);
+    const upstream = await execGit(repoPath, [
+      'for-each-ref',
+      '--format=%(upstream:short)',
+      `refs/heads/${resumeBranch}`,
+    ]);
+    expect(upstream.stdout).toBe(`origin/${resumeBranch}`);
+  });
+
+  test('cleanup keeps a resumed branch when requested', async () => {
+    const { repoPath, worktreesRoot } = await createRepo();
+    const manager = new WorkspaceManager(worktreesRoot);
+    const resumeBranch = 'feature/resume-pr';
+    await execGit(repoPath, ['branch', resumeBranch, 'main']);
+
+    const attempt = await manager.prepareAttempt({
+      repoPath,
+      baseBranch: 'main',
+      runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
+      agentName: 'resume-agent',
+      resumeBranch,
+    });
+
+    expect(attempt.branchName).toBe(resumeBranch);
+    await manager.cleanup(attempt.worktreePath, attempt.branchName, {
+      keepBranch: true,
+    });
+
+    const { branchExists } = await import('@/git/git');
+    expect(await branchExists(repoPath, resumeBranch)).toBe(true);
+  });
+
+  test('prepareAttempt rejects unsafe or invalid resume refs', async () => {
+    const { repoPath, worktreesRoot } = await createRepo();
+    const manager = new WorkspaceManager(worktreesRoot);
+    const input = {
+      repoPath,
+      baseBranch: 'main',
+      runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+      projectName: 'demo',
+      agentName: 'resume-agent',
+    };
+
+    await expect(
+      manager.prepareAttempt({ ...input, resumeBranch: '--help' }),
+    ).rejects.toThrow('Invalid resume branch');
+    await expect(
+      manager.prepareAttempt({ ...input, resumeBranch: 'bad branch' }),
+    ).rejects.toThrow('Invalid resume branch');
+  });
+
   test('prepareAttempt with syncBeforeRun succeeds on dirty primary checkout', async () => {
     const { repoPath, worktreesRoot, remoteMainSha } =
       await createDirtyCloneWithRemote();

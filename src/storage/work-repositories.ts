@@ -204,6 +204,10 @@ export interface RunContextRecord {
   failurePolicyJson: string;
   /** Non-secret env config snapshot (file + names); never resolved values. */
   environmentJson: string;
+  /** Immutable enqueue-time snapshot of the issue or PR this run serves. */
+  subjectJson: string | null;
+  /** Existing PR branch to attach rather than creating a fresh run branch. */
+  resumeBranch: string | null;
   baseBranch: string | null;
   scheduleJson: string | null;
   createdAt: string;
@@ -703,6 +707,15 @@ export function createWorkRepositories(db: Database) {
         updatedAt: row.updated_at,
       }));
     },
+
+    updateConfig(id: string, configJson: string): SourceConnection | null {
+      const existing = this.findById(id);
+      if (!existing) return null;
+      sqlite
+        .query("UPDATE source_connections SET config_json = ?, updated_at = ? WHERE id = ?")
+        .run(configJson, nowIso(), id);
+      return this.findById(id);
+    },
   };
 
   const sources = {
@@ -1054,6 +1067,15 @@ export function createWorkRepositories(db: Database) {
       return row ? mapWorkItem(row) : null;
     },
 
+    findByWebUrl(webUrl: string): WorkItem | null {
+      const row = sqlite
+        .query<WorkItemRow, [string]>(
+          "SELECT * FROM work_items WHERE web_url = ? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1",
+        )
+        .get(webUrl);
+      return row ? mapWorkItem(row) : null;
+    },
+
     upsertExternal(input: UpsertExternalWorkInput): WorkItem {
       return db.transaction(() => {
         const existing = sqlite
@@ -1189,6 +1211,7 @@ export function createWorkRepositories(db: Database) {
           | "delivery"
           | "outcome"
           | "attention"
+          | "labels"
           | "nativeState"
           | "nativeJson"
           | "webUrl"
@@ -1207,7 +1230,7 @@ export function createWorkRepositories(db: Database) {
         .query(
           `UPDATE work_items SET
             title = ?, summary = ?, execution = ?, delivery = ?, outcome = ?,
-            attention = ?, native_state = ?, native_json = ?, web_url = ?,
+            attention = ?, labels_json = ?, native_state = ?, native_json = ?, web_url = ?,
             observed_at = ?, next_sync_at = ?, sync_state = ?, last_error = ?,
             started_at = ?, completed_at = ?, updated_at = ?
           WHERE id = ?`,
@@ -1219,6 +1242,7 @@ export function createWorkRepositories(db: Database) {
           input.delivery ?? existing.delivery,
           input.outcome ?? existing.outcome,
           input.attention ?? existing.attention,
+          JSON.stringify(input.labels ?? existing.labels),
           input.nativeState === undefined ? existing.nativeState : input.nativeState,
           input.nativeJson ?? existing.nativeJson,
           input.webUrl === undefined ? existing.webUrl : input.webUrl,
@@ -1664,8 +1688,8 @@ export function createWorkRepositories(db: Database) {
             run_id, work_item_id, agent_name, agent_description, prompt,
             manifest_hash, instructions, profile_json, adapter, model,
             validation_json, integration_json, failure_policy_json,
-            environment_json, base_branch, schedule_json, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            environment_json, subject_json, resume_branch, base_branch, schedule_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.runId,
@@ -1682,6 +1706,8 @@ export function createWorkRepositories(db: Database) {
           input.integrationJson,
           input.failurePolicyJson,
           input.environmentJson,
+          input.subjectJson,
+          input.resumeBranch,
           input.baseBranch,
           input.scheduleJson,
           createdAt,
@@ -1707,6 +1733,8 @@ export function createWorkRepositories(db: Database) {
             integration_json: string;
             failure_policy_json: string;
             environment_json: string;
+            subject_json: string | null;
+            resume_branch: string | null;
             base_branch: string | null;
             schedule_json: string | null;
             created_at: string;
@@ -1730,6 +1758,8 @@ export function createWorkRepositories(db: Database) {
         integrationJson: row.integration_json,
         failurePolicyJson: row.failure_policy_json,
         environmentJson: row.environment_json ?? "{}",
+        subjectJson: row.subject_json,
+        resumeBranch: row.resume_branch,
         baseBranch: row.base_branch,
         scheduleJson: row.schedule_json,
         createdAt: row.created_at,

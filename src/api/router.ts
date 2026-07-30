@@ -89,6 +89,7 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
+import { ApprovalStateSchema } from "@shared/approvals";
 import {
   compareWindowToMs,
   parseCompareWindow,
@@ -223,6 +224,12 @@ function isPublicRoute(method: string, pathname: string, hasUsers: boolean): boo
   if (pathname === "/api/v1/auth/logout" && method === "POST") {
     return true;
   }
+  if (
+    (method === "GET" || method === "POST") &&
+    /^\/api\/v1\/approvals\/[^/]+\/approve-link$/.test(pathname)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -246,7 +253,17 @@ function isAuthExemptMutation(pathname: string): boolean {
   return pathname === "/api/v1/setup" ||
     pathname === "/api/v1/auth/login" ||
     pathname === "/api/v1/auth/logout" ||
+    /^\/api\/v1\/approvals\/[^/]+\/approve-link$/.test(pathname) ||
     /^\/api\/v1\/sources\/[^/]+\/events$/.test(pathname);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function isMutating(method: string): boolean {
@@ -372,6 +389,53 @@ export async function handleApiRequest(
   }
 
   const auth = (request as Request & { auth?: AuthContext }).auth;
+
+  const approveLinkMatch = pathname.match(
+    /^\/api\/v1\/approvals\/([^/]+)\/approve-link$/,
+  );
+  if (approveLinkMatch && (method === "GET" || method === "POST")) {
+    const approvalId = approveLinkMatch[1] ?? "";
+    const token =
+      method === "GET"
+        ? url.searchParams.get("token")
+        : String((await request.formData()).get("token") ?? "");
+    const verified = token ? users.verifyApiTokenDetails(token) : null;
+    const validScope = verified?.scopes.includes(
+      `control:approve:${approvalId}`,
+    );
+    const approval = ctx.approvals.findById(approvalId);
+    if (!verified || !validScope || !approval) {
+      return new Response(
+        "<!doctype html><title>Invalid approval link</title><h1>Invalid or expired approval link</h1>",
+        { status: 403, headers: { "Content-Type": "text/html; charset=utf-8" } },
+      );
+    }
+    if (method === "POST") {
+      const intent = await ctx.approvals.submitIntent({
+        projectId: approval.projectId,
+        kind: "approve",
+        targetType: "approval",
+        targetId: approval.id,
+        actor: verified.user.username,
+        surface: "chat",
+        surfaceRef: verified.token.id,
+        note: "Approved from single-use notification link",
+      });
+      users.revokeApiToken(verified.user.id, verified.token.id);
+      const applied = intent.state === "applied";
+      return new Response(
+        `<!doctype html><title>Gojo approval</title><h1>${applied ? "Approval applied" : "Approval not applied"}</h1><p>${escapeHtml(intent.error ?? "You may close this page.")}</p>`,
+        {
+          status: applied ? 200 : 409,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        },
+      );
+    }
+    return new Response(
+      `<!doctype html><title>Confirm Gojo approval</title><meta name="viewport" content="width=device-width,initial-scale=1"><main><h1>Approve merge?</h1><p>${escapeHtml(approval.reason || approval.subjectId)}</p><form method="post"><input type="hidden" name="token" value="${escapeHtml(token ?? "")}"><button type="submit">Approve</button></form></main>`,
+      { headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
 
   if (method === "GET" && pathname === "/api/v1/health") {
     return success({
@@ -524,6 +588,16 @@ export async function handleApiRequest(
       .map((token) => ({
         id: token.id,
         name: token.name,
+        scopes: (() => {
+          try {
+            const parsed = JSON.parse(token.scopesJson) as unknown;
+            return Array.isArray(parsed)
+              ? parsed.filter((scope): scope is string => typeof scope === "string")
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
         createdAt: token.createdAt,
         expiresAt: token.expiresAt,
       }));
@@ -550,21 +624,176 @@ export async function handleApiRequest(
     if (!auth) {
       return failure("unauthorized", "Authentication required", 401);
     }
-    const body = await readJsonBody<{ name?: string }>(request);
+    const body = await readJsonBody<{
+      name?: string;
+      scopes?: string[];
+      expiresAt?: string | null;
+    }>(request);
     if (!body?.name) {
       return failure("validation_error", "name is required", 400);
     }
 
-    const created = users.createApiTokenForUser(auth.userId, body.name);
+    const scopes = Array.isArray(body.scopes)
+      ? body.scopes.filter((scope): scope is string => typeof scope === "string" && scope.length > 0)
+      : [];
+    if (body.expiresAt && !Number.isFinite(new Date(body.expiresAt).getTime())) {
+      return failure("validation_error", "expiresAt must be an ISO date-time", 400);
+    }
+    const created = users.createApiTokenForUser(auth.userId, body.name, {
+      scopes,
+      expiresAt: body.expiresAt ?? null,
+    });
     return success(
       {
         id: created.record.id,
         name: created.record.name,
         token: created.token,
+        scopes,
         createdAt: created.record.createdAt,
+        expiresAt: created.record.expiresAt,
       },
       201,
     );
+  }
+
+  if (method === "GET" && pathname === "/api/v1/approvals") {
+    const page = parsePageParamsFromUrl(url);
+    const stateValue = url.searchParams.get("state");
+    const parsedState = stateValue ? ApprovalStateSchema.safeParse(stateValue) : null;
+    if (parsedState && !parsedState.success) {
+      return failure("validation_error", "Invalid approval state", 400);
+    }
+    const result = ctx.approvals.list({
+      ...page,
+      ...(url.searchParams.get("projectId")
+        ? { projectId: url.searchParams.get("projectId")! }
+        : {}),
+      ...(url.searchParams.get("subjectType")
+        ? { subjectType: url.searchParams.get("subjectType")! }
+        : {}),
+      ...(parsedState?.success ? { state: parsedState.data } : {}),
+    });
+    return success({
+      approvals: result.items.map((approval) => {
+        const workItem = approval.workItemId
+          ? ctx.work.items.findById(approval.workItemId)
+          : null;
+        const run = approval.runId ? ctx.repos.runs.findById(approval.runId) : null;
+        const agent = run ? ctx.repos.agents.findById(run.agentId) : null;
+        const project = ctx.repos.projects.findById(approval.projectId);
+        return {
+          ...approval,
+          workTitle: workItem?.title ?? null,
+          workUrl: workItem?.webUrl ?? null,
+          agentName: agent?.name ?? null,
+          projectName: project?.name ?? null,
+        };
+      }),
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
+  }
+
+  const approvalActionMatch = pathname.match(
+    /^\/api\/v1\/approvals\/([^/]+)\/(approve|reject|hold)$/,
+  );
+  const approvalDetailMatch = pathname.match(/^\/api\/v1\/approvals\/([^/]+)$/);
+  if (method === "GET" && approvalDetailMatch) {
+    const approval = ctx.approvals.findById(approvalDetailMatch[1] ?? "");
+    const workItem = approval?.workItemId
+      ? ctx.work.items.findById(approval.workItemId)
+      : null;
+    return approval
+      ? success({
+          approval: {
+            ...approval,
+            workTitle: workItem?.title ?? null,
+            workUrl: workItem?.webUrl ?? null,
+          },
+        })
+      : failure("not_found", "Approval not found", 404);
+  }
+  if (method === "POST" && approvalActionMatch) {
+    if (!auth) return failure("unauthorized", "Authentication required", 401);
+    const approvalId = approvalActionMatch[1] ?? "";
+    const approval = ctx.approvals.findById(approvalId);
+    if (!approval) return failure("not_found", "Approval not found", 404);
+    const body = await readJsonBody<{ note?: string; surfaceRef?: string }>(request);
+    const action = approvalActionMatch[2] as "approve" | "reject" | "hold";
+    const intent = await ctx.approvals.submitIntent({
+      projectId: approval.projectId,
+      kind: action,
+      targetType: "approval",
+      targetId: approval.id,
+      actor: auth.username,
+      surface: "api",
+      surfaceRef: body?.surfaceRef ?? auth.tokenId ?? null,
+      note: body?.note ?? null,
+    });
+    if (intent.state === "rejected") {
+      return failure("conflict", intent.error ?? "Approval intent rejected", 409);
+    }
+    if (
+      action === "approve" &&
+      auth.authMethod === "token" &&
+      auth.tokenId &&
+      auth.scopes?.includes(`control:approve:${approval.id}`)
+    ) {
+      users.revokeApiToken(auth.userId, auth.tokenId);
+    }
+    return success({
+      intent,
+      approval: ctx.approvals.findById(approval.id),
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/v1/control/intents") {
+    if (!auth) return failure("unauthorized", "Authentication required", 401);
+    const body = await readJsonBody<{
+      projectId?: string;
+      kind?: "approve" | "reject" | "hold" | "claim" | "cancel" | "retry";
+      targetType?: string;
+      targetId?: string;
+      note?: string;
+      surfaceRef?: string;
+    }>(request);
+    if (!body?.projectId || !body.kind || !body.targetType || !body.targetId) {
+      return failure(
+        "validation_error",
+        "projectId, kind, targetType, and targetId are required",
+        400,
+      );
+    }
+    const intent = await ctx.approvals.submitIntent({
+      projectId: body.projectId,
+      kind: body.kind,
+      targetType: body.targetType,
+      targetId: body.targetId,
+      actor: auth.username,
+      surface: "api",
+      surfaceRef: body.surfaceRef ?? null,
+      note: body.note ?? null,
+    });
+    return success({ intent }, intent.state === "applied" ? 201 : 409);
+  }
+
+  const workDiffMatch = pathname.match(/^\/api\/v1\/work\/([^/]+)\/diff$/);
+  if (method === "GET" && workDiffMatch) {
+    const workItem = ctx.work.items.findById(workDiffMatch[1] ?? "");
+    if (!workItem) return failure("not_found", "Work item not found", 404);
+    try {
+      return success({
+        workItemId: workItem.id,
+        diff: await ctx.mergeService.getDiff(workItem.projectId, workItem.id),
+      });
+    } catch (error) {
+      return failure(
+        "validation_error",
+        error instanceof Error ? error.message : String(error),
+        400,
+      );
+    }
   }
 
   const tokenDeleteMatch = pathname.match(/^\/api\/v1\/auth\/tokens\/([^/]+)$/);
@@ -1238,6 +1467,7 @@ export async function handleApiRequest(
       attempts,
       impactItems: ctx.repos.runImpactItems.listByRun(runId),
       integration: ctx.repos.runIntegrations.findByRun(runId),
+      approval: ctx.approvals.findByRun(runId),
     });
   }
 

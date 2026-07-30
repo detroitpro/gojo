@@ -7,10 +7,6 @@ import {
   statusPorcelain,
 } from '@/git/git';
 import {
-  enableForgejoAutoMerge,
-  type ForgejoMergeStyle,
-} from '@/integration/forgejo-auto-merge';
-import {
   buildPrCreateInvocation,
   extractPrUrl,
   normalizePrTool,
@@ -25,6 +21,7 @@ export type IntegrationMode =
   | 'none'
   | 'commit-only'
   | 'pull-request'
+  | 'update-pull-request'
   | 'auto-merge'
   | 'await-approval';
 
@@ -47,11 +44,6 @@ export interface IntegrateOptions {
   prLogin?: string;
   /** Tea `--remote` when `prTool` is `tea` (default `origin` if omitted). */
   prRemote?: string;
-  /** Enable Forgejo merge-when-checks-succeed after tea PR create. */
-  prAutoMerge?: boolean;
-  prApiUrl?: string;
-  prRepo?: string;
-  prMergeStyle?: ForgejoMergeStyle;
   mergeQueue?: MergeQueue;
 }
 
@@ -65,8 +57,6 @@ export interface IntegrateResult {
    * Null for modes that do not open PRs.
    */
   prCreated: boolean | null;
-  /** Non-null when prAutoMerge was requested but could not be enabled. */
-  prAutoMergeError?: string | null;
 }
 
 const defaultMergeQueue = new MergeQueue();
@@ -187,6 +177,17 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
       return { commitSha, prUrl: null, conflict: false, prCreated: null };
     }
 
+    case 'update-pull-request': {
+      const commitSha = await commitIfDirty(opts.worktreePath, opts.commitMessage);
+      if (!commitSha) {
+        return { commitSha: null, prUrl: null, conflict: false, prCreated: null };
+      }
+      if (await hasRemote(opts.repoPath)) {
+        await push(opts.repoPath, 'origin', `${opts.branchName}:${opts.branchName}`);
+      }
+      return { commitSha, prUrl: null, conflict: false, prCreated: null };
+    }
+
     case 'pull-request': {
       const commitSha = await commitIfDirty(opts.worktreePath, opts.commitMessage);
 
@@ -216,24 +217,11 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
       });
 
       if (createdUrl) {
-        let prAutoMergeError: string | null = null;
-        if (opts.prAutoMerge && tool === 'tea') {
-          prAutoMergeError = await enableForgejoAutoMerge({
-            prUrl: createdUrl,
-            apiUrl: opts.prApiUrl ?? '',
-            repo: opts.prRepo ?? '',
-            ...(opts.prMergeStyle ? { mergeStyle: opts.prMergeStyle } : {}),
-          });
-        } else if (opts.prAutoMerge && tool !== 'tea') {
-          prAutoMergeError = 'prAutoMerge is only supported with prTool: tea';
-        }
-
         return {
           commitSha,
           prUrl: createdUrl,
           conflict: false,
           prCreated: true,
-          prAutoMergeError,
         };
       }
 
@@ -242,7 +230,6 @@ export async function integrate(opts: IntegrateOptions): Promise<IntegrateResult
         prUrl: `local://pr/${opts.branchName}`,
         conflict: false,
         prCreated: false,
-        prAutoMergeError: null,
       };
     }
 

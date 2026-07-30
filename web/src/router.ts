@@ -4,6 +4,7 @@ import { checkSession } from "./api";
 import AdaptersView from "./views/AdaptersView.vue";
 import AgentDetailView from "./views/AgentDetailView.vue";
 import AgentsView from "./views/AgentsView.vue";
+import ApprovalsView from "./views/ApprovalsView.vue";
 import AppShell from "./components/AppShell.vue";
 import DashboardView from "./views/DashboardView.vue";
 import ImpactView from "./views/ImpactView.vue";
@@ -39,6 +40,7 @@ const router = createRouter({
         { path: "runs", name: "runs", component: RunsView },
         { path: "runs/:id", name: "run-detail", component: RunDetailView },
         { path: "integrations", name: "integrations", component: IntegrationsView },
+        { path: "approvals", name: "approvals", component: ApprovalsView },
         { path: "impact", name: "impact", component: ImpactView },
         { path: "queue", name: "queue", component: QueueView },
         { path: "schedules", name: "schedules", component: SchedulesView },

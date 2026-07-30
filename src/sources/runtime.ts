@@ -43,6 +43,15 @@ export interface SourceSyncSummary {
   observedAt: string | null;
 }
 
+export interface SourceObservedItem {
+  source: ProjectSource;
+  connection: SourceConnection;
+  adapter: SourceAdapter;
+  token: string | null;
+  workItem: WorkItem;
+  previousLabels: string[];
+}
+
 function parseConfig(connection: SourceConnection): Record<string, unknown> {
   try {
     const parsed = JSON.parse(connection.configJson) as unknown;
@@ -83,6 +92,9 @@ export class SourceSyncService {
     | null;
   private readonly resolveDefaultToken: (adapter: string) => string | null;
   private readonly platformEvents: PlatformChangeFeed | null;
+  private readonly onObserved:
+    | ((input: SourceObservedItem) => Promise<void>)
+    | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
   private activeTick: Promise<void> | null = null;
@@ -93,6 +105,7 @@ export class SourceSyncService {
     resolveSecret?: (name: string, projectId: string) => string | null;
     resolveDefaultToken?: (adapter: string) => string | null;
     platformEvents?: PlatformChangeFeed;
+    onObserved?: (input: SourceObservedItem) => Promise<void>;
   }) {
     this.work = createWorkRepositories(input.db);
     this.registry =
@@ -106,6 +119,7 @@ export class SourceSyncService {
     this.resolveSecret = input.resolveSecret ?? null;
     this.resolveDefaultToken = input.resolveDefaultToken ?? defaultToken;
     this.platformEvents = input.platformEvents ?? null;
+    this.onObserved = input.onObserved ?? null;
   }
 
   start(): void {
@@ -191,6 +205,11 @@ export class SourceSyncService {
         offset: 0,
       }).items;
       const orphanedByNativeRef = new Map<string, typeof beforeSync>();
+      const previousByNativeRef = new Map(
+        beforeSync
+          .filter((existing) => existing.sourceId === source.id && existing.nativeKey)
+          .map((existing) => [`${existing.kind}:${existing.nativeKey}`, existing] as const),
+      );
       for (const existing of beforeSync) {
         if (existing.sourceId || !existing.nativeKey) continue;
         const key = `${existing.kind}:${existing.nativeKey}`;
@@ -214,6 +233,15 @@ export class SourceSyncService {
             nativeKey: item.nativeKey,
             nativeState: item.nativeState,
           }),
+        });
+        await this.onObserved?.({
+          source,
+          connection,
+          adapter,
+          token,
+          workItem,
+          previousLabels:
+            previousByNativeRef.get(`${item.kind}:${item.nativeKey}`)?.labels ?? [],
         });
         if (!observedAt || item.observedAt > observedAt) observedAt = item.observedAt;
       }

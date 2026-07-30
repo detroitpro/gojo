@@ -289,6 +289,7 @@ type SqlAgentRow = {
   concurrency_json: string;
   notifications_json: string;
   environment_json: string;
+  trigger_json: string;
   enabled: number;
   created_at: string;
   project_name: string | null;

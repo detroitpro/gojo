@@ -12,7 +12,7 @@ export type AttemptState =
   | "canceled"
   | "timed_out";
 
-export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal";
+export type RunTrigger = "schedule" | "manual" | "api" | "web" | "heal" | "work";
 
 export interface Project {
   id: string;
@@ -55,6 +55,8 @@ export interface Agent {
   notificationsJson: string;
   /** Non-secret env config (file + include/required names); never resolved values. */
   environmentJson: string;
+  /** Declarative work trigger contract; never source credentials or values. */
+  triggerJson: string;
   enabled: boolean;
   createdAt: string;
 }
@@ -71,6 +73,7 @@ export interface CreateAgentInput {
   concurrencyJson?: string;
   notificationsJson?: string;
   environmentJson?: string;
+  triggerJson?: string;
   enabled?: boolean;
 }
 
@@ -85,6 +88,7 @@ export interface UpdateAgentInput {
   concurrencyJson?: string;
   notificationsJson?: string;
   environmentJson?: string;
+  triggerJson?: string;
   enabled?: boolean;
 }
 

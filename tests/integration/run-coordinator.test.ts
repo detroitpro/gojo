@@ -310,6 +310,60 @@ describe('integration/run-coordinator', () => {
     expect(validation.steps[0]?.exitCode).toBe(7);
   });
 
+  test('work-triggered run snapshots, links, and materializes its issue subject', async () => {
+    const { coordinator, database, repos, project, task } = await setup();
+    const work = createWorkRepositories(database);
+    const issue = work.items.create({
+      projectId: project.id,
+      kind: 'issue',
+      nativeKey: '42',
+      title: 'Implement compact output',
+      summary: 'Add a compact mode to the CLI.',
+      delivery: 'open',
+      outcome: 'pending',
+      provenance: 'human',
+      actorName: 'detroitpro',
+      labels: ['gojo:ready', 'area:cli'],
+      nativeState: 'open',
+      webUrl: 'https://example.test/issues/42',
+      syncState: 'current',
+    });
+    repos.agents.update(task.id, {
+      prompt: [
+        '#!/bin/sh',
+        'set -eu',
+        'test -f .gojo/context/subject.json',
+        'grep -q \'"nativeKey": "42"\' .gojo/context/subject.json',
+        'echo "subject received" > agent-result.txt',
+      ].join('\n'),
+    });
+
+    const run = await coordinator.createRun({
+      projectId: project.id,
+      agentId: task.id,
+      trigger: 'work',
+      subjectWorkItemId: issue.id,
+    });
+    const context = work.runContexts.findByRun(run.id);
+
+    expect(JSON.parse(context?.subjectJson ?? '{}')).toMatchObject({
+      workItemId: issue.id,
+      kind: 'issue',
+      nativeKey: '42',
+      labels: ['gojo:ready', 'area:cli'],
+    });
+    expect(work.links.listByWorkItem(run.workItemId!)).toEqual([
+      expect.objectContaining({
+        sourceWorkItemId: run.workItemId,
+        targetWorkItemId: issue.id,
+        type: 'implements',
+      }),
+    ]);
+
+    expect((await coordinator.executeRun(run.id)).state).toBe(RunState.Succeeded);
+    expect(work.items.findById(issue.id)?.execution).toBe('terminal');
+  });
+
   test('schedule-triggered run transitions Scheduled → Queued → Preparing and succeeds', async () => {
     const { coordinator, repos, project, task } = await setup();
 

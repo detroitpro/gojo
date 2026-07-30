@@ -20,6 +20,7 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
   - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [work](./modules/work.md) (cross-source project visibility)
   - [sources](./modules/sources.md) (GitHub/GitLab/Forgejo/non-git connectors)
+  - [control](./modules/control.md) (approvals, intents, bounded repair, platform merge)
   - [platform events](./modules/events.md) (durable invalidation over WebSocket + live UI refresh)
   - [notifications](./modules/notifications.md) (channels, per-agent routing, report delivery)
   - [adapters](./modules/agents.md) (adapter registry — file kept at `modules/agents.md`)

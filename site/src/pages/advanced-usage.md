@@ -37,15 +37,81 @@ integration:
   prTool: tea # or gh
   prLogin: home
   prRemote: origin
-  # Optional Forgejo auto-merge after create (daemon needs FORGEJO_TOKEN / GOJO_FORGEJO_TOKEN):
-  prAutoMerge: true
   prApiUrl: http://192.168.5.251:3001
   prRepo: detroitpro/rhystic-gaming
   prMergeStyle: squash
+  approval: reviewer
+  autonomyLabels:
+    auto: gojo:auto-merge
+  fixRounds: 2
   requireAllValidations: true
 ```
 
-Use `pull-request` in `gojo.yaml` so merges wait on review or CI. Set `prTool: tea` (and usually `prLogin`) for Forgejo/Gitea hosts. `prAutoMerge` schedules merge when checks succeed (same idea as Rhystic `make pr`); it does not bypass CI. The runtime also supports `await-approval` (commit on the run branch, then pause for UI / `gojo run approve|reject` without opening a PR), but that mode is **not** accepted in manifests yet — stick to `pull-request` until the schema adds it. Auto-merge only for narrow, trusted agents.
+Use `pull-request` so the coding agent can push and exit. Gojo durably polls
+source checks; no model process waits for CI. Once checks settle, an independent
+reviewer agent supplies a verdict. The platform—not either agent—revalidates
+checks and performs the merge through the source adapter.
+
+`approval: reviewer` merges after green checks and a passing reviewer verdict.
+`approval: manual` additionally requires an operator decision from Approvals,
+CLI/API, or a trusted `/gojo approve` forge comment. An issue carrying the
+configured `gojo:auto-merge` label upgrades reviewer authority to auto authority;
+checks and reviewer pass are still mandatory. `fixRounds` bounds automatic
+repairs for red CI or requested changes.
+
+## Issue-driven coding away from the workstation
+
+An issue pipeline uses three small agents:
+
+```yaml
+agents:
+  issue-triage:
+    profile: reviewer
+    promptFile: .gojo/agents/issue-triage.md
+    validationProfile: handoff
+    trigger:
+      on: issue-label
+      requireLabels: [gojo:ready]
+      excludeLabels: [gojo:validated, gojo:blocked, gojo:in-progress]
+      trustedActors: [your-forge-login]
+      maxOpenClaims: 1
+
+  issue-implement:
+    profile: maintenance
+    promptFile: .gojo/agents/issue-implement.md
+    validationProfile: standard
+    trigger:
+      on: issue-label
+      requireLabels: [gojo:ready, gojo:validated]
+      excludeLabels: [gojo:blocked, gojo:in-progress]
+      trustedActors: [your-forge-login]
+      maxOpenClaims: 1
+    integration:
+      mode: pull-request
+      targetBranch: main
+      approval: reviewer
+      fixRounds: 2
+      requireAllValidations: true
+
+  issue-review:
+    profile: reviewer
+    promptFile: .gojo/agents/issue-review.md
+    validationProfile: handoff
+    trigger:
+      on: pull-request-checks-settled
+      fromAgents: [issue-implement]
+```
+
+Apply `gojo:ready` as a trusted actor. Triage validates the brief and adds
+`gojo:validated`; implementation claims it, runs local validation, and opens a
+PR; review starts only after checks settle. Issue and PR text are injected as
+explicitly untrusted context. Forge credentials stay in Gojo's source service
+and are stripped from coding/reviewer environments.
+
+Use `gojo approval list` and `gojo approval approve <id>` when manual authority
+is configured. On GitHub, GitLab, or Forgejo, a trusted actor can also comment
+`/gojo approve`, `/gojo hold`, or `/gojo reject` on the PR. Repeated comment
+delivery is idempotent.
 
 ## Secrets without committing them
 

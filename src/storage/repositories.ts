@@ -68,6 +68,7 @@ interface AgentRow {
   concurrency_json: string;
   notifications_json: string;
   environment_json: string;
+  trigger_json: string;
   enabled: number;
   created_at: string;
 }
@@ -194,6 +195,7 @@ export function mapAgent(row: AgentRow): Agent {
     concurrencyJson: row.concurrency_json,
     notificationsJson: row.notifications_json,
     environmentJson: row.environment_json ?? "{}",
+    triggerJson: row.trigger_json ?? "{}",
     enabled: boolFromInt(row.enabled),
     createdAt: row.created_at,
   };
@@ -613,8 +615,9 @@ export function createRepositories(db: Database): Repositories {
           `INSERT INTO agents (
             id, project_id, name, description, profile_id, prompt,
             validation_profile_json, integration_json, failure_policy_json,
-            concurrency_json, notifications_json, environment_json, enabled, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            concurrency_json, notifications_json, environment_json, trigger_json,
+            enabled, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -629,6 +632,7 @@ export function createRepositories(db: Database): Repositories {
           input.concurrencyJson ?? "{}",
           input.notificationsJson ?? "{}",
           input.environmentJson ?? "{}",
+          input.triggerJson ?? "{}",
           intFromBool(input.enabled ?? true),
           createdAt,
         );
@@ -646,6 +650,7 @@ export function createRepositories(db: Database): Repositories {
         concurrency_json: input.concurrencyJson ?? "{}",
         notifications_json: input.notificationsJson ?? "{}",
         environment_json: input.environmentJson ?? "{}",
+        trigger_json: input.triggerJson ?? "{}",
         enabled: intFromBool(input.enabled ?? true),
         created_at: createdAt,
       });
@@ -705,6 +710,7 @@ export function createRepositories(db: Database): Repositories {
         concurrencyJson: input.concurrencyJson ?? existing.concurrencyJson,
         notificationsJson: input.notificationsJson ?? existing.notificationsJson,
         environmentJson: input.environmentJson ?? existing.environmentJson,
+        triggerJson: input.triggerJson ?? existing.triggerJson,
         enabled: input.enabled ?? existing.enabled,
       };
 
@@ -713,7 +719,8 @@ export function createRepositories(db: Database): Repositories {
           `UPDATE agents SET
             name = ?, description = ?, profile_id = ?, prompt = ?,
             validation_profile_json = ?, integration_json = ?, failure_policy_json = ?,
-            concurrency_json = ?, notifications_json = ?, environment_json = ?, enabled = ?
+            concurrency_json = ?, notifications_json = ?, environment_json = ?,
+            trigger_json = ?, enabled = ?
           WHERE id = ?`,
         )
         .run(
@@ -727,6 +734,7 @@ export function createRepositories(db: Database): Repositories {
           next.concurrencyJson,
           next.notificationsJson,
           next.environmentJson,
+          next.triggerJson,
           intFromBool(next.enabled),
           id,
         );

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS agents (
   concurrency_json TEXT NOT NULL DEFAULT '{}',
   notifications_json TEXT NOT NULL DEFAULT '{}',
   environment_json TEXT NOT NULL DEFAULT '{}',
+  trigger_json TEXT NOT NULL DEFAULT '{}',
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
@@ -416,9 +417,58 @@ CREATE TABLE IF NOT EXISTS run_context (
   integration_json TEXT NOT NULL DEFAULT '{}',
   failure_policy_json TEXT NOT NULL DEFAULT '{}',
   environment_json TEXT NOT NULL DEFAULT '{}',
+  subject_json TEXT,
+  resume_branch TEXT,
   base_branch TEXT,
   schedule_json TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+  work_item_id TEXT REFERENCES work_items(id) ON DELETE SET NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  autonomy TEXT NOT NULL,
+  state TEXT NOT NULL,
+  review_verdict TEXT,
+  checks_state TEXT,
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  decided_by TEXT,
+  decided_via TEXT,
+  note TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(subject_type, subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS control_intents (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  surface_ref TEXT,
+  note TEXT,
+  state TEXT NOT NULL,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(surface, surface_ref)
+);
+
+CREATE TABLE IF NOT EXISTS source_comment_cursors (
+  work_item_id TEXT PRIMARY KEY NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  source_id TEXT NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  last_comment_id TEXT,
+  updated_at TEXT NOT NULL
 );
 `;
 
@@ -736,6 +786,58 @@ ALTER TABLE agents ADD COLUMN environment_json TEXT NOT NULL DEFAULT '{}';
 ALTER TABLE run_context ADD COLUMN environment_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
+  {
+    version: 14,
+    sql: `
+ALTER TABLE agents ADD COLUMN trigger_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE run_context ADD COLUMN subject_json TEXT;
+ALTER TABLE run_context ADD COLUMN resume_branch TEXT;
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+  work_item_id TEXT REFERENCES work_items(id) ON DELETE SET NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  autonomy TEXT NOT NULL,
+  state TEXT NOT NULL,
+  review_verdict TEXT,
+  checks_state TEXT,
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  decided_by TEXT,
+  decided_via TEXT,
+  note TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(subject_type, subject_id)
+);
+CREATE TABLE IF NOT EXISTS control_intents (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  surface_ref TEXT,
+  note TEXT,
+  state TEXT NOT NULL,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(surface, surface_ref)
+);
+CREATE TABLE IF NOT EXISTS source_comment_cursors (
+  work_item_id TEXT PRIMARY KEY NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
+  source_id TEXT NOT NULL REFERENCES project_sources(id) ON DELETE CASCADE,
+  last_comment_id TEXT,
+  updated_at TEXT NOT NULL
+);
+`,
+  },
 ];
 
 /** Applied after incremental migrations so upgraded DBs have columns first. */
@@ -755,6 +857,9 @@ CREATE INDEX IF NOT EXISTS idx_work_events_state
 CREATE INDEX IF NOT EXISTS idx_work_status_rollup_bucket
   ON work_status_rollup(bucket_at, kind);
 CREATE INDEX IF NOT EXISTS idx_platform_events_project_sequence ON platform_change_events(project_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_approvals_project_state ON approvals(project_id, state, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_approvals_next_attempt ON approvals(state, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_control_intents_target ON control_intents(target_type, target_id, created_at DESC);
 `;
 
 export const EXPECTED_TABLES = [
@@ -787,4 +892,7 @@ export const EXPECTED_TABLES = [
   "platform_change_events",
   "external_resources",
   "run_context",
+  "approvals",
+  "control_intents",
+  "source_comment_cursors",
 ] as const;

@@ -304,6 +304,30 @@ export function integrationStatus(status: string): StatusIconSpec {
   }
 }
 
+export function approvalStatus(state: string): StatusIconSpec {
+  const label = titleCase(state);
+  switch (state) {
+    case "pending-review":
+      return { icon: Eye, tone: "queued", label };
+    case "awaiting-human":
+      return { icon: User, tone: "warn", label };
+    case "approved":
+      return { icon: CircleCheck, tone: "queued", label };
+    case "applying":
+      return { icon: Loader, tone: "running", label };
+    case "applied":
+      return { icon: GitMerge, tone: "success", label };
+    case "held":
+      return { icon: Pause, tone: "warn", label };
+    case "rejected":
+    case "failed":
+    case "expired":
+      return { icon: CircleX, tone: "failed", label };
+    default:
+      return { icon: CircleQuestionMark, tone: "neutral", label };
+  }
+}
+
 export function enabledStatus(enabled: boolean): StatusIconSpec {
   return enabled
     ? { icon: Power, tone: "success", label: "Enabled" }

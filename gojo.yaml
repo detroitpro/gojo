@@ -182,28 +182,80 @@ agents:
       agent: self-heal
       afterConsecutiveFailedRuns: 1
 
-  maintain-merge:
-    description: Babysit and merge open maintenance PRs from gojo scheduled agents
-    profile: cursor
-    promptFile: .gojo/agents/maintain-merge.md
-    validationProfile: noop
-    concurrency:
-      projectLimit: 1
-      overlapPolicy: skip
-    integration:
-      mode: commit-only
-      targetBranch: main
-      requireAllValidations: true
-    failurePolicy:
-      maxAttemptsPerRun: 1
-      disableAfterConsecutiveFailedRuns: 5
-      backoff: exponential
-
   maintain-issue-tags:
     description: Ensure GitHub label taxonomy and triage issue tags (no code changes)
     profile: cursor
     promptFile: .gojo/agents/maintain-issue-tags.md
     validationProfile: noop
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: exponential
+
+  issue-triage:
+    description: Validate ready issues before implementation
+    profile: cursor
+    promptFile: .gojo/agents/issue-triage.md
+    validationProfile: handoff
+    trigger:
+      on: issue-label
+      requireLabels: [gojo:ready]
+      excludeLabels: [gojo:validated, gojo:blocked, gojo:in-progress]
+      trustedActors: [detroitpro]
+      maxOpenClaims: 1
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 5
+      backoff: exponential
+
+  issue-implement:
+    description: Implement validated issues and open reviewable pull requests
+    profile: cursor
+    promptFile: .gojo/agents/issue-implement.md
+    validationProfile: full-check
+    trigger:
+      on: issue-label
+      requireLabels: [gojo:ready, gojo:validated]
+      excludeLabels: [gojo:blocked, gojo:in-progress]
+      trustedActors: [detroitpro]
+      maxOpenClaims: 1
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      prTool: gh
+      approval: reviewer
+      autonomyLabels:
+        auto: gojo:auto-merge
+      fixRounds: 2
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+
+  issue-review:
+    description: Review agent pull requests after source checks settle
+    profile: cursor
+    promptFile: .gojo/agents/issue-review.md
+    validationProfile: handoff
+    trigger:
+      on: pull-request-checks-settled
+      fromAgents:
+        - self-heal
+        - maintain-quality
+        - maintain-tests
+        - maintain-deps
+        - maintain-docs
+        - issue-implement
     concurrency:
       projectLimit: 1
       overlapPolicy: skip
@@ -251,10 +303,6 @@ schedules:
     agent: maintain-docs
     cron: "0 4 * * *"
     timezone: America/Detroit
-  maintain-merge:
-    agent: maintain-merge
-    cron: "0 6 * * *"
-    timezone: America/Detroit
   maintain-issue-tags:
     agent: maintain-issue-tags
     cron: "30 5 * * *"
@@ -264,6 +312,6 @@ schedules:
     cron: "0 8 * * *"
     timezone: America/Detroit
 
-# Project-wide routing stays empty on purpose: only activity-digest notifies,
-# via its own agent-level notifications block.
-notifications: {}
+notifications:
+  onApprovalNeeded:
+    - ghost

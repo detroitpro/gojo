@@ -102,6 +102,13 @@ export interface InstanceDoctorResult {
   /** Operator-facing warnings (stale binary, etc.). */
   warnings: string[];
   network: InstanceNetworkDoctor;
+  sourceCredentials: Array<{
+    sourceId: string;
+    projectId: string;
+    adapter: string;
+    secretName: string | null;
+    available: boolean;
+  }>;
 }
 
 /** Core tools; `gh` and `tea` are optional PR CLIs (`integration.prTool`). */
@@ -434,6 +441,73 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
       "apiBaseUrl cannot be resolved — agent progress callbacks will be disabled until publicBaseUrl is set",
     );
   }
+  const sourceCredentials = ctx.repos.projects.list().flatMap((project) =>
+    ctx.work.sources.listByProject(project.id).flatMap((source) => {
+      const connection = source.connectionId
+        ? ctx.work.connections.findById(source.connectionId)
+        : null;
+      if (
+        !connection ||
+        !["github", "gitlab", "forgejo"].includes(connection.adapter)
+      ) {
+        return [];
+      }
+      const config = (() => {
+        try {
+          return JSON.parse(connection.configJson) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })();
+      const secretName =
+        typeof config["tokenSecretName"] === "string"
+          ? config["tokenSecretName"]
+          : null;
+      let available = secretName
+        ? Boolean(
+            ctx.secrets.get(secretName, project.id) ??
+              ctx.secrets.get(secretName),
+          )
+        : false;
+      if (!available && connection.adapter === "github") {
+        available = Boolean(
+          process.env["GH_TOKEN"] ?? process.env["GITHUB_TOKEN"],
+        );
+        if (!available) {
+          try {
+            const auth = Bun.spawnSync({
+              cmd: ["gh", "auth", "token"],
+              stdout: "ignore",
+              stderr: "ignore",
+            });
+            available = auth.exitCode === 0;
+          } catch {
+            available = false;
+          }
+        }
+      } else if (!available && connection.adapter === "gitlab") {
+        available = Boolean(process.env["GITLAB_TOKEN"]);
+      } else if (!available && connection.adapter === "forgejo") {
+        available = Boolean(
+          process.env["FORGEJO_TOKEN"] ?? process.env["GITEA_TOKEN"],
+        );
+      }
+      if (!available) {
+        warnings.push(
+          `source ${source.displayName} (${connection.adapter}) has no platform write credential`,
+        );
+      }
+      return [
+        {
+          sourceId: source.id,
+          projectId: project.id,
+          adapter: connection.adapter,
+          secretName,
+          available,
+        },
+      ];
+    }),
+  );
 
   return {
     git,
@@ -447,5 +521,6 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     binaryStatus,
     warnings,
     network,
+    sourceCredentials,
   };
 }

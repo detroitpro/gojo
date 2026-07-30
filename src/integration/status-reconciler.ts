@@ -10,10 +10,13 @@ import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
 import { createWorkRepositories } from '@/storage/work-repositories';
 import type { RunIntegration } from '@/storage/types';
-
-import { resolveForgejoToken } from './forgejo-auto-merge';
+import type { SourceChecksResult } from '@/sources';
 
 export type PrOutcomeState = 'open' | 'merged' | 'closed';
+
+function resolveForgejoToken(): string | null {
+  return process.env['FORGEJO_TOKEN'] ?? process.env['GITEA_TOKEN'] ?? null;
+}
 
 export interface PrStatusResult {
   state: PrOutcomeState;
@@ -169,18 +172,31 @@ export class IntegrationStatusReconciler {
   private readonly fetchStatus: FetchPrStatus;
   private readonly batchLimit: number;
   private readonly platformEvents: PlatformChangeFeed | null;
+  private readonly fetchChecks:
+    | ((integration: RunIntegration) => Promise<SourceChecksResult>)
+    | null;
+  private readonly onChecksSettled:
+    | ((integration: RunIntegration, checks: SourceChecksResult) => Promise<void>)
+    | null;
 
   constructor(deps: {
     db: Database;
     fetchStatus?: FetchPrStatus;
     batchLimit?: number;
     platformEvents?: PlatformChangeFeed;
+    fetchChecks?: (integration: RunIntegration) => Promise<SourceChecksResult>;
+    onChecksSettled?: (
+      integration: RunIntegration,
+      checks: SourceChecksResult,
+    ) => Promise<void>;
   }) {
     this.repos = createRepositories(deps.db);
     this.work = createWorkRepositories(deps.db);
     this.fetchStatus = deps.fetchStatus ?? defaultFetchStatus;
     this.batchLimit = deps.batchLimit ?? 5;
     this.platformEvents = deps.platformEvents ?? null;
+    this.fetchChecks = deps.fetchChecks ?? null;
+    this.onChecksSettled = deps.onChecksSettled ?? null;
   }
 
   /** Check due, nonterminal integrations in one bounded batch. */
@@ -238,6 +254,12 @@ export class IntegrationStatusReconciler {
             completedAt: status.closedAt ?? nowIso,
           });
         } else {
+          const checks = this.fetchChecks
+            ? await this.fetchChecks(integration)
+            : null;
+          if (checks && checks.status !== 'pending') {
+            await this.onChecksSettled?.(integration, checks);
+          }
           const nextCheckAt = computeNextCheckAt(checkCount, now);
           this.repos.runIntegrations.update(integration.id, {
             checkCount,

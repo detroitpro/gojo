@@ -2,6 +2,8 @@ import type {
   AdapterInfo,
   AdapterTestResult,
   Agent,
+  Approval,
+  ApprovalState,
   ApiTokenInfo,
   Attempt,
   BackupInfo,
@@ -387,6 +389,49 @@ export async function listIntegrations(
   };
 }
 
+export async function listApprovals(
+  query: ListQuery & {
+    state?: ApprovalState;
+    projectId?: string;
+    subjectType?: string;
+  } = {},
+): Promise<PaginatedResult<Approval>> {
+  const { data } = await request<{
+    approvals: Approval[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/approvals${buildListQuery(query)}`);
+  return {
+    items: data.approvals,
+    total: data.total,
+    limit: data.limit,
+    offset: data.offset,
+  };
+}
+
+export async function updateApproval(
+  id: string,
+  action: "approve" | "reject" | "hold",
+  note?: string,
+): Promise<Approval> {
+  const { data } = await request<{ approval: Approval }>(
+    `/approvals/${encodeURIComponent(id)}/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    },
+  );
+  return data.approval;
+}
+
+export async function getWorkDiff(workItemId: string): Promise<string> {
+  const { data } = await request<{ diff: string }>(
+    `/work/${encodeURIComponent(workItemId)}/diff`,
+  );
+  return data.diff;
+}
+
 export async function listImpactItems(
   query: ListQuery = {},
 ): Promise<PaginatedResult<ImpactItemListRow>> {
@@ -567,12 +612,14 @@ export async function getRun(id: string): Promise<{
   attempts: Attempt[];
   impactItems: RunImpactItem[];
   integration: RunIntegration | null;
+  approval: Approval | null;
 }> {
   const { data } = await request<{
     run: Run;
     attempts: Attempt[];
     impactItems: RunImpactItem[];
     integration: RunIntegration | null;
+    approval: Approval | null;
   }>(`/runs/${id}`);
   return data;
 }

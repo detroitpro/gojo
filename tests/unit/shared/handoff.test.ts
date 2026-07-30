@@ -89,10 +89,39 @@ describe('AgentHandoffReport', () => {
     expect(result.success).toBe(true);
   });
 
-  test('rejects unsupported schema version', () => {
+  test('accepts schema version 3 subject actions for platform application', () => {
     const result = AgentHandoffReportSchema.safeParse({
       ...validHandoff,
       schemaVersion: 3,
+      subjectActions: {
+        addLabels: ['gojo:validated'],
+        removeLabels: ['gojo:needs-detail'],
+        comment: 'Issue is sufficiently specified.',
+        verdict: 'pass',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects invalid subject action verdicts and empty labels', () => {
+    for (const subjectActions of [
+      { verdict: 'looks-good-to-me' },
+      { addLabels: [''] },
+    ]) {
+      expect(
+        AgentHandoffReportSchema.safeParse({
+          ...validHandoff,
+          schemaVersion: 3,
+          subjectActions,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  test('rejects unsupported schema version', () => {
+    const result = AgentHandoffReportSchema.safeParse({
+      ...validHandoff,
+      schemaVersion: 4,
     });
     expect(result.success).toBe(false);
   });

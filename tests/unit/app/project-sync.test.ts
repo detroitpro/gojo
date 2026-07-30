@@ -243,6 +243,34 @@ agents:
     expect(agent?.environmentJson).not.toContain('secret');
   });
 
+  test('persists declarative work trigger config', () => {
+    const path = createRepoWithManifest('');
+    const manifestPath = join(path, 'gojo.yaml');
+    const manifest = readFileSync(manifestPath, 'utf8').replace(
+      '    validationProfile: handoff\n',
+      `    validationProfile: handoff
+    trigger:
+      on: issue-label
+      requireLabels: [gojo:ready]
+      trustedActors: [detroitpro]
+      maxOpenClaims: 1
+`,
+    );
+    writeFileSync(manifestPath, manifest, 'utf8');
+
+    const repos = createRepositories(openDb());
+    const project = repos.projects.create({ name: 'sync-trigger', repoPath: path });
+    syncProjectFromManifest(repos, project);
+
+    const agent = repos.agents.listByProject(project.id).find((a) => a.name === 'demo');
+    expect(JSON.parse(agent?.triggerJson ?? '{}')).toEqual({
+      on: 'issue-label',
+      requireLabels: ['gojo:ready'],
+      trustedActors: ['detroitpro'],
+      maxOpenClaims: 1,
+    });
+  });
+
   test('does not resurrect disabled schedule names absent from manifest', () => {
     const path = createRepoWithManifest(`schedules:
   demo-daily:

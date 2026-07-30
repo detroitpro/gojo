@@ -25,7 +25,15 @@ import { extractPrNumber, initialNextCheckAt } from '@/integration/status-reconc
 import { PlatformChangeFeed } from '@/events/platform-change-feed';
 import type { PlatformEventTopic } from '@shared/events';
 import { canTransition, isTerminal, RunState } from '@shared/run-states';
-import { GENERATED_WORKSPACE_PATHS } from '@shared/workspace-files';
+import {
+  GENERATED_WORKSPACE_PATHS,
+  SUBJECT_CONTEXT_RELATIVE_PATH,
+} from '@shared/workspace-files';
+import {
+  RunSubjectSchema,
+  type RunSubject,
+  type RunSubjectFeedback,
+} from '@shared/work-subject';
 import { priorityForTrigger } from '@shared/scheduling';
 import {
   extractHandoffImpactItems,
@@ -40,6 +48,7 @@ import {
 } from '@shared/manifest';
 import type { Database } from '@/storage/db';
 import { createRepositories } from '@/storage/repositories';
+import { createApprovalRepository } from '@/storage/approval-repositories';
 import { createWorkRepositories } from '@/storage/work-repositories';
 import type {
   Agent,
@@ -88,10 +97,12 @@ interface IntegrationConfig {
   prTool?: 'gh' | 'tea';
   prLogin?: string;
   prRemote?: string;
-  prAutoMerge?: boolean;
   prApiUrl?: string;
   prRepo?: string;
   prMergeStyle?: 'squash' | 'merge' | 'rebase';
+  approval?: 'manual' | 'reviewer' | 'auto';
+  autonomyLabels?: { auto?: string };
+  fixRounds?: number;
 }
 
 interface ActiveRunContext {
@@ -109,6 +120,12 @@ export interface CreateRunInput {
   notBeforeAt?: string | null;
   expiresAt?: string | null;
   priority?: number;
+  /** Existing issue or PR this run implements or reviews. */
+  subjectWorkItemId?: string;
+  /** Existing source branch used by PR review and repair runs. */
+  resumeBranch?: string;
+  /** Deterministic CI/review feedback for bounded PR repair rounds. */
+  subjectFeedback?: RunSubjectFeedback;
   /** When true, create as Queued for the dispatcher (default for enqueueRun). */
   enqueue?: boolean;
 }
@@ -144,6 +161,7 @@ export class RunCoordinator {
   private readonly repos;
   private readonly db: Database;
   private readonly work;
+  private readonly approvals;
   private readonly activeRuns = new Map<string, ActiveRunContext>();
   private readonly apiBaseUrl: string | null;
   private readonly issueAgentToken:
@@ -168,6 +186,7 @@ export class RunCoordinator {
     this.platformEvents = deps.platformEvents ?? null;
     this.repos = createRepositories(deps.db);
     this.work = createWorkRepositories(deps.db);
+    this.approvals = createApprovalRepository(deps.db);
     this.apiBaseUrl = deps.apiBaseUrl ?? null;
     this.issueAgentToken = deps.issueAgentToken ?? null;
     this.revokeAgentToken = deps.revokeAgentToken ?? null;
@@ -197,6 +216,29 @@ export class RunCoordinator {
     const schedule = input.scheduleId
       ? this.repos.schedules.findById(input.scheduleId)
       : null;
+    const subjectItem = input.subjectWorkItemId
+      ? this.work.items.findById(input.subjectWorkItemId)
+      : null;
+    if (input.subjectWorkItemId && !subjectItem) {
+      throw new Error(`Subject work item not found: ${input.subjectWorkItemId}`);
+    }
+    if (subjectItem && subjectItem.projectId !== project.id) {
+      throw new Error('Subject work item belongs to a different project');
+    }
+    const subject: RunSubject | null = subjectItem
+      ? RunSubjectSchema.parse({
+          workItemId: subjectItem.id,
+          sourceId: subjectItem.sourceId,
+          kind: subjectItem.kind,
+          nativeKey: subjectItem.nativeKey,
+          title: subjectItem.title,
+          summary: subjectItem.summary,
+          labels: subjectItem.labels,
+          webUrl: subjectItem.webUrl,
+          nativeState: subjectItem.nativeState,
+          ...(input.subjectFeedback ? { feedback: input.subjectFeedback } : {}),
+        })
+      : null;
     const run = this.db.transaction(() => {
       let created = this.repos.runs.create({
         projectId: input.projectId,
@@ -222,11 +264,17 @@ export class RunCoordinator {
         actorName: profile?.name ?? profile?.adapter ?? null,
         profileId: agent.profileId,
         nativeState: created.state,
-        nativeJson: JSON.stringify({ trigger: created.trigger }),
+        nativeJson: JSON.stringify({
+          trigger: created.trigger,
+          ...(subject ? { subjectWorkItemId: subject.workItemId } : {}),
+        }),
         syncState: "current",
       });
       created =
         this.repos.runs.update(created.id, { workItemId: workItem.id }) ?? created;
+      if (subject) {
+        this.work.links.create(workItem.id, subject.workItemId, 'implements');
+      }
       const profileConfig = profile?.configJson ?? "{}";
       const parsedProfile = parseJsonObject(profileConfig);
       this.work.runContexts.create({
@@ -245,6 +293,8 @@ export class RunCoordinator {
         integrationJson: agent.integrationJson,
         failurePolicyJson: agent.failurePolicyJson,
         environmentJson: agent.environmentJson,
+        subjectJson: subject ? JSON.stringify(subject) : null,
+        resumeBranch: input.resumeBranch ?? null,
         baseBranch:
           parseIntegrationConfig(agent.integrationJson).targetBranch ?? project.defaultBranch,
         scheduleJson: schedule ? JSON.stringify(schedule) : null,
@@ -337,16 +387,15 @@ export class RunCoordinator {
         });
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7558/ingest/7e236216-3f8d-43b1-a4b3-edfa6170ef77',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6247c'},body:JSON.stringify({sessionId:'b6247c',runId:run.id,hypothesisId:'A',location:'coordinator.ts:runStart',message:'agent run starting',data:{projectId:project.id,projectName:project.name,agentId:agent.id,agentName:agent.name,trigger:run.trigger,integrationMode:integration.mode??null,prAutoMerge:integration.prAutoMerge??false,prTool:integration.prTool??null,targetBranch:integration.targetBranch??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
       let lastFailureMessage = 'Run failed';
       let attempt: Attempt | null = null;
       let workspacePath = '';
       let branchName = '';
       let validationResults: ValidationStepResult[] = [];
       const secretValues = loadedEnvironment?.secretValues ?? [];
+      const runContext = this.work.runContexts.findByRun(run.id);
+      const subject = parseRunSubject(runContext?.subjectJson ?? null);
+      const deniedDaemonEnvKeys = this.sourceTokenSecretNames(project.id);
 
       for (let attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber += 1) {
         if (attemptNumber > 1) {
@@ -377,10 +426,16 @@ export class RunCoordinator {
           // so a dirty primary checkout cannot block worktree creation.
           syncBeforeRun: false,
           useRemoteBase: syncBeforeRun,
+          ...(runContext?.resumeBranch ? { resumeBranch: runContext.resumeBranch } : {}),
         });
 
         workspacePath = workspace.worktreePath;
         branchName = workspace.branchName;
+        if (subject) {
+          const subjectPath = join(workspacePath, SUBJECT_CONTEXT_RELATIVE_PATH);
+          mkdirSync(join(workspacePath, '.gojo', 'context'), { recursive: true });
+          writeFileSync(subjectPath, `${JSON.stringify(subject, null, 2)}\n`, 'utf8');
+        }
         context.workspacePath = workspacePath;
         context.branchName = branchName;
 
@@ -414,6 +469,8 @@ export class RunCoordinator {
           readInstructions(project),
           loadedEnvironment?.values ?? {},
           secretValues,
+          subject,
+          deniedDaemonEnvKeys,
         );
 
         if (controller.signal.aborted || agentResult.canceled) {
@@ -456,6 +513,7 @@ export class RunCoordinator {
             GOJO_PROJECT_ID: agent.projectId,
             GOJO_RUN_ID: run.id,
           },
+          deniedDaemonEnvKeys,
         });
         const validationResult = await runValidationProfile({
           cwd: workspacePath,
@@ -496,7 +554,11 @@ export class RunCoordinator {
         return this.failRun(run, lastFailureMessage, { project, agent, failurePolicy });
       }
 
-      const mode = integration.mode ?? 'none';
+      const configuredMode = integration.mode ?? 'none';
+      const mode: IntegrationMode =
+        runContext?.resumeBranch && configuredMode === 'pull-request'
+          ? 'update-pull-request'
+          : configuredMode;
 
       if (mode === 'await-approval') {
         const commitResult = await integrate({
@@ -533,7 +595,12 @@ export class RunCoordinator {
           validationResults,
         );
         this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
-        await this.cleanupWorkspace(workspacePath, branchName, true);
+        await this.cleanupWorkspace(
+          workspacePath,
+          branchName,
+          true,
+          Boolean(runContext?.resumeBranch),
+        );
         return this.terminalRun(run, RunState.Succeeded);
       }
 
@@ -779,14 +846,6 @@ export class RunCoordinator {
       ...(input.integration.prTool ? { prTool: input.integration.prTool } : {}),
       ...(input.integration.prLogin ? { prLogin: input.integration.prLogin } : {}),
       ...(input.integration.prRemote ? { prRemote: input.integration.prRemote } : {}),
-      ...(input.integration.prAutoMerge !== undefined
-        ? { prAutoMerge: input.integration.prAutoMerge }
-        : {}),
-      ...(input.integration.prApiUrl ? { prApiUrl: input.integration.prApiUrl } : {}),
-      ...(input.integration.prRepo ? { prRepo: input.integration.prRepo } : {}),
-      ...(input.integration.prMergeStyle
-        ? { prMergeStyle: input.integration.prMergeStyle }
-        : {}),
       mergeQueue: this.mergeQueue,
     });
 
@@ -801,6 +860,7 @@ export class RunCoordinator {
     this.recordIntegrationOutcome({
       run,
       attempt,
+      agent: input.agent,
       mode: input.mode,
       integration: input.integration,
       result,
@@ -845,7 +905,10 @@ export class RunCoordinator {
     );
     this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
 
-    const keepBranch = input.mode === 'commit-only' || input.mode === 'pull-request';
+    const keepBranch =
+      input.mode === 'commit-only' ||
+      input.mode === 'pull-request' ||
+      input.mode === 'update-pull-request';
     await this.cleanupWorkspace(input.workspacePath, input.branchName, true, keepBranch);
 
     return this.terminalRun(run, RunState.Succeeded);
@@ -855,6 +918,7 @@ export class RunCoordinator {
   private recordIntegrationOutcome(input: {
     run: Run;
     attempt: Attempt;
+    agent: Agent;
     mode: IntegrationMode;
     integration: IntegrationConfig;
     result: IntegrateResult;
@@ -901,7 +965,7 @@ export class RunCoordinator {
         prNumber: realPrUrl ? extractPrNumber(realPrUrl) : null,
         prUrl: result.prUrl ?? null,
         status,
-        autoMergeRequested: input.integration.prAutoMerge ?? false,
+        autoMergeRequested: false,
         commitSha: result.commitSha,
         ...(status === 'open'
           ? { openedAt: nowIso, nextCheckAt: initialNextCheckAt(now) }
@@ -944,6 +1008,43 @@ export class RunCoordinator {
         });
         if (input.run.workItemId) {
           this.work.links.create(input.run.workItemId, externalWork.id, "delivers");
+        }
+        if (status === "open") {
+          const runContext = this.work.runContexts.findByRun(input.run.id);
+          const subject = parseRunSubject(runContext?.subjectJson ?? null);
+          const autoLabel = input.integration.autonomyLabels?.auto;
+          const autonomy =
+            autoLabel && subject?.labels.includes(autoLabel)
+              ? "auto"
+              : input.integration.approval ?? "manual";
+          const approval = this.approvals.create({
+            projectId: input.run.projectId,
+            subjectType: "pull-request",
+            subjectId: externalWork.id,
+            runId: input.run.id,
+            workItemId: externalWork.id,
+            reason: `Review pull request from ${input.agent.name}`,
+            autonomy,
+            state: "pending-review",
+            checksState: "pending",
+            evidence: {
+              integrationId: this.repos.runIntegrations.findByRun(input.run.id)?.id,
+              prUrl: realPrUrl,
+              mergeStyle: input.integration.prMergeStyle ?? "squash",
+              implementingAgentId: input.agent.id,
+              implementingAgentName: input.agent.name,
+              resumeBranch: input.attempt.branchName,
+              fixRounds: input.integration.fixRounds ?? 0,
+            },
+          });
+          this.platformEvents?.append({
+            projectId: input.run.projectId,
+            type: "approval.created",
+            entityKind: "approval",
+            entityId: approval.id,
+            topics: ["dashboard", "work", "runs"],
+            data: { state: approval.state, subjectId: approval.subjectId },
+          });
         }
       }
     } catch (error) {
@@ -993,6 +1094,8 @@ export class RunCoordinator {
     instructions?: InstructionsConfig,
     projectValues: Record<string, string> = {},
     secretValues: readonly string[] = [],
+    subject?: RunSubject,
+    deniedDaemonEnvKeys: readonly string[] = [],
   ): Promise<AgentExecuteResult> {
     const adapterName = resolveAdapterName(agent, this.repos.profiles);
     const adapter = getAdapter(adapterName);
@@ -1031,6 +1134,7 @@ export class RunCoordinator {
         workspacePath,
         validationSteps,
         progressReporting: this.apiBaseUrl !== null,
+        ...(subject ? { subject } : {}),
         ...(instructions !== undefined ? { instructions } : {}),
       });
 
@@ -1052,6 +1156,7 @@ export class RunCoordinator {
         daemonEnv: process.env,
         projectValues,
         platformEnv,
+        deniedDaemonEnvKeys,
       });
 
       try {
@@ -1329,6 +1434,19 @@ export class RunCoordinator {
     );
   }
 
+  private sourceTokenSecretNames(projectId: string): string[] {
+    const names = new Set<string>();
+    for (const source of this.work.sources.listByProject(projectId)) {
+      if (!source.connectionId) continue;
+      const connection = this.work.connections.findById(source.connectionId);
+      if (!connection) continue;
+      const config = parseJsonObject(connection.configJson);
+      const name = config['tokenSecretName'];
+      if (typeof name === 'string' && name.trim()) names.add(name.trim());
+    }
+    return [...names];
+  }
+
   private async cleanupWorkspace(
     workspacePath: string,
     branchName: string,
@@ -1376,7 +1494,6 @@ export class RunCoordinator {
     integrationResult?: {
       commitSha: string | null;
       prUrl: string | null;
-      prAutoMergeError?: string | null;
     },
   ): Promise<{ handoff: AgentHandoffReport; filesChanged: string[] }> {
     const artifactDir = join(this.paths.artifacts, run.id);
@@ -1449,11 +1566,7 @@ export class RunCoordinator {
         );
       }
     }
-    const autoMergeWarning = integrationResult?.prAutoMergeError?.trim();
-    if (autoMergeWarning) {
-      warnings.push(`prAutoMerge: ${autoMergeWarning}`);
-    }
-    const withAutoMergeNote: AgentHandoffReport =
+    const withWarnings: AgentHandoffReport =
       warnings.length > 0
         ? {
             ...merged,
@@ -1467,23 +1580,12 @@ export class RunCoordinator {
     );
     const handoff: AgentHandoffReport =
       materialized.length > 0
-        ? { ...withAutoMergeNote, assets: materialized }
-        : withAutoMergeNote;
+        ? { ...withWarnings, assets: materialized }
+        : withWarnings;
 
     const artifactPath = join(artifactDir, 'handoff.json');
     writeFileSync(artifactPath, JSON.stringify(handoff, null, 2), 'utf8');
     this.emit('run.artifact_written', run.id, { path: artifactPath });
-
-    // #region agent log
-    {
-      const agentRow = this.repos.agents.findById(run.agentId);
-      const summary = typeof handoff.summary === 'string' ? handoff.summary : '';
-      const mentionsMerge = /merg/i.test(summary);
-      if (agentRow?.name === 'maintain-merge' || mentionsMerge) {
-        fetch('http://127.0.0.1:7558/ingest/7e236216-3f8d-43b1-a4b3-edfa6170ef77',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6247c'},body:JSON.stringify({sessionId:'b6247c',runId:run.id,hypothesisId:'A',location:'coordinator.ts:handoffWritten',message:'handoff mentions merge or maintain-merge agent',data:{agentName:agentRow?.name??null,projectId:run.projectId,summaryHead:summary.slice(0,400),status:handoff.status??null,decisions:(handoff.decisions??[]).slice(0,5)},timestamp:Date.now()})}).catch(()=>{});
-      }
-    }
-    // #endregion
 
     return { handoff, filesChanged: handoff.filesChanged };
   }
@@ -1581,8 +1683,9 @@ export class RunCoordinator {
   /** Keep the run's work item axes in sync with run state (also used by the dispatcher). */
   syncWorkFromRun(run: Run): void {
     if (!run.workItemId) return;
+    const execution = workExecutionForRunState(run.state);
     this.work.items.update(run.workItemId, {
-      execution: workExecutionForRunState(run.state),
+      execution,
       outcome: workOutcomeForRunState(run.state),
       attention: workAttentionForRunState(run.state),
       nativeState: run.state,
@@ -1592,6 +1695,15 @@ export class RunCoordinator {
       syncState: "current",
       observedAt: new Date().toISOString(),
     });
+    const subject = parseRunSubject(
+      this.work.runContexts.findByRun(run.id)?.subjectJson ?? null,
+    );
+    if (subject) {
+      this.work.items.update(subject.workItemId, {
+        execution,
+        observedAt: new Date().toISOString(),
+      });
+    }
   }
 }
 
@@ -1601,6 +1713,15 @@ function parseJsonObject(json: string): Record<string, unknown> {
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
+  }
+}
+
+function parseRunSubject(json: string | null): RunSubject | undefined {
+  if (!json) return undefined;
+  try {
+    return RunSubjectSchema.parse(JSON.parse(json) as unknown);
+  } catch {
+    return undefined;
   }
 }
 

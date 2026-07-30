@@ -119,6 +119,14 @@ export function loadAgentEnvironment(input: {
   return { values, secretValues, config };
 }
 
+const FORGE_WRITE_CREDENTIAL_KEYS = new Set([
+  'FORGEJO_TOKEN',
+  'GITEA_TOKEN',
+  'GOJO_FORGEJO_TOKEN',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+]);
+
 /**
  * Merge daemon env, selected project values, then Gojo platform vars.
  * Platform `GOJO_*` always wins over project file values.
@@ -127,10 +135,15 @@ export function buildAgentProcessEnv(input: {
   daemonEnv: NodeJS.ProcessEnv | Record<string, string | undefined>;
   projectValues: Record<string, string>;
   platformEnv: Record<string, string>;
+  deniedDaemonEnvKeys?: readonly string[];
 }): Record<string, string> {
   const merged: Record<string, string> = {};
+  const deniedDaemonEnvKeys = new Set([
+    ...FORGE_WRITE_CREDENTIAL_KEYS,
+    ...(input.deniedDaemonEnvKeys ?? []),
+  ]);
   for (const [key, value] of Object.entries(input.daemonEnv)) {
-    if (value !== undefined) {
+    if (value !== undefined && !deniedDaemonEnvKeys.has(key)) {
       merged[key] = value;
     }
   }

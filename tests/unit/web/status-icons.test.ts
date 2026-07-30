@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  approvalStatus,
   attentionStatus,
   deliveryStatus,
   enabledStatus,
@@ -15,6 +16,23 @@ import {
 } from "../../../web/src/lib/status-icons";
 
 describe("web/status-icons", () => {
+  test("maps every approval state", () => {
+    for (const state of [
+      "pending-review",
+      "awaiting-human",
+      "approved",
+      "rejected",
+      "held",
+      "applying",
+      "applied",
+      "failed",
+      "expired",
+    ]) {
+      expect(approvalStatus(state).label.length).toBeGreaterThan(0);
+      expect(approvalStatus(state).icon).toBeTruthy();
+    }
+  });
+
   test("maps every known work kind", () => {
     for (const kind of [
       "run",

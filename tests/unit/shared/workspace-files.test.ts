@@ -20,6 +20,7 @@ describe('shared/workspace-files', () => {
     expect(isGeneratedWorkspacePath('.gojo/run.sh')).toBe(true);
     expect(isGeneratedWorkspacePath('.gojo/assets')).toBe(true);
     expect(isGeneratedWorkspacePath('.gojo/assets/pr-body.md')).toBe(true);
+    expect(isGeneratedWorkspacePath('.gojo/context/subject.json')).toBe(true);
 
     expect(isGeneratedWorkspacePath('.gojo/agents/maintain-tests.md')).toBe(false);
     expect(isGeneratedWorkspacePath('.gojo/instructions.md')).toBe(false);

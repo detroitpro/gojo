@@ -1121,6 +1121,44 @@ describe("api/router", () => {
     };
     expect(detailBody.data.project.openPrCount).toBe(1);
   });
+
+  test("approval notification links require confirmation and are single-use", async () => {
+    const { baseUrl } = await boot();
+    const project = ctx!.repos.projects.create({
+      name: "approval-link",
+      repoPath: tempDir!,
+    });
+    const approval = ctx!.approvals.create({
+      projectId: project.id,
+      subjectType: "pull-request",
+      subjectId: "pr-link",
+      autonomy: "manual",
+      state: "awaiting-human",
+      checksState: "success",
+      reviewVerdict: "pass",
+    });
+    const users = new UserService(ctx!.db);
+    const admin = users.findFirstAdmin()!;
+    const { token } = users.createApiTokenForUser(admin.id, "approval-link-test", {
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      scopes: [`control:approve:${approval.id}`],
+    });
+    const link = `${baseUrl}/api/v1/approvals/${approval.id}/approve-link`;
+
+    const confirmation = await fetch(`${link}?token=${encodeURIComponent(token)}`);
+    expect(confirmation.status).toBe(200);
+    expect(await confirmation.text()).toContain("Approve merge?");
+
+    const applied = await fetch(link, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
+    });
+    expect(applied.status).toBe(409);
+
+    const reused = await fetch(`${link}?token=${encodeURIComponent(token)}`);
+    expect(reused.status).toBe(403);
+  });
 });
 
 

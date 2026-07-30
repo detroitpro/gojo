@@ -5,6 +5,17 @@ import type {
   WorkProvenance,
 } from "@shared/work";
 
+import type {
+  NormalizedSourceComment,
+  NormalizedSourceLabelActor,
+  SourceChecksResult,
+  SourceCommentInput,
+  SourceItemOperationInput,
+  SourceMergePullRequestInput,
+  SourceMergePullRequestResult,
+  SourceSetLabelsInput,
+} from "./write-types";
+
 export interface NormalizedSourceItem {
   kind: string;
   nativeKey: string;
@@ -56,6 +67,15 @@ export interface SourceAdapter {
   readonly capabilities: SourceCapabilities;
   listActive(input: SourceListInput): Promise<SourceListResult>;
   getItem?(input: SourceGetItemInput): Promise<SourceGetItemResult>;
+  listComments?(input: SourceItemOperationInput): Promise<NormalizedSourceComment[]>;
+  listLabelActors?(input: SourceItemOperationInput): Promise<NormalizedSourceLabelActor[]>;
+  comment?(input: SourceCommentInput): Promise<NormalizedSourceComment>;
+  setLabels?(input: SourceSetLabelsInput): Promise<string[]>;
+  getDiff?(input: SourceItemOperationInput): Promise<string>;
+  getChecks?(input: SourceItemOperationInput): Promise<SourceChecksResult>;
+  mergePullRequest?(
+    input: SourceMergePullRequestInput,
+  ): Promise<SourceMergePullRequestResult>;
 }
 
 export class SourceAdapterRegistry {

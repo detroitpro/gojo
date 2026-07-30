@@ -179,6 +179,59 @@ describe("storage/db", () => {
     });
   });
 
+  test("migration v14 adds trigger subjects, approvals, intents, and comment cursors", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    sqlite.exec("ALTER TABLE agents DROP COLUMN trigger_json;");
+    sqlite.exec("ALTER TABLE run_context DROP COLUMN subject_json;");
+    sqlite.exec("ALTER TABLE run_context DROP COLUMN resume_branch;");
+    sqlite.exec("DROP TABLE source_comment_cursors;");
+    sqlite.exec("DROP TABLE control_intents;");
+    sqlite.exec("DROP TABLE approvals;");
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(13, new Date().toISOString());
+
+    database.migrate();
+
+    const agentColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('agents')")
+      .all()
+      .map((row) => row.name);
+    expect(agentColumns).toContain("trigger_json");
+
+    const runContextColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('run_context')")
+      .all()
+      .map((row) => row.name);
+    expect(runContextColumns).toContain("subject_json");
+    expect(runContextColumns).toContain("resume_branch");
+
+    const tables = new Set(database.tableNames());
+    expect(tables.has("approvals")).toBe(true);
+    expect(tables.has("control_intents")).toBe(true);
+    expect(tables.has("source_comment_cursors")).toBe(true);
+
+    const repos = createRepositories(database);
+    const project = repos.projects.create({ name: "trigger-demo", repoPath: "/tmp/trigger" });
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: "implement-issue",
+      prompt: "implement",
+      triggerJson: JSON.stringify({
+        on: "issue-label",
+        requireLabels: ["gojo:ready"],
+        trustedActors: ["detroitpro"],
+        maxOpenClaims: 1,
+      }),
+    });
+    expect(JSON.parse(repos.agents.findById(agent.id)?.triggerJson ?? "{}").on).toBe(
+      "issue-label",
+    );
+  });
+
   test("migration v11 renames tasks/agent_profiles into agents/profiles", () => {
     const database = openInMemory();
     const sqlite = database.connection();

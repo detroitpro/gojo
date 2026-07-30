@@ -20,6 +20,7 @@ import { ensureProjectRepositorySource } from "@/sources";
 import { getAgentDetail, listIntegrationsPage } from "@/storage/paged-lists";
 import { migrateProjectVocab, type MigrateVocabResult } from "@/app/migrate-vocab";
 import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
+import { ApprovalStateSchema } from "@shared/approvals";
 import {
   installService,
   resolveServiceLaunch,
@@ -477,6 +478,172 @@ function showHelp(parsed: ParsedArgv): void {
     return;
   }
   printOverviewHelp();
+}
+
+async function runSourceCommand(
+  parsed: ParsedArgv,
+  format: ReturnType<typeof getOutputFormat>,
+): Promise<void> {
+  const action = parsed.command[1];
+  const sub = parsed.command[2];
+  if (action !== "token" || sub !== "set") {
+    die(
+      "usage: gojo source token set <sourceId> [--secret-name <name>]",
+      format,
+      ExitCode.Usage,
+      "The token is read from GOJO_SOURCE_TOKEN or prompted securely on a TTY",
+    );
+  }
+  const sourceId = parsed.positional[0];
+  if (!sourceId) {
+    die("sourceId is required", format, ExitCode.Usage);
+  }
+
+  await withContext(getHome(parsed), async (ctx) => {
+    const source = ctx.work.sources.findById(sourceId);
+    if (!source?.connectionId) {
+      die("project source or source connection not found", format, ExitCode.NotFound);
+    }
+    const connection = ctx.work.connections.findById(source.connectionId);
+    if (!connection) {
+      die("source connection not found", format, ExitCode.NotFound);
+    }
+    let token = process.env["GOJO_SOURCE_TOKEN"];
+    if (!token && isInteractive()) {
+      token = (await promptSecret(`Token for ${source.displayName}:`)) ?? undefined;
+    }
+    if (!token?.trim()) {
+      die(
+        "No token provided",
+        format,
+        ExitCode.Usage,
+        "Set GOJO_SOURCE_TOKEN or run this command in an interactive terminal",
+      );
+    }
+    const secretName =
+      getFlagString(parsed, "secret-name") ?? `source-token-${source.id}`;
+    ctx.secrets.set(secretName, token.trim(), source.projectId);
+    const config = (() => {
+      try {
+        const parsedConfig = JSON.parse(connection.configJson) as unknown;
+        return parsedConfig && typeof parsedConfig === "object"
+          ? (parsedConfig as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    })();
+    ctx.work.connections.updateConfig(
+      connection.id,
+      JSON.stringify({ ...config, tokenSecretName: secretName }),
+    );
+    printSuccess(`Stored token for ${source.displayName}`, format);
+    printOutput(format, {
+      sourceId: source.id,
+      connectionId: connection.id,
+      tokenSecretName: secretName,
+    });
+  });
+}
+
+async function runApprovalCommand(
+  parsed: ParsedArgv,
+  format: ReturnType<typeof getOutputFormat>,
+): Promise<void> {
+  const sub = parsed.command[1];
+  await withContext(getHome(parsed), async (ctx) => {
+    if (sub === "list") {
+      const parsedState = getFlagString(parsed, "state")
+        ? ApprovalStateSchema.safeParse(getFlagString(parsed, "state"))
+        : null;
+      if (parsedState && !parsedState.success) {
+        die("invalid approval state", format, ExitCode.Usage);
+      }
+      const page = ctx.approvals.list({
+        limit: DEFAULT_PAGE_LIMIT,
+        offset: 0,
+        ...(getFlagString(parsed, "project")
+          ? { projectId: getFlagString(parsed, "project")! }
+          : {}),
+        ...(parsedState?.success ? { state: parsedState.data } : {}),
+      });
+      if (format === "text") {
+        printTable(page.items, [
+          { key: "id", header: "ID", value: (item) => item.id },
+          { key: "state", header: "STATE", value: (item) => item.state },
+          { key: "subject", header: "SUBJECT", value: (item) => item.subjectId },
+          { key: "checks", header: "CHECKS", value: (item) => item.checksState ?? "—" },
+          { key: "review", header: "REVIEW", value: (item) => item.reviewVerdict ?? "—" },
+        ]);
+      } else {
+        printOutput(format, page);
+      }
+      return;
+    }
+    const id = parsed.positional[0];
+    if (!id) die(`usage: gojo approval ${sub ?? "show"} <id>`, format, ExitCode.Usage);
+    const approval = ctx.approvals.findById(id);
+    if (!approval) die("approval not found", format, ExitCode.NotFound);
+    if (sub === "show") {
+      printOutput(format, { approval });
+      return;
+    }
+    if (sub === "approve" || sub === "reject" || sub === "hold") {
+      const intent = await ctx.approvals.submitIntent({
+        projectId: approval.projectId,
+        kind: sub,
+        targetType: "approval",
+        targetId: approval.id,
+        actor: process.env["USER"] ?? "cli",
+        surface: "cli",
+        surfaceRef: `cli:${sub}:${approval.id}:${Date.now()}`,
+        note: getFlagString(parsed, "note") ?? null,
+      });
+      printOutput(format, {
+        intent,
+        approval: ctx.approvals.findById(approval.id),
+      });
+      return;
+    }
+    die(
+      `unknown approval command: ${sub ?? ""}`,
+      format,
+      ExitCode.Usage,
+      "Try `gojo approval --help`",
+    );
+  });
+}
+
+async function runWorkCommand(
+  parsed: ParsedArgv,
+  format: ReturnType<typeof getOutputFormat>,
+): Promise<void> {
+  const sub = parsed.command[1];
+  if (sub !== "claim") {
+    die("usage: gojo work claim <workItemId> --agent <name-or-id>", format);
+  }
+  const workItemId = parsed.positional[0];
+  const agentRef = getFlagString(parsed, "agent");
+  if (!workItemId || !agentRef) {
+    die("workItemId and --agent are required", format, ExitCode.Usage);
+  }
+  await withContext(getHome(parsed), async (ctx) => {
+    const workItem = ctx.work.items.findById(workItemId);
+    if (!workItem) die("work item not found", format, ExitCode.NotFound);
+    const agent = ctx.repos.agents
+      .listByProject(workItem.projectId)
+      .find((candidate) => candidate.id === agentRef || candidate.name === agentRef);
+    if (!agent?.enabled) die("enabled agent not found", format, ExitCode.NotFound);
+    const run = await ctx.coordinator.enqueueRun({
+      projectId: workItem.projectId,
+      agentId: agent.id,
+      trigger: "work",
+      idempotencyKey: `claim:${workItem.id}:${agent.id}`,
+      subjectWorkItemId: workItem.id,
+    });
+    ctx.dispatcher.kick();
+    printOutput(format, { run });
+  });
 }
 
 async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof getOutputFormat>): Promise<void> {
@@ -1283,6 +1450,21 @@ async function main(argv: string[]): Promise<void> {
 
     if (group === "project") {
       await runProjectCommand(parsed, format);
+      return;
+    }
+
+    if (group === "source") {
+      await runSourceCommand(parsed, format);
+      return;
+    }
+
+    if (group === "approval") {
+      await runApprovalCommand(parsed, format);
+      return;
+    }
+
+    if (group === "work") {
+      await runWorkCommand(parsed, format);
       return;
     }
 

@@ -19,6 +19,9 @@ export const RUN_SCRIPT_RELATIVE_PATH = '.gojo/run.sh';
 /** Conventional location for handoff assets (long PR bodies, reports). */
 export const HANDOFF_ASSETS_RELATIVE_PATH = '.gojo/assets/';
 
+/** Immutable source issue/PR snapshot materialized for the current run. */
+export const SUBJECT_CONTEXT_RELATIVE_PATH = '.gojo/context/subject.json';
+
 /**
  * Paths gojo writes into a workspace during a run. Never committed, never
  * reported as a changed file. Directory entries end with `/`.
@@ -27,6 +30,7 @@ export const GENERATED_WORKSPACE_PATHS: readonly string[] = [
   HANDOFF_RELATIVE_PATH,
   RUN_SCRIPT_RELATIVE_PATH,
   HANDOFF_ASSETS_RELATIVE_PATH,
+  SUBJECT_CONTEXT_RELATIVE_PATH,
 ];
 
 /**

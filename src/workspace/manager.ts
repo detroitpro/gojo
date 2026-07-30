@@ -29,6 +29,8 @@ export interface PrepareAttemptInput {
    * so a dirty primary checkout cannot block worktree prep.
    */
   useRemoteBase?: boolean;
+  /** Existing local or origin branch to attach instead of creating a run branch. */
+  resumeBranch?: string;
 }
 
 export interface PrepareAttemptResult {
@@ -127,17 +129,86 @@ export class WorkspaceManager {
   }
 
   async prepareAttempt(input: PrepareAttemptInput): Promise<PrepareAttemptResult> {
+    let resumeBranch: string | undefined;
+    if (input.resumeBranch !== undefined) {
+      resumeBranch = input.resumeBranch.trim();
+      if (resumeBranch.length === 0 || resumeBranch.startsWith('-')) {
+        throw new Error(`Invalid resume branch: ${input.resumeBranch}`);
+      }
+      const refCheck = await execGit(input.repoPath, [
+        'check-ref-format',
+        '--branch',
+        resumeBranch,
+      ]);
+      if (refCheck.exitCode !== 0 || refCheck.stdout !== resumeBranch) {
+        throw new Error(`Invalid resume branch: ${input.resumeBranch}`);
+      }
+    }
+
     const preferRemote = Boolean(input.syncBeforeRun || input.useRemoteBase);
 
-    if (input.syncBeforeRun) {
+    if (!resumeBranch && input.syncBeforeRun) {
       // Best-effort local ff; never blocks on a dirty primary checkout.
       await this.syncBaseBranch(input.repoPath, input.baseBranch);
     }
 
     let startPoint = input.baseBranch;
     let startingCommit: string | null = null;
+    let branchName: string;
 
-    if (preferRemote && (await hasRemote(input.repoPath))) {
+    if (resumeBranch) {
+      branchName = resumeBranch;
+      if (await hasRemote(input.repoPath)) {
+        await fetchAndFastForwardBranch(input.repoPath, resumeBranch);
+        startingCommit = await resolveRemoteTrackingRef(input.repoPath, resumeBranch);
+
+        const localRef = await execGit(input.repoPath, [
+          'rev-parse',
+          '--verify',
+          `refs/heads/${resumeBranch}^{commit}`,
+        ]);
+        if (localRef.exitCode !== 0 || localRef.stdout !== startingCommit) {
+          const refresh = await execGit(input.repoPath, [
+            'branch',
+            '-f',
+            resumeBranch,
+            `origin/${resumeBranch}`,
+          ]);
+          if (refresh.exitCode !== 0) {
+            throw new Error(`Unable to refresh resume branch: ${resumeBranch}`);
+          }
+        }
+
+        const tracking = await execGit(input.repoPath, [
+          'branch',
+          `--set-upstream-to=origin/${resumeBranch}`,
+          resumeBranch,
+        ]);
+        if (tracking.exitCode !== 0) {
+          throw new Error(`Unable to track resume branch: ${resumeBranch}`);
+        }
+      } else {
+        const localRef = await execGit(input.repoPath, [
+          'rev-parse',
+          '--verify',
+          `refs/heads/${resumeBranch}^{commit}`,
+        ]);
+        if (localRef.exitCode !== 0) {
+          throw new Error(`Unable to resolve resume branch: ${resumeBranch}`);
+        }
+        startingCommit = localRef.stdout;
+      }
+    } else {
+      branchName = this.buildBranchName(
+        input.agentName,
+        input.runId,
+        input.projectName,
+        new Date(),
+        input.attemptNumber ?? 1,
+      );
+    }
+
+    if (!resumeBranch && preferRemote && (await hasRemote(input.repoPath))) {
       // Branch worktrees from the remote tracking tip so operator dirt is irrelevant.
       startPoint = `origin/${input.baseBranch}`;
       startingCommit = await resolveRemoteTrackingRef(
@@ -146,14 +217,6 @@ export class WorkspaceManager {
       );
     }
 
-    const attemptNumber = input.attemptNumber ?? 1;
-    const branchName = this.buildBranchName(
-      input.agentName,
-      input.runId,
-      input.projectName,
-      new Date(),
-      attemptNumber,
-    );
     const worktreePath = this.buildWorktreePath(branchName);
 
     if (startingCommit == null) {
@@ -165,11 +228,12 @@ export class WorkspaceManager {
     }
 
     await this.reclaimWorktreePath(input.repoPath, worktreePath);
-    if (await branchExists(input.repoPath, branchName)) {
-      await deleteBranch(input.repoPath, branchName);
+    if (!resumeBranch) {
+      if (await branchExists(input.repoPath, branchName)) {
+        await deleteBranch(input.repoPath, branchName);
+      }
+      await createBranch(input.repoPath, branchName, startPoint);
     }
-
-    await createBranch(input.repoPath, branchName, startPoint);
 
     try {
       await addWorktree(input.repoPath, worktreePath, branchName);
