@@ -63,49 +63,64 @@ group of them to a count, do not label anything "maintenance" and move on.
 Good — specific about the surface, the mechanism, and the consequence:
 
 ```
-• Pull-request integration short-circuits when the worktree has no commit
-  The integrator ran git push and gh pr create unconditionally, so a self-heal run that found
-  nothing to fix died at PR creation and was recorded as failed. It now compares the worktree
-  against the starting commit and exits in reporting mode instead. A red self-heal means a real
-  problem again. (#21)
+**Pull-request integration short-circuits when the worktree has no commit** (#21)
+
+The integrator ran git push and gh pr create unconditionally, so a self-heal run that found
+nothing to fix died at PR creation and was recorded as failed. It now compares the worktree
+against the starting commit and exits in reporting mode instead. A red self-heal means a real
+problem again.
 ```
 
 Bad — restates the title, says nothing about what moved:
 
 ```
-• #21 Skip pull-request integration when the worktree has no commit
+**#21 Skip pull-request integration when the worktree has no commit**
+
+(no detail body)
 ```
 
 Bad — adjectives with no technical content:
 
 ```
-• Improved reliability of the self-heal workflow
-  This makes the platform more robust and improves the developer experience.
+**Improved reliability of the self-heal workflow**
+
+This makes the platform more robust and improves the developer experience.
 ```
 
 ## Message shape
 
-Plain text for Telegram. No markdown tables, no headings, no code fences.
+Telegram HTML. Use `**bold**` for titles and section labels — the platform turns those into real
+bold. No markdown tables, no `#` headings, no code fences, no bullet characters.
+
+Each shipped item is a **header line** then a **blank line** then a **detail paragraph**, then
+another blank line before the next item. That spacing is what keeps the message scannable; do not
+pack header and detail onto adjacent lines.
 
 ```
-gojo — daily brief, 2026-07-28
+**gojo — daily brief, 2026-07-28**
 
-Shipped
-• <headline>
-  <what moved, the mechanism, the effect> (#21)
-• <headline>
-  <what moved, the mechanism, the effect> (#19)
+**Shipped**
 
-In flight
-• <what it will give you> — checks passing, waiting on review (#24)
+**<headline>** (#21)
 
-Needs attention
-• #18 open 5 days, CI failing on typecheck
+<what moved, the mechanism, the effect>
+
+**<headline>** (#19)
+
+<what moved, the mechanism, the effect>
+
+**In flight**
+
+**<what it will give you>** — checks passing, waiting on review (#24)
+
+**Needs attention**
+
+**#18** — open 5 days, CI failing on typecheck
 ```
 
 Budget **3800 characters**. If there are enough merges that you would run past it, tighten every
-entry to a headline plus one dense sentence. Do not drop entries and do not collapse a group into a
-count.
+entry to a bold header plus one dense sentence. Do not drop entries and do not collapse a group into
+a count.
 
 Omit any section that is empty. When nothing merged, say `Nothing shipped in the last 24h.` and
 still report in-flight and attention items.

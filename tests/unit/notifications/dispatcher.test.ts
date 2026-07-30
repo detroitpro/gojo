@@ -5,6 +5,7 @@ import {
   formatTelegramText,
   NotificationDispatcher,
   redactSecrets,
+  renderTelegramHtml,
 } from "@/notifications/dispatcher";
 
 describe("notifications/dispatcher", () => {
@@ -114,11 +115,15 @@ describe("notifications/dispatcher", () => {
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         chat_id: string;
         text: string;
+        parse_mode: string;
         disable_web_page_preview: boolean;
       };
       expect(body.chat_id).toBe("-1001");
+      expect(body.parse_mode).toBe("HTML");
       expect(body.text).toContain("gojo: Failed");
       expect(body.text).toContain("demo / nightly");
+      expect(body.text).toContain("<b>Broken self-heal</b>");
+      expect(body.text).toContain("compare a &lt; b");
       expect(body.disable_web_page_preview).toBe(true);
       return new Response("{}", { status: 200 });
     });
@@ -136,6 +141,7 @@ describe("notifications/dispatcher", () => {
         runId: "01ABC",
         state: "Failed",
         error: "boom",
+        summary: "**Broken self-heal**\n\ncompare a < b",
       },
     );
 
@@ -201,5 +207,13 @@ describe("notifications/dispatcher", () => {
 
     expect(text.length).toBe(4096);
     expect(text.endsWith("… truncated")).toBe(true);
+  });
+
+  test("renderTelegramHtml escapes markup then converts **bold** markers", () => {
+    expect(renderTelegramHtml("compare a < b & c > d")).toBe("compare a &lt; b &amp; c &gt; d");
+    expect(renderTelegramHtml("**Header**\n\ndetail with `src/foo.ts`")).toBe(
+      "<b>Header</b>\n\ndetail with `src/foo.ts`",
+    );
+    expect(renderTelegramHtml("**A** and **B**")).toBe("<b>A</b> and <b>B</b>");
   });
 });

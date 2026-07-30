@@ -97,7 +97,10 @@ Whatever the adapter writes as `summary` in `.gojo/handoff.json` is delivered as
 verbatim. That makes a report-only agent a usable digest: it researches, writes the finished
 message, and gojo delivers it.
 
-Keep it plain text. Telegram caps messages at 4096 characters and gojo truncates past that.
+Use `**bold**` for section labels and per-item headers — gojo sends Telegram with HTML parse mode
+and converts those markers to real bold after escaping raw markup. Put a blank line between each
+header and its detail paragraph so the message stays scannable. Telegram caps messages at 4096
+characters and gojo truncates past that.
 
 ## Delivery behavior
 

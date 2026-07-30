@@ -58,8 +58,10 @@ test sends add `test: true`.
 
 Webhook-like channels POST the payload object; Slack wraps it as `{ "text": … }`. Telegram renders a
 human-readable header followed by `summary` as the message body, truncated to the Bot API limit of
-4096 characters. Work is queued in `notifications` and retried up to five times with backoff. Webhook
-URLs and bot tokens are redacted from error logs.
+4096 characters. The text is sent with `parse_mode: HTML` after escaping raw markup and converting
+agent `**bold**` markers to `<b>…</b>`, so digest headers render bold without trusting raw HTML from
+the agent. Work is queued in `notifications` and retried up to five times with backoff. Webhook URLs
+and bot tokens are redacted from error logs.
 
 ## Boundaries
 
