@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listIntegrations, listProjects } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import IntegrationStatusBadge from "@/components/status/IntegrationStatusBadge.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
@@ -179,14 +180,10 @@ void loadProjects();
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Integrations</h1>
-        <div class="subtitle">
-          Open PRs, merges, and commits produced by automation runs
-        </div>
-      </div>
-    </header>
+    <PageHeader
+      title="Integrations"
+      subtitle="Open PRs, merges, and commits produced by automation runs"
+    />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

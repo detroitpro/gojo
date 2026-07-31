@@ -403,41 +403,6 @@ a.entity-name:hover {
   flex-wrap: wrap;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-  margin: 0 0 var(--space-8);
-  padding: 0;
-  border-bottom: 1px solid var(--border);
-  box-sizing: border-box;
-}
-
-.section-header h1 {
-  margin: 0;
-  font-family: var(--sans);
-  font-size: 1.85rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.15;
-  color: var(--text);
-}
-
-.section-header .muted {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin-top: 4px;
-  max-width: 42rem;
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -2321,6 +2286,10 @@ table.data tr:hover td {
   .shell,
   .shell.sidebar-collapsed {
     grid-template-columns: 1fr;
+    /* Topbar keeps its content height; main fills the rest. Without an explicit
+       row template the grid's default stretch inflates the sticky topbar to fill
+       leftover viewport height on short pages (e.g. Approvals). */
+    grid-template-rows: auto 1fr;
     --sidebar-width: 0px;
   }
 
@@ -2396,8 +2365,7 @@ table.data tr:hover td {
     inset-inline-start: 0;
   }
 
-  .page-header,
-  .section-header {
+  .page-header {
     flex-direction: column;
     align-items: stretch;
     min-height: 0;
@@ -2406,29 +2374,24 @@ table.data tr:hover td {
     padding-block: var(--space-3);
   }
 
-  .page-header h1,
-  .section-header h1 {
+  .page-header h1 {
     font-size: 1.35rem;
   }
 
-  .page-header .subtitle,
-  .section-header .muted {
+  .page-header .subtitle {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
   }
 
-  .page-header .toolbar,
-  .section-header .header-actions {
+  .page-header .toolbar {
     width: 100%;
     justify-content: flex-start;
     gap: var(--space-2);
   }
 
   .page-header .toolbar > .btn,
-  .page-header .toolbar > a.btn,
-  .section-header .header-actions > .btn,
-  .section-header .header-actions > a.btn {
+  .page-header .toolbar > a.btn {
     flex: 1 1 auto;
     min-width: min(100%, 9.5rem);
   }

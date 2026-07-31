@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 
 import { getQueue } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import StatGrid from "@/components/StatGrid.vue";
 import StatTile from "@/components/StatTile.vue";
 import StateBadge from "@/components/StateBadge.vue";
@@ -63,14 +64,11 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Queue</h1>
-        <div class="subtitle">
-          Cron times are suggestions — the dispatcher admits runs under the global concurrency cap
-        </div>
-      </div>
-      <div class="toolbar">
+    <PageHeader
+      title="Queue"
+      subtitle="Cron times are suggestions — the dispatcher admits runs under the global concurrency cap"
+    >
+      <template #actions>
         <AppButton
           size="sm"
           :icon="RefreshCw"
@@ -80,8 +78,8 @@ useLiveRefresh({
         >
           Refresh
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

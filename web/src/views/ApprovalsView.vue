@@ -4,6 +4,7 @@ import { Check, FileDiff, Pause, RefreshCw, X } from "lucide-vue-next";
 
 import { getWorkDiff, listApprovals, updateApproval } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
@@ -86,13 +87,12 @@ async function toggleDiff(approval: Approval) {
 </script>
 
 <template>
-  <section class="panel approvals-page">
-    <header class="section-header">
-      <div>
-        <h1>Approvals</h1>
-        <p class="muted">Review settled checks and control platform-owned merges.</p>
-      </div>
-      <div class="header-actions">
+  <div>
+    <PageHeader
+      title="Approvals"
+      subtitle="Review settled checks and control platform-owned merges."
+    >
+      <template #actions>
         <AppButton
           variant="ghost"
           size="sm"
@@ -111,8 +111,8 @@ async function toggleDiff(approval: Approval) {
         >
           Refresh
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="error || actionError" class="error">{{ actionError || error }}</p>
     <p v-else-if="!loading && approvals.length === 0" class="empty-state">
@@ -209,5 +209,5 @@ async function toggleDiff(approval: Approval) {
       :range-label="rangeLabel"
       :total="total"
     />
-  </section>
+  </div>
 </template>

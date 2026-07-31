@@ -19,6 +19,7 @@ import {
 } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
 import { useSoftLoading } from "@/composables/useSoftLoading";
@@ -554,13 +555,15 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <RouterLink :to="{ name: 'projects' }" class="muted text-sm">← Projects</RouterLink>
-        <h1 class="mt-2">{{ project?.name ?? "Project" }}</h1>
+    <PageHeader
+      :title="project?.name ?? 'Project'"
+      :back-to="{ name: 'projects' }"
+      back-label="Projects"
+    >
+      <template #subtitle>
         <div v-if="project" class="subtitle mono">{{ project.id }}</div>
-      </div>
-      <div class="toolbar">
+      </template>
+      <template #actions>
         <AppButton
           variant="primary"
           size="sm"
@@ -581,8 +584,8 @@ useLiveRefresh({
         >
           Remove
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="notice" class="alert alert-success">{{ notice }}</div>

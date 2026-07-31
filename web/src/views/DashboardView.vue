@@ -10,6 +10,7 @@ import {
   resumeInstance,
 } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import StatGrid from "@/components/StatGrid.vue";
 import StatTile from "@/components/StatTile.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -241,12 +242,11 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Dashboard</h1>
-        <div class="subtitle">Live scheduler pulse — what is running, waiting, and shipping</div>
-      </div>
-      <div class="toolbar">
+    <PageHeader
+      title="Dashboard"
+      subtitle="Live scheduler pulse — what is running, waiting, and shipping"
+    >
+      <template #actions>
         <StatusBadge
           v-if="paused"
           :icon="pausedStatus().icon"
@@ -262,8 +262,8 @@ useLiveRefresh({
         >
           {{ paused ? "Resume scheduler" : "Pause scheduler" }}
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="loading" class="empty">Loading ops overview…</div>

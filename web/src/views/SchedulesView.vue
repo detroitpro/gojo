@@ -10,6 +10,7 @@ import {
   listSchedulesUpcoming,
 } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import SchedulesTimelineChart from "@/components/SchedulesTimelineChart.vue";
 import SortableTh from "@/components/SortableTh.vue";
@@ -230,14 +231,10 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Schedules</h1>
-        <div class="subtitle">
-          Cron is a suggested start — the run queue admits under the global concurrency cap
-        </div>
-      </div>
-    </header>
+    <PageHeader
+      title="Schedules"
+      subtitle="Cron is a suggested start — the run queue admits under the global concurrency cap"
+    />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import { listAdapters, testAdapter } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import { useClientPager } from "@/composables/useClientPager";
@@ -77,15 +78,13 @@ onMounted(load);
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Adapters</h1>
-        <div class="subtitle">Adapter detection status</div>
-      </div>
-      <AppButton size="sm" :icon="RefreshCw" :loading="loading" loading-label="Detecting…" @click="load">
-        Re-detect
-      </AppButton>
-    </header>
+    <PageHeader title="Adapters" subtitle="Adapter detection status">
+      <template #actions>
+        <AppButton size="sm" :icon="RefreshCw" :loading="loading" loading-label="Detecting…" @click="load">
+          Re-detect
+        </AppButton>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

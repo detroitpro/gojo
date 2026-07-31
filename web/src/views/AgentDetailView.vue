@@ -10,6 +10,7 @@ import {
   runAgent,
 } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import { useLiveRefresh } from "@/composables/useLiveQuery";
@@ -111,13 +112,13 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <RouterLink :to="{ name: 'agents' }" class="muted text-sm">← Agents</RouterLink>
-        <h1 class="mt-2">{{ agent?.name ?? "Agent" }}</h1>
-        <div v-if="agent?.description" class="subtitle">{{ agent.description }}</div>
-      </div>
-      <div v-if="agent" class="toolbar">
+    <PageHeader
+      :title="agent?.name ?? 'Agent'"
+      :subtitle="agent?.description ?? undefined"
+      :back-to="{ name: 'agents' }"
+      back-label="Agents"
+    >
+      <template v-if="agent" #actions>
         <AppButton
           variant="primary"
           size="sm"
@@ -139,8 +140,8 @@ useLiveRefresh({
         >
           {{ agent.enabled ? "Disable" : "Enable" }}
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 
