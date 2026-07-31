@@ -319,7 +319,7 @@ async function signOut() {
   display: none;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 721px) {
   .live-status-mobile {
     display: none;
   }

@@ -403,6 +403,41 @@ a.entity-name:hover {
   flex-wrap: wrap;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin: 0 0 var(--space-8);
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.section-header h1 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.section-header .muted {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+  max-width: 42rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -2292,8 +2327,8 @@ table.data tr:hover td {
   .topbar {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     background: var(--bg-sidebar);
     position: sticky;
@@ -2303,6 +2338,7 @@ table.data tr:hover td {
 
   .brand-mobile {
     flex: 1;
+    font-size: 1.35rem;
   }
 
   .collapse-btn {
@@ -2360,8 +2396,96 @@ table.data tr:hover td {
     inset-inline-start: 0;
   }
 
-  .page-header {
-    min-height: var(--chrome-band-height);
+  .page-header,
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
     padding-block: var(--space-3);
+  }
+
+  .page-header h1,
+  .section-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .page-header .subtitle,
+  .section-header .muted {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  .page-header .toolbar,
+  .section-header .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: var(--space-2);
+  }
+
+  .page-header .toolbar > .btn,
+  .page-header .toolbar > a.btn,
+  .section-header .header-actions > .btn,
+  .section-header .header-actions > a.btn {
+    flex: 1 1 auto;
+    min-width: min(100%, 9.5rem);
+  }
+
+  .panel-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: var(--space-2);
+  }
+
+  .panel-header > .muted,
+  .panel-header > .text-sm {
+    flex: 1 1 100%;
+    white-space: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 11px;
+  }
+
+  .schedules-panel-header .filter-bar,
+  .schedules-panel-header .schedules-toolbar {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .filter-bar-search,
+  .schedules-toolbar-search,
+  .task-filters .flex-2 {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .task-filters.inline-form {
+    justify-content: stretch;
+    align-items: stretch;
+  }
+
+  .task-filters.inline-form .field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .status-band {
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-5);
+  }
+
+  .panel-body .toolbar {
+    gap: var(--space-2);
+  }
+
+  .panel-body .toolbar > .btn,
+  .panel-body .toolbar > a.btn {
+    flex: 1 1 auto;
+    min-width: min(100%, 9.5rem);
   }
 }
