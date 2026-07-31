@@ -21,6 +21,13 @@ profiles:
   shell:
     adapter: shell
     timeout: 5m
+  ops:
+    adapter: shell
+    timeout: 20m
+    permissions:
+      filesystem: project
+      shell: full
+      network: full
   cursor:
     adapter: cursor
     model: default
@@ -75,6 +82,17 @@ validationProfiles:
         timeout: 30s
   handoff:
     steps:
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
+  instance-deploy:
+    steps:
+      - name: service-status
+        command: gojo service status
+        timeout: 30s
+      - name: doctor
+        command: gojo server doctor
+        timeout: 3m
       - name: handoff-exists
         command: test -f .gojo/handoff.json
         timeout: 30s
@@ -282,6 +300,24 @@ agents:
       onFailure:
         - ghost
 
+  deploy-instance:
+    description: Build gojo from synced main, install CLI+UI, and restart the service
+    profile: ops
+    promptFile: .gojo/agents/deploy-instance.sh
+    validationProfile: instance-deploy
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    failurePolicy:
+      maxAttemptsPerRun: 1
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: none
+    notifications:
+      onSuccess:
+        - ghost
+      onFailure:
+        - ghost
+
 schedules:
   self-heal:
     agent: self-heal
@@ -310,6 +346,12 @@ schedules:
   activity-digest:
     agent: activity-digest
     cron: "0 8 * * *"
+    timezone: America/Detroit
+  # Runs after maintain-quality (02:00) so that run's syncBeforeRun has fetched
+  # main and registered this agent + schedule before the first deploy fire.
+  deploy-instance:
+    agent: deploy-instance
+    cron: "15 2 * * *"
     timezone: America/Detroit
 
 notifications:
