@@ -70,15 +70,17 @@ useLiveRefresh({
           Cron times are suggestions — the dispatcher admits runs under the global concurrency cap
         </div>
       </div>
-      <AppButton
-        size="sm"
-        :icon="RefreshCw"
-        :loading="loading"
-        loading-label="Refreshing…"
-        @click="load"
-      >
-        Refresh
-      </AppButton>
+      <div class="toolbar">
+        <AppButton
+          size="sm"
+          :icon="RefreshCw"
+          :loading="loading"
+          loading-label="Refreshing…"
+          @click="load"
+        >
+          Refresh
+        </AppButton>
+      </div>
     </header>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
