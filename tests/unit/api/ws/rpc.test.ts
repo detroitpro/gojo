@@ -54,6 +54,7 @@ describe("handleRpcFrame", () => {
       },
       headers: new Headers({ Cookie: cookie.split(";")[0]! }),
       origin: "http://localhost",
+      browserOrigin: "http://localhost",
     };
     return data;
   }
@@ -102,5 +103,55 @@ describe("handleRpcFrame", () => {
       ok: false,
       status: 404,
     });
+  });
+
+  test("session RPC mutation passes CSRF when publicBaseUrl is set", async () => {
+    tempDir = mkdtempSync(`${tmpdir()}/gojo-ws-rpc-csrf-`);
+    ctx = await createAppContext(tempDir);
+    ctx.instance.publicBaseUrl = "https://gojo.example.com";
+    ctx.saveInstanceConfig();
+
+    const setup = await (
+      await import("@/api/router")
+    ).handleApiRequest(
+      ctx,
+      new Request("http://localhost/api/v1/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+      }),
+    );
+    expect(setup?.status).toBe(201);
+
+    const login = await (
+      await import("@/api/router")
+    ).handleApiRequest(
+      ctx,
+      new Request("http://localhost/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+      }),
+    );
+    expect(login?.status).toBe(200);
+    const cookie = login!.headers.get("Set-Cookie") ?? "";
+    const data: WsConnectionData = {
+      auth: {
+        userId: "admin",
+        username: "admin",
+        authMethod: "session",
+      },
+      headers: new Headers({ Cookie: cookie.split(";")[0]! }),
+      origin: "http://127.0.0.1:7430",
+      browserOrigin: "https://gojo.example.com",
+    };
+
+    const result = await handleRpcFrame(ctx!, data, {
+      t: "req",
+      id: 10,
+      method: "POST",
+      path: "/api/v1/instance/pause",
+    });
+    expect(result).toMatchObject({ t: "res", id: 10, ok: true });
   });
 });

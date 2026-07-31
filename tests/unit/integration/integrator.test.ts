@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { describeUnlessCloud } from '../../support/cloud';
 
 import {
   commitAll,
@@ -14,7 +16,7 @@ import {
 import { integrate } from '@/integration/integrator';
 import { MergeQueue } from '@/integration/queue';
 
-describe('integration/integrator', () => {
+describeUnlessCloud('integration/integrator', () => {
   let tempDir: string | null = null;
 
   afterEach(() => {

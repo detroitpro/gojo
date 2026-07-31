@@ -69,6 +69,24 @@ gojo service restart
 
 LAN-only without Cloudflare is allowed with `publicBaseUrl=http://<lan-ip>:7430` and a non-loopback bind; doctor will warn about cleartext. Treat any exposed instance as able to run repository commands.
 
+## I see "CSRF check failed — Origin/Referer not allowed"
+
+Cookie-authenticated UI actions validate the browser `Origin` against **public base URL** (or **allowed origins**). Common fixes:
+
+1. Set **public base URL** to the exact URL you use in the browser (scheme + host), e.g. `https://gojo.example.com` — not the internal tunnel address.
+2. Leave **allowed origins** empty unless you need extra hostnames; when set, it must include the public base URL origin.
+3. Add **trusted proxies** (`cloudflare`, `127.0.0.1` for Cloudflare Tunnel) and restart: `gojo service restart`.
+4. Use **Settings → Network → Cloudflare preset** or:
+
+```bash
+gojo instance set \
+  --public-base-url https://gojo.example.com \
+  --trusted-proxies cloudflare,127.0.0.1
+gojo service restart
+```
+
+If settings cannot be saved from the UI, apply the CLI commands above on the host running gojo. Run `gojo server doctor` for network warnings.
+
 ## A schedule keeps failing — why did it disappear?
 
 Schedules can **auto-disable** after consecutive failures. You'll get a notification if channels are configured. Re-enable explicitly after fixing the cause.

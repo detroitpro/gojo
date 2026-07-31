@@ -116,6 +116,12 @@ function applyCloudflarePreset() {
     current.push("127.0.0.1");
   }
   networkForm.value.trustedProxies = current.join(", ");
+  if (!networkForm.value.publicBaseUrl.trim() && typeof window !== "undefined") {
+    const { protocol, host } = window.location;
+    if (host !== "127.0.0.1" && host !== "localhost" && !host.startsWith("[")) {
+      networkForm.value.publicBaseUrl = `${protocol}//${host}`;
+    }
+  }
 }
 
 const daemonPathSummary = computed(() => {

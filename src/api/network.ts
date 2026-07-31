@@ -162,6 +162,67 @@ function configuredOrigins(config: InstanceConfig): string[] {
   return [];
 }
 
+/** Origins permitted for CSRF/CORS (for diagnostics). */
+export function listAllowedOrigins(config: InstanceConfig): string[] {
+  return configuredOrigins(config);
+}
+
+/** Read the browser Origin header, or derive it from Referer. */
+export function browserOriginFromRequest(request: Request): string | null {
+  const origin = request.headers.get("origin");
+  if (origin) {
+    return origin;
+  }
+  const referer = request.headers.get("referer");
+  if (!referer) {
+    return null;
+  }
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the browser origin for a session-backed request.
+ * Loopback installs without publicBaseUrl may omit Origin on same-host traffic.
+ */
+export function resolveBrowserOriginForSession(
+  request: Request,
+  config: InstanceConfig,
+): string | null {
+  const fromHeaders = browserOriginFromRequest(request);
+  if (fromHeaders) {
+    return fromHeaders;
+  }
+  if (config.publicBaseUrl == null && isLoopbackHost(config.bindHost)) {
+    try {
+      return new URL(request.url).origin;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export function csrfFailureMessage(request: Request, config: InstanceConfig): string {
+  const received = browserOriginFromRequest(request) ?? "(none)";
+  const allowed = configuredOrigins(config);
+  let allowHint: string;
+  if (allowed.length > 0) {
+    allowHint = allowed.join(", ");
+  } else if (isLoopbackHost(config.bindHost)) {
+    allowHint = "same origin as the API host (loopback default)";
+  } else {
+    allowHint = "(unset — set publicBaseUrl)";
+  }
+  return (
+    `CSRF check failed — Origin/Referer not allowed (received ${received}; allowed: ${allowHint}). ` +
+    "Set publicBaseUrl or allowedOrigins in instance settings."
+  );
+}
+
 export function originAllowed(
   origin: string | null,
   config: InstanceConfig,

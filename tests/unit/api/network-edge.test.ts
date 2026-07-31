@@ -174,6 +174,9 @@ describe("api network edge", () => {
       },
     });
     expect(blocked.status).toBe(403);
+    const blockedBody = (await blocked.json()) as { error: { message: string } };
+    expect(blockedBody.error.message).toContain("https://evil.example");
+    expect(blockedBody.error.message).toContain("publicBaseUrl");
 
     const allowed = await fetch(`${baseUrl}/api/v1/instance/pause`, {
       method: "POST",
@@ -215,5 +218,20 @@ describe("api network edge", () => {
     expect(body.data.network.publicBaseUrlScheme).toBe("https");
     expect(body.data.network.trustedProxiesConfigured).toBe(false);
     expect(body.data.warnings.some((w) => /trustedProxies/i.test(w))).toBe(true);
+  });
+
+  test("doctor warns when allowedOrigins omits publicBaseUrl origin", async () => {
+    const { baseUrl, token } = await bootWithConfig((c) => {
+      c.instance.publicBaseUrl = "https://gojo.example.com";
+    });
+    ctx!.instance.allowedOrigins = ["https://ui.example.com"];
+    ctx!.saveInstanceConfig();
+
+    const doctor = await fetch(`${baseUrl}/api/v1/instance/doctor`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(doctor.status).toBe(200);
+    const body = (await doctor.json()) as { data: { warnings: string[] } };
+    expect(body.data.warnings.some((w) => /allowedOrigins/i.test(w))).toBe(true);
   });
 });

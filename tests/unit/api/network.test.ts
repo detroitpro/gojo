@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  browserOriginFromRequest,
   checkAuthRateLimit,
   corsHeaders,
+  csrfFailureMessage,
   csrfOk,
   ipInList,
   ipMatches,
+  listAllowedOrigins,
   recordAuthFailure,
   resetRateLimitsForTests,
+  resolveBrowserOriginForSession,
   resolveClient,
   shouldSetSecureCookie,
 } from "@/api/network";
@@ -101,6 +105,56 @@ describe("api/network", () => {
       headers: { Origin: "http://127.0.0.1:7430" },
     });
     expect(csrfOk(sameOrigin, local)).toBe(true);
+  });
+
+  test("browserOriginFromRequest prefers Origin then Referer", () => {
+    const withOrigin = new Request("http://localhost/", {
+      headers: { Origin: "https://gojo.example.com" },
+    });
+    expect(browserOriginFromRequest(withOrigin)).toBe("https://gojo.example.com");
+
+    const withReferer = new Request("http://localhost/", {
+      headers: { Referer: "https://gojo.example.com/settings" },
+    });
+    expect(browserOriginFromRequest(withReferer)).toBe("https://gojo.example.com");
+
+    const missing = new Request("http://localhost/");
+    expect(browserOriginFromRequest(missing)).toBeNull();
+  });
+
+  test("resolveBrowserOriginForSession falls back on loopback without publicBaseUrl", () => {
+    const local = cfg();
+    const request = new Request("http://127.0.0.1:7430/api/v1/instance", { method: "PATCH" });
+    expect(resolveBrowserOriginForSession(request, local)).toBe("http://127.0.0.1:7430");
+
+    const remote = cfg({ publicBaseUrl: "https://gojo.example.com" });
+    expect(resolveBrowserOriginForSession(request, remote)).toBeNull();
+  });
+
+  test("csrfFailureMessage includes received and allowed origins", () => {
+    const config = cfg({ publicBaseUrl: "https://gojo.example.com" });
+    const request = new Request("https://gojo.example.com/api/v1/instance", {
+      method: "PATCH",
+      headers: { Origin: "https://evil.example" },
+    });
+    const message = csrfFailureMessage(request, config);
+    expect(message).toContain("https://evil.example");
+    expect(message).toContain("https://gojo.example.com");
+    expect(message).toContain("publicBaseUrl");
+  });
+
+  test("listAllowedOrigins mirrors CSRF allowlist", () => {
+    expect(listAllowedOrigins(cfg({ publicBaseUrl: "https://gojo.example.com" }))).toEqual([
+      "https://gojo.example.com",
+    ]);
+    expect(
+      listAllowedOrigins(
+        cfg({
+          publicBaseUrl: "https://gojo.example.com",
+          allowedOrigins: ["https://ui.example.com"],
+        }),
+      ),
+    ).toEqual(["https://ui.example.com"]);
   });
 
   test("corsHeaders only for allowed origins", () => {

@@ -41,7 +41,7 @@ loopback first, then set `publicBaseUrl` and reopen the bind.
 2. IP allowlist → 403 (except `GET /api/v1/health`).
 3. Login/setup sliding-window rate limit per client IP → `429 rate_limited`.
 4. `cookieSecure: auto` sets `Secure` when resolved proto is `https`.
-5. Cookie-authenticated mutations require Origin/Referer in the allowlist; Bearer exempt.
+5. Cookie-authenticated mutations require Origin/Referer in the allowlist; Bearer exempt. WebSocket RPC replays the browser Origin captured at upgrade.
 6. CORS only for allowed origins (credentials, no `*`).
 
 ## Operator surfaces
