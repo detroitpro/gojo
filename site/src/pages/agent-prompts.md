@@ -140,6 +140,23 @@ Handoff schema v2 adds `impact.items` — structured outcome claims the dashboar
 
 Categories: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`. Claims whose `evidence.files` match the real diff are marked **corroborated**; machine-detectable changes (deps, docs, tests) are recorded as **verified** platform facts. Speculative or duplicate claims stay labeled **claimed** — tell agents not to pad.
 
+## Source-side effects use schema v3 (`subjectActions`)
+
+Report-only and issue-driven agents must not call forge APIs with write tokens. Instead, use handoff **schema v3** and let gojo validate and apply mutations with platform credentials:
+
+```json
+{
+  "schemaVersion": 3,
+  "subjectActions": {
+    "addLabels": ["gojo:validated"],
+    "removeLabels": ["gojo:in-progress"],
+    "comment": "Brief is actionable — implement X with tests for Y."
+  }
+}
+```
+
+Review agents return a single `verdict`: `pass`, `changes-requested`, or `reject` (optionally with a `comment`). Triage agents use labels + comments; implementation agents usually omit `subjectActions` and rely on `pull-request` integration. v2 `impact.items` and v3 `subjectActions` can coexist. Full workflow: [Issue-driven agents](/issue-driven-agents).
+
 ### Minimal Hard rules sketch
 
 ```markdown

@@ -66,7 +66,21 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo project refresh-source <id> <sourceId>` | Reconcile one source immediately |
 | `gojo project recheck-work <id> <workItemId>` | Verify one work item against its provider |
 | `gojo project resolve-work <id> <workItemId> [--by …] [--note …]` | Operator-resolve attention without inventing delivery |
-| `GOJO_SOURCE_TOKEN=… gojo source token set <sourceId> [--secret-name <name>]` | Store/rotate a forge API token and attach its secret reference (secure prompt on a TTY) |
+| `gojo project migrate-vocab (--path <repoPath> \| <projectId>)` | One-time Tasks→Agents vocabulary rewrite in a checkout (manifest keys, `promptFile` paths, `.gojo/tasks/` → `.gojo/agents/`) |
+
+## Source credentials
+
+| Command | Purpose |
+| --- | --- |
+| `gojo source token set <sourceId> [--secret-name <name>]` | Store/rotate a forge API token in the encrypted secret store (secure prompt on a TTY) |
+
+For automation, supply the token only for that command:
+
+```bash
+GOJO_SOURCE_TOKEN="$TOKEN" gojo source token set <sourceId> --secret-name source-forgejo
+```
+
+See [Project visibility and sources](/project-visibility) and [Issue-driven agents](/issue-driven-agents) for when to rotate source write tokens.
 
 ## Adapters (detection)
 
