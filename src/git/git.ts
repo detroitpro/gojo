@@ -274,7 +274,17 @@ export async function commitAll(
   message: string,
   options: PathspecOptions = {},
 ): Promise<string> {
-  await execGitOrThrow(cwd, ['add', '-A', ...pathspecArgs(options)], 'commitAll');
+  await execGitOrThrow(cwd, ['add', '-A'], 'commitAll');
+  if (options.exclude?.length) {
+    // `git add` treats even exclusion pathspecs that name ignored files as
+    // explicit ignored paths and exits non-zero. Stage once, then restore the
+    // generated paths to HEAD so tracked and untracked runtime files stay out.
+    await execGitOrThrow(
+      cwd,
+      ['reset', '-q', 'HEAD', '--', ...options.exclude],
+      'commitAll',
+    );
+  }
   await execGitOrThrow(
     cwd,
     ['commit', '-m', message],

@@ -249,6 +249,38 @@ describe("runs/dispatcher", () => {
     await dispatcher.stop();
   });
 
+  test("kick does not admit runs before the dispatcher starts", async () => {
+    const { repos, projectA, taskA } = setup();
+    repos.runs.create({
+      projectId: projectA.id,
+      agentId: taskA.id,
+      idempotencyKey: "queued-before-start",
+      trigger: "manual",
+      state: RunState.Queued,
+      priority: 10,
+      notBeforeAt: "2026-07-26T00:00:00.000Z",
+    });
+    const executed: string[] = [];
+    const coordinator = {
+      executeRun: mock(async (runId: string) => {
+        executed.push(runId);
+        return repos.runs.findById(runId)!;
+      }),
+    } as unknown as RunCoordinator;
+    const dispatcher = new RunDispatcher({
+      db: db!,
+      coordinator,
+      loadPerCpu: () => 0,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+
+    dispatcher.kick();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(executed).toEqual([]);
+  });
+
   test("admitted Scheduled run transitions to Queued", async () => {
     const { repos, projectA, taskA } = setup();
     const scheduled = repos.runs.create({

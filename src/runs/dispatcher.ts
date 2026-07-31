@@ -28,6 +28,7 @@ export class RunDispatcher {
   private readonly loadPerCpu: () => number;
   private readonly now: () => Date;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private started = false;
   private ticking = false;
 
   constructor(deps: RunDispatcherDeps) {
@@ -45,9 +46,10 @@ export class RunDispatcher {
   }
 
   start(): void {
-    if (this.timer) {
+    if (this.started) {
       return;
     }
+    this.started = true;
     void this.tick();
     this.timer = setInterval(() => {
       void this.tick();
@@ -55,6 +57,7 @@ export class RunDispatcher {
   }
 
   async stop(): Promise<void> {
+    this.started = false;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -63,6 +66,9 @@ export class RunDispatcher {
 
   /** Kick admission immediately (e.g. after a run finishes). */
   kick(): void {
+    if (!this.started) {
+      return;
+    }
     void this.tick();
   }
 

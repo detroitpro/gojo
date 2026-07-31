@@ -37,6 +37,7 @@ describe("integration/api-flow", () => {
     await commitAll(repoPath, "initial");
 
     ctx = await createAppContext(tempDir);
+    ctx.dispatcher.start();
     const handler = createRouter(ctx);
     server = Bun.serve({
       port: 0,

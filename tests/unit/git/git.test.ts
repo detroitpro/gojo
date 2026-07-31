@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -55,6 +55,33 @@ describeUnlessCloud('git/git', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.length).toBeGreaterThan(0);
+  });
+
+  test('commitAll excludes ignored generated workspace files', async () => {
+    const repo = await createTempRepo();
+    mkdirSync(join(repo, '.gojo'), { recursive: true });
+    writeFileSync(
+      join(repo, '.gitignore'),
+      '.gojo/handoff.json\n.gojo/run.sh\n',
+    );
+    await commitAll(repo, 'ignore runtime files');
+
+    writeFileSync(join(repo, '.gojo', 'handoff.json'), '{}\n');
+    writeFileSync(join(repo, '.gojo', 'run.sh'), '#!/bin/sh\n');
+    writeFileSync(join(repo, 'result.txt'), 'agent result\n');
+
+    await expect(
+      commitAll(repo, 'agent result', {
+        exclude: ['.gojo/handoff.json', '.gojo/run.sh'],
+      }),
+    ).resolves.toMatch(/^[0-9a-f]{40}$/);
+    const committed = await execGit(repo, [
+      'show',
+      '--name-only',
+      '--pretty=format:',
+      'HEAD',
+    ]);
+    expect(committed.stdout.trim()).toBe('result.txt');
   });
 
   test('isRepo detects git repositories', async () => {
