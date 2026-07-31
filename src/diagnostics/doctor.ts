@@ -426,6 +426,23 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
       "bindHost is not loopback but publicBaseUrl is unset — set publicBaseUrl before exposing the daemon",
     );
   }
+  if (!instance.publicBaseUrl && instance.trustedProxies.length > 0) {
+    warnings.push(
+      "trustedProxies is set but publicBaseUrl is unset — set publicBaseUrl to the browser URL (e.g. https://gojo.example.com) so CSRF/CORS and agent callbacks work",
+    );
+  }
+  if (instance.publicBaseUrl && instance.allowedOrigins.length > 0) {
+    try {
+      const baseOrigin = new URL(instance.publicBaseUrl).origin;
+      if (!instance.allowedOrigins.some((entry) => entry === baseOrigin || entry === "*")) {
+        warnings.push(
+          `allowedOrigins is set but does not include publicBaseUrl origin (${baseOrigin}) — browser CSRF/CORS will reject the UI`,
+        );
+      }
+    } catch {
+      // publicBaseUrl parse errors are surfaced elsewhere.
+    }
+  }
   if (publicBaseUrlScheme === "https" && instance.trustedProxies.length === 0) {
     warnings.push(
       "publicBaseUrl is https but trustedProxies is empty — Secure cookies and real client IPs will not honor X-Forwarded-* (add cloudflare or 127.0.0.1 for Tunnel)",

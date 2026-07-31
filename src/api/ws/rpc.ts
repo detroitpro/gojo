@@ -27,6 +27,7 @@ export async function handleRpcFrame(
   }
 
   const headers = new Headers(data.headers);
+  headers.set("Origin", data.browserOrigin);
   if (frame.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }

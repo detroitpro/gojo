@@ -31,11 +31,15 @@ import {
   type AuthContext,
 } from "./http";
 import {
+  browserOriginFromRequest,
   checkAuthRateLimit,
   corsHeaders,
+  csrfFailureMessage,
   csrfOk,
   ipInList,
+  originAllowed,
   recordAuthFailure,
+  resolveBrowserOriginForSession,
   resolveClient,
   shouldSetSecureCookie,
 } from "./network";
@@ -338,6 +342,17 @@ export async function handleApiRequest(
     if (isScopedAgentToken(auth)) {
       return failure("forbidden", "Scoped agent tokens cannot open WebSocket", 403);
     }
+    const browserOrigin = resolveBrowserOriginForSession(request, ctx.instance);
+    if (!browserOrigin || !originAllowed(browserOrigin, ctx.instance, request.url)) {
+      const received = browserOriginFromRequest(request) ?? "(none)";
+      return failure(
+        "forbidden",
+        browserOrigin
+          ? `Origin not allowed for WebSocket (${browserOrigin})`
+          : `WebSocket upgrade requires an allowed Origin or Referer (received ${received})`,
+        403,
+      );
+    }
     const headers = new Headers();
     const cookie = request.headers.get("Cookie");
     const authorization = request.headers.get("Authorization");
@@ -348,6 +363,7 @@ export async function handleApiRequest(
         auth,
         headers,
         origin: `${url.protocol}//${url.host}`,
+        browserOrigin,
       },
     });
     if (!upgraded) {
@@ -384,7 +400,7 @@ export async function handleApiRequest(
       mutationAuth?.authMethod === "session" &&
       !csrfOk(request, ctx.instance)
     ) {
-      return failure("forbidden", "CSRF check failed — Origin/Referer not allowed", 403);
+      return failure("forbidden", csrfFailureMessage(request, ctx.instance), 403);
     }
   }
 

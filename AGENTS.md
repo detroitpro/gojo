@@ -21,12 +21,14 @@ those instead of re-deriving them.
 - `bun test` runs 100+ files concurrently and many spawn real `git` subprocesses. On the
   4-CPU cloud VM the default 5s per-test timeout is too tight, so a *different* random
   subset of the git/workspace/integration tests times out on each run (flaky, not real
-  failures). Run the daemon suite with a longer timeout for a reliable green result:
+  failures). Those suites are **skipped automatically** in cloud dev when `CURSOR_AGENT=1`
+  (or `GOJO_CLOUD_DEV=1`); CI still runs them. Force them in cloud with
+  `GOJO_RUN_CLOUD_INCOMPATIBLE_TESTS=1 bun test`.
+- For a full local/cloud run without skips, use a longer timeout:
   `bun test --timeout 30000`. Web tests (`bun run --cwd web test`) are fast and reliable.
 - `make check` / `scripts/ci-check.sh` is the full gate (daemon typecheck+test, web
-  typecheck+test+build, site build, binary compile). Its `bun test` step uses the default
-  timeout, so it can show the same flakiness; re-run or use the longer-timeout command
-  above to confirm a green daemon suite.
+  typecheck+test+build, site build, binary compile). In cloud dev, git-heavy suites are
+  skipped as above; CI runs the complete suite.
 
 ### Running the app
 

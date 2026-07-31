@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { describeUnlessCloud } from "../../support/cloud";
+
 import {
   firstCommandToken,
   primaryValidationTool,
@@ -100,7 +102,7 @@ describe("diagnostics/doctor helpers", () => {
   });
 });
 
-describe("diagnostics/projectDoctor", () => {
+describeUnlessCloud("diagnostics/projectDoctor", () => {
   test("reports dirty base checkout and validation tools", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "gojo-doctor-proj-"));
     try {

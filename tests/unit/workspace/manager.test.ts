@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { describeUnlessCloud } from '../../support/cloud';
 
 import {
   commitAll,
@@ -13,7 +15,7 @@ import {
 } from '@/git/git';
 import { WorkspaceManager } from '@/workspace/manager';
 
-describe('workspace/manager', () => {
+describeUnlessCloud('workspace/manager', () => {
   let tempDir: string | null = null;
 
   afterEach(() => {

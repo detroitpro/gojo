@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { describeUnlessCloud } from '../../support/cloud';
 
 import {
   addWorktree,
@@ -22,7 +24,7 @@ import {
   statusPorcelain,
 } from '@/git/git';
 
-describe('git/git', () => {
+describeUnlessCloud('git/git', () => {
   let tempDir: string | null = null;
   let repoPath: string | null = null;
 

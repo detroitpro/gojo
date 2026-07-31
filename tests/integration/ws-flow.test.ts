@@ -207,4 +207,108 @@ describe("WebSocket flow", () => {
     },
     { timeout: 15_000 },
   );
+
+  test("rejects WebSocket upgrade with foreign Origin when publicBaseUrl is set", async () => {
+    tempDir = mkdtempSync(`${tmpdir()}/gojo-ws-csrf-`);
+    ctx = await createAppContext(tempDir);
+    ctx.instance.publicBaseUrl = "https://gojo.example.com";
+    ctx.saveInstanceConfig();
+    hub = new WsHub(ctx);
+    const handler = createRouter(ctx);
+    server = Bun.serve({
+      port: 0,
+      fetch: async (req, bunServer) => (await handler(req, bunServer)) ?? undefined!,
+      websocket: createWebSocketHandler(ctx, hub),
+    });
+    const baseUrl = server.url.toString().replace(/\/$/, "");
+
+    await fetch(`${baseUrl}/api/v1/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+    });
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+    });
+    const cookie = (login.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    const blocked = await fetch(`${baseUrl}${WS_PATH}`, {
+      headers: {
+        Cookie: cookie,
+        Origin: "https://evil.example",
+      },
+    });
+    expect(blocked.status).toBe(403);
+
+    const wsUrl = baseUrl.replace(/^http/, "ws") + WS_PATH;
+    const ws = new WebSocket(wsUrl, {
+      headers: {
+        Cookie: cookie,
+        Origin: "https://gojo.example.com",
+      },
+    } as unknown as string[]);
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error("ws open failed"));
+    });
+    ws.close();
+  });
+
+  test("WebSocket RPC mutation passes CSRF when publicBaseUrl is set", async () => {
+    tempDir = mkdtempSync(`${tmpdir()}/gojo-ws-rpc-remote-`);
+    ctx = await createAppContext(tempDir);
+    ctx.instance.publicBaseUrl = "https://gojo.example.com";
+    ctx.saveInstanceConfig();
+    hub = new WsHub(ctx);
+    const handler = createRouter(ctx);
+    server = Bun.serve({
+      port: 0,
+      fetch: async (req, bunServer) => (await handler(req, bunServer)) ?? undefined!,
+      websocket: createWebSocketHandler(ctx, hub),
+    });
+    const baseUrl = server.url.toString().replace(/\/$/, "");
+
+    await fetch(`${baseUrl}/api/v1/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+    });
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "secret-pass" }),
+    });
+    const cookie = (login.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    const wsUrl = baseUrl.replace(/^http/, "ws") + WS_PATH;
+    const ws = new WebSocket(wsUrl, {
+      headers: {
+        Cookie: cookie,
+        Origin: "https://gojo.example.com",
+      },
+    } as unknown as string[]);
+
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error("ws open failed"));
+    });
+    await waitForFrame(ws, (frame) => frame.t === "hello");
+
+    ws.send(
+      JSON.stringify({
+        t: "req",
+        id: 42,
+        method: "POST",
+        path: "/api/v1/instance/pause",
+      }),
+    );
+    const pauseRes = await waitForFrame(
+      ws,
+      (frame) => frame.t === "res" && frame.id === 42,
+    );
+    expect(pauseRes).toMatchObject({ t: "res", id: 42, ok: true });
+    ws.close();
+  });
 });
