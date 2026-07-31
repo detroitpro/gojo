@@ -176,7 +176,12 @@ This repository dogfoods that pattern as **`maintain-issue-tags`**:
 | [`.gojo/agents/maintain-issue-tags.md`](https://github.com/detroitpro/gojo/blob/main/.gojo/agents/maintain-issue-tags.md) | Prompt: reconcile labels, triage open issues, write handoff |
 | `gojo.yaml` agent `maintain-issue-tags` | `profile: cursor`, `validationProfile: noop`, **no** `integration` block |
 
-Copy the shape for your repo: keep a labels doc as the single authority, cap issues per run, and forbid inventing labels in the prompt. Reserved labels such as `gojo:ready` + matching `area:*` are the **future** contract for workers to claim issues — no maintenance agent in this repo filters on tags yet.
+Copy the shape for your repo: keep a labels doc as the single authority, cap
+issues per run, and forbid inventing labels in the prompt. The shipped
+issue-driven pipeline uses `gojo:ready`, `gojo:validated`,
+`gojo:in-progress`, and `gojo:blocked` as a durable claim state machine. See
+[Issue-driven agents](/issue-driven-agents) for the trigger, triage,
+implementation, review, and approval contract.
 
 ### Digest agents (the message *is* the deliverable)
 
@@ -203,6 +208,7 @@ This repository's scheduled maintenance prompts under [`.gojo/agents/`](https://
 ## Related
 
 - [Advanced agent](/advanced-agent) — full dependency-maintenance prompt example
+- [Issue-driven agents](/issue-driven-agents) — triage, implementation, and review prompt responsibilities
 - [Advanced usage](/advanced-usage) — multi-role agents and operating hygiene
 - [Concepts](/concepts) — why the platform owns success and merge
 - [Settings](/settings) — agent and schedule fields

@@ -89,9 +89,11 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve\|reject [--reason]` | Approve or reject runs in `await-approval` integration |
 | `gojo approval list\|show\|approve\|reject\|hold` | Inspect and decide platform-owned PR approvals |
-| `gojo work claim <workItemId> --agent <agentId>` | Explicitly enqueue an issue against an eligible agent |
+| `gojo work claim <workItemId> --agent <name-or-id>` | Explicitly enqueue an issue against an eligible issue-triggered agent |
 
 Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
+For the label-triggered triage → implementation → review workflow, see
+[Issue-driven agents](/issue-driven-agents).
 
 ## Work status
 
@@ -111,3 +113,4 @@ Failed runs may enqueue a project **self-heal** agent when the manifest declares
 - [Settings](/settings)
 - [FAQ](/faq)
 - [Project visibility and sources](/project-visibility)
+- [Issue-driven agents](/issue-driven-agents)

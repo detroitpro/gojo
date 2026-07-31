@@ -61,57 +61,15 @@ repairs for red CI or requested changes.
 
 ## Issue-driven coding away from the workstation
 
-An issue pipeline uses three small agents:
+Use a trusted `gojo:ready` label to move an actionable issue through triage,
+implementation, asynchronous CI, independent review, bounded repair, and a
+platform-owned merge. Coding and reviewer agents never receive the source merge
+token managed by Gojo or remain running while checks execute. Host-level CLI,
+SSH, and Git credentials remain part of the adapter host's trust boundary.
 
-```yaml
-agents:
-  issue-triage:
-    profile: reviewer
-    promptFile: .gojo/agents/issue-triage.md
-    validationProfile: handoff
-    trigger:
-      on: issue-label
-      requireLabels: [gojo:ready]
-      excludeLabels: [gojo:validated, gojo:blocked, gojo:in-progress]
-      trustedActors: [your-forge-login]
-      maxOpenClaims: 1
-
-  issue-implement:
-    profile: maintenance
-    promptFile: .gojo/agents/issue-implement.md
-    validationProfile: standard
-    trigger:
-      on: issue-label
-      requireLabels: [gojo:ready, gojo:validated]
-      excludeLabels: [gojo:blocked, gojo:in-progress]
-      trustedActors: [your-forge-login]
-      maxOpenClaims: 1
-    integration:
-      mode: pull-request
-      targetBranch: main
-      approval: reviewer
-      fixRounds: 2
-      requireAllValidations: true
-
-  issue-review:
-    profile: reviewer
-    promptFile: .gojo/agents/issue-review.md
-    validationProfile: handoff
-    trigger:
-      on: pull-request-checks-settled
-      fromAgents: [issue-implement]
-```
-
-Apply `gojo:ready` as a trusted actor. Triage validates the brief and adds
-`gojo:validated`; implementation claims it, runs local validation, and opens a
-PR; review starts only after checks settle. Issue and PR text are injected as
-explicitly untrusted context. Forge credentials stay in Gojo's source service
-and are stripped from coding/reviewer environments.
-
-Use `gojo approval list` and `gojo approval approve <id>` when manual authority
-is configured. On GitHub, GitLab, or Forgejo, a trusted actor can also comment
-`/gojo approve`, `/gojo hold`, or `/gojo reject` on the PR. Repeated comment
-delivery is idempotent.
+See [Issue-driven agents](/issue-driven-agents) for the complete three-agent
+manifest, source-token and label setup, prompt responsibilities, approval modes,
+remote forge commands, operating views, and troubleshooting.
 
 ## Secrets without committing them
 

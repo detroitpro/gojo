@@ -13,10 +13,12 @@ Gojo separates **where** notifications go (instance channels) from **when** they
 | Channels | Instance Settings (or API) | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token + chat id |
 | Routing | `gojo.yaml` → `notifications` (project or per-agent) | Which channel names fire on success, failure, or schedule auto-disable |
 
-1. A run finishes (`run.finished`).
-2. Gojo reads the project’s `notifications.onSuccess` / `onFailure` (and `onDisabled` if a schedule was auto-disabled).
+1. A run finishes (`run.finished`) or a durable PR approval enters
+   `awaiting-human` (`run.awaiting_approval`).
+2. Gojo reads the matching project routing.
 3. Those **names** look up channels on the instance.
-4. Delivery is **queued** with retries so a flaky provider does not turn a successful run into a failure.
+4. Delivery is **queued** with retries so a flaky provider does not change run
+   or approval state.
 
 ## Create a channel (Settings)
 
@@ -57,6 +59,8 @@ notifications:
     - ops-telegram
   onDisabled:
     - ops-telegram
+  onApprovalNeeded:
+    - ops-telegram
 ```
 
 Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) so the manifest is loaded.
@@ -66,6 +70,12 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 | `onSuccess` | Run ended in `Succeeded` |
 | `onFailure` | Run ended in any other terminal state (failed, canceled, timed out, …) |
 | `onDisabled` | After a scheduled run, the schedule was auto-disabled for consecutive failures |
+| `onApprovalNeeded` | A reviewed PR enters `awaiting-human` before the run is terminal |
+
+Approval-needed payloads include the approval id, PR URL when available, checks
+state, reviewer verdict, and a short-lived single-use confirmation URL when
+`publicBaseUrl` and an admin user are configured. The confirmation page performs
+no action until you press **Approve**; a successful attempt revokes its token.
 
 ## Route a single agent
 
@@ -123,6 +133,7 @@ characters and gojo truncates past that.
 
 - **Test sends** include `"test": true`.
 - **Auto-disable** payloads also include `reason`, `scheduleId`, and `consecutiveFailures`.
+- **Approval-needed** payloads also include `approvalId`, `approveUrl`, `prUrl`, `reviewerVerdict`, and `checksState`.
 - Webhook URLs and Telegram bot tokens are **redacted** from error logs (`***`).
 
 ## Auto-disable notifications
@@ -144,11 +155,13 @@ Pair `onDisabled` with your ops channel so silent schedule death is visible.
 | Every agent notifies | Routing is on the project block; move it to the one agent that should notify |
 | Message has no report text | The run wrote no handoff, or its `summary` was empty |
 | Schedule died quietly | Missing `onDisabled`, or `disableAfterConsecutiveFailedRuns` not set |
+| Approval needs attention but no message arrives | Missing `onApprovalNeeded`, channel name mismatch, or no `publicBaseUrl` for the link |
 | Telegram 401/404 | Invalid bot token, or the bot has not been started / added to the chat |
 
 ## Related
 
 - [Settings](/settings) — instance knobs overview
 - [Advanced agent](/advanced-agent) — full manifest example including notifications
+- [Issue-driven agents](/issue-driven-agents) — approval routing and remote decisions
 - [CLI](/cli) — project sync and run inspection
 - [FAQ](/faq) — common post-setup questions

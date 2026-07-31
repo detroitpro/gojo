@@ -103,10 +103,17 @@ In the web UI, **Agents** lists synced agents with success rate and last run. **
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/agent-prompts) |
 | `validationProfile` | Ordered checks after the adapter exits |
 | `environment` | Optional `{ file, include[], required?[] }` — load allowlisted dotenv vars from the registered primary checkout into the adapter and validation phases (see [Advanced usage](/advanced-usage)) |
+| `trigger` | Optional source-work contract: trusted issue labels or settled PR checks (see [Issue-driven agents](/issue-driven-agents)) |
 | `concurrency` | Synced onto the agent row (`projectLimit`; manifest `overlapPolicy`: `skip` / `queue` / `cancel`) for intent documentation — **not** the same field as per-schedule overlap (`cancel_replace` / `allow_parallel`). **Starts** are gated by the instance **run admission** policy (Settings → Run admission / `GET /api/v1/instance/scheduling`). Per-schedule `overlapPolicy` still controls whether a cron tick enqueues while that schedule already has work |
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
 | `selfHeal` | Optional `{ agent, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |
+
+`trigger.on: issue-label` supports `requireLabels`, `anyLabels`,
+`excludeLabels`, `trustedActors`, and `maxOpenClaims`.
+`trigger.on: pull-request-checks-settled` supports `fromAgents`. Source-triggered
+runs snapshot the issue or PR as untrusted context instead of treating its body
+as instructions.
 
 ## Schedules
 
@@ -133,7 +140,7 @@ Empty profile = pass (useful for pure analysis). Failed required steps fail the 
 
 | Mode | In `gojo.yaml`? | Behavior |
 | --- | --- | --- |
-| *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime). Use for forge side-effect agents (e.g. issue label triage via `gh`) that must not open PRs — see [Agent prompts](/agent-prompts#report-only-agents-forge-side-effects). |
+| *(omit `integration`)* | yes | No commit; reporting only (`none` at runtime). Triggered triage/review agents can request validated source actions through handoff without opening a PR — see [Issue-driven agents](/issue-driven-agents). |
 | **commit-only** | yes | Commit on the run branch; do not merge |
 | **pull-request** | yes | Push branch and open a PR via `integration.prTool` (`gh` or `tea`; default `gh`). Missing CLI / create failure → run **fails** with `local://pr/<branch>` recorded on the attempt. Checks, reviewer verdict, approval, and merge then advance asynchronously through the platform control plane. |
 | **auto-merge** | yes | Merge into the target under the project merge lock after checks |
@@ -141,11 +148,16 @@ Empty profile = pass (useful for pure analysis). Failed required steps fail the 
 
 Adapter subprocesses should not `git push origin main`. The **merge queue** serializes integration and re-checks the target branch.
 
+For `pull-request`, `approval: manual|reviewer|auto`,
+`autonomyLabels.auto`, and `fixRounds` configure the durable approval and
+bounded repair policy.
+
 ## Secrets
 
 - Stored encrypted at rest; referenced by name, not pasted into manifests
 - Injected only at execution time; redacted from logs and handoffs
 - Prefer project-scoped secrets for repo-specific tokens
+- Store source write tokens with `gojo source token set <source-id>`; Gojo strips its managed forge-token environment keys from agent and validation processes
 
 ## Notification channels
 

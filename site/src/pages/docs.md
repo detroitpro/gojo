@@ -10,6 +10,7 @@ description: Guides and reference for operating gojo — from first shell agent 
 - [Your first agent](/first-agent) — shell agent end-to-end (learn the pipeline)
 - [Advanced agent](/advanced-agent) — Claude Code / Cursor dependency maintenance with PRs
 - [Agent prompt best practices](/agent-prompts) — constrained limits, hard rules, handoffs
+- [Issue-driven agents](/issue-driven-agents) — start trusted work from a forge issue and control review, repair, and merge remotely
 - [Advanced usage](/advanced-usage) — multi-role agents, approvals, secrets, hygiene
 - [Self-healing](/self-healing) — recover from failed agents with in-repo healer PRs
 
@@ -34,7 +35,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, remote link, open and recently merged PR lists (with merge babysitter enqueue when `maintain-merge` exists), Impact detail, structured config, and sync manifests.
+**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, source-backed work and freshness, remote links, open and recently merged PRs, Impact detail, structured config, and manifest sync.
 
 ![gojo agents](/images/ui-agents.png)
 
@@ -55,6 +56,8 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 ![gojo integrations](/images/ui-integrations.png)
 
 **Integrations** — Open / Merged / Commits tabs over `run_integrations`, with project filters and links into run detail. Dashboard Merged / Commits / Merge rate tiles land here.
+
+**Approvals** — mobile-friendly evidence cards for checks, independent reviewer verdict, repair count, source or mirrored diff, and platform-owned Approve / Hold / Reject controls.
 
 ![gojo impact items](/images/ui-impact.png)
 

@@ -12,11 +12,13 @@ const docPaths = [
   "/docs",
   "/advanced-agent",
   "/agent-prompts",
+  "/issue-driven-agents",
   "/advanced-usage",
   "/self-healing",
   "/settings",
   "/notifications",
   "/concepts",
+  "/project-visibility",
   "/cli",
   "/faq",
 ];
@@ -59,6 +61,11 @@ const inDocs = docPaths.some((route) => current(route));
             >Agent prompts</a
           >
           <a
+            href={href("/issue-driven-agents")}
+            aria-current={current("/issue-driven-agents") ? "page" : undefined}
+            >Issue-driven agents</a
+          >
+          <a
             href={href("/advanced-usage")}
             aria-current={current("/advanced-usage") ? "page" : undefined}
             >Advanced usage</a
@@ -78,6 +85,11 @@ const inDocs = docPaths.some((route) => current(route));
           >
           <a href={href("/concepts")} aria-current={current("/concepts") ? "page" : undefined}
             >Concepts</a
+          >
+          <a
+            href={href("/project-visibility")}
+            aria-current={current("/project-visibility") ? "page" : undefined}
+            >Project visibility</a
           >
           <a href={href("/cli")} aria-current={current("/cli") ? "page" : undefined}>CLI</a>
           <a href={href("/faq")} aria-current={current("/faq") ? "page" : undefined}>FAQ</a>

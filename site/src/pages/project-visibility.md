@@ -73,6 +73,18 @@ standard `GH_TOKEN`/`GITHUB_TOKEN`, `GITLAB_TOKEN`, and
 fallbacks. For GitHub, Gojo also uses the active `gh` CLI login when no token is
 configured explicitly.
 
+Use `gojo project sources <project-id>` to find the source id, then store or
+rotate its write token in the encrypted secret store:
+
+```bash
+gojo source token set <source-id> --secret-name source-github
+gojo server doctor
+```
+
+Source write adapters use that credential for platform-owned comments, labels,
+diffs, check reconciliation, and approved merges. Gojo-managed forge tokens are
+removed from agent and validation environments.
+
 Attach additional sources with `POST /api/v1/projects/:id/sources`. A generic
 webhook connection stores only `webhookSecretName` in its configuration; put
 the actual value in gojo Secrets. Send events to
@@ -117,6 +129,7 @@ Filter work with `--kind`, `--provenance`, `--delivery`, and `--attention` (enum
 
 ## Related
 
+- [Issue-driven agents](/issue-driven-agents) — turn source issues into reviewed pull requests
 - [Concepts](/concepts) — ownership and success boundaries
 - [CLI](/cli) — command reference
 - [Settings](/settings) — projects, secrets, and integrations
