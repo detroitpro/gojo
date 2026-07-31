@@ -33,3 +33,7 @@ Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.fi
 Coordinator passes title/body into `gh pr create` or `tea pulls create` (with optional `prLogin` / `prRemote` for tea).
 
 The handoff and its assets are run output, not repository content — the integrator excludes them from the result commit. See [Repository files](./repo-files.md) for the full committed-vs-generated contract.
+
+## Handoff schema v3 (`subjectActions`)
+
+`normalizeAgentHandoff` accepts schema v1–v3 ([`src/shared/handoff.ts`](../src/shared/handoff.ts)). v3 adds optional `subjectActions` (`addLabels`, `removeLabels`, `comment`, `verdict`) for issue-driven triage/review agents: the platform validates and applies forge mutations with managed credentials instead of injecting write tokens into adapter processes. User-facing guide: [`site/src/pages/agent-prompts.md`](../site/src/pages/agent-prompts.md) and [`site/src/pages/issue-driven-agents.md`](../site/src/pages/issue-driven-agents.md).
