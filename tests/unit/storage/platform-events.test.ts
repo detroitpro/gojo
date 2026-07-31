@@ -70,4 +70,32 @@ describe("storage/platform-change-events", () => {
     expect(events.list({ afterSequence: 0, limit: 10 })).toEqual([instance]);
     db.close();
   });
+
+  test("replays pre-rebrand task topics as agent events", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    db.connection()
+      .query(
+        `INSERT INTO platform_change_events (
+          id, project_id, type, entity_kind, entity_id, topics_json,
+          data_json, occurred_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "legacy-task-event",
+        "project-1",
+        "task.updated",
+        "task",
+        "task-1",
+        JSON.stringify(["dashboard", "tasks"]),
+        JSON.stringify({}),
+        "2026-07-27T19:00:00.000Z",
+        "2026-07-27T19:00:00.000Z",
+      );
+
+    const events = createPlatformChangeEventRepository(db).list();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.topics).toEqual(["dashboard", "agents"]);
+    db.close();
+  });
 });

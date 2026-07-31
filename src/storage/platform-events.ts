@@ -38,6 +38,15 @@ function parseJson(value: string): unknown {
   }
 }
 
+function normalizeLegacyTopics(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return [
+    ...new Set(
+      value.map((topic) => (topic === "tasks" ? "agents" : topic)),
+    ),
+  ];
+}
+
 function mapEvent(row: PlatformChangeEventRow): PlatformChangeEvent {
   return PlatformChangeEventSchema.parse({
     sequence: row.sequence,
@@ -46,7 +55,7 @@ function mapEvent(row: PlatformChangeEventRow): PlatformChangeEvent {
     type: row.type,
     entityKind: row.entity_kind,
     entityId: row.entity_id,
-    topics: parseJson(row.topics_json),
+    topics: normalizeLegacyTopics(parseJson(row.topics_json)),
     data: parseJson(row.data_json),
     occurredAt: row.occurred_at,
     createdAt: row.created_at,
