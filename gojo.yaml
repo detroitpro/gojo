@@ -347,6 +347,12 @@ schedules:
     agent: activity-digest
     cron: "0 8 * * *"
     timezone: America/Detroit
+  # Runs after maintain-quality (02:00) so that run's syncBeforeRun has fetched
+  # main and registered this agent + schedule before the first deploy fire.
+  deploy-instance:
+    agent: deploy-instance
+    cron: "15 2 * * *"
+    timezone: America/Detroit
 
 notifications:
   onApprovalNeeded:
