@@ -5,7 +5,19 @@ set -eu
 echo "==> Deploying gojo from worktree at $(pwd)"
 echo "==> HEAD: $(git rev-parse --short HEAD) ($(git rev-parse HEAD))"
 
-make install
+: "${GOJO_RUN_ID:?GOJO_RUN_ID is required}"
+
+echo "==> Installing locked dependencies"
+bun install --frozen-lockfile
+
+echo "==> Building and installing CLI + web UI"
+bun run install:cli
+
+GOJO_BIN="${HOME}/.local/bin/gojo"
+if [ ! -x "$GOJO_BIN" ]; then
+  GOJO_BIN="$(pwd)/bin/gojo"
+fi
+"$GOJO_BIN" service install
 
 COMMIT_SHORT=$(git rev-parse --short HEAD)
 COMMIT_FULL=$(git rev-parse HEAD)
@@ -14,7 +26,7 @@ mkdir -p .gojo
 cat > .gojo/handoff.json <<EOF
 {
   "schemaVersion": 2,
-  "runId": "01PLACEHOLDERULID000000000",
+  "runId": "${GOJO_RUN_ID}",
   "status": "completed",
   "summary": "Deployed gojo instance at ${COMMIT_SHORT}",
   "startingCommit": "${COMMIT_FULL}",
@@ -25,7 +37,8 @@ cat > .gojo/handoff.json <<EOF
     "steps": []
   },
   "decisions": [
-    "Used make install (install-cli + service install + service restart) from the synced worktree so origin/main is what gets built."
+    "Installed locked dependencies and built CLI/UI from the synced worktree so origin/main is what gets deployed.",
+    "Scheduled the daemon restart in a separate systemd transient unit so restarting gojo.service cannot kill this run before its handoff is recorded."
   ],
   "unresolvedIssues": [],
   "recommendedNextActions": [
@@ -51,5 +64,12 @@ cat > .gojo/handoff.json <<EOF
   }
 }
 EOF
+
+echo "==> Scheduling service restart in 30 seconds"
+systemd-run \
+  --user \
+  --unit "gojo-deploy-restart-${GOJO_RUN_ID}" \
+  --on-active=30s \
+  /usr/bin/systemctl --user restart gojo.service
 
 echo "==> Deploy complete"
