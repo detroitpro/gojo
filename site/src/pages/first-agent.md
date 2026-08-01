@@ -158,7 +158,7 @@ profiles:
 ```
 
 4. Point an agent at that profile and put the natural-language instructions in `promptFile` (Markdown is fine).
-5. Prefer **pull-request** integration on shared repositories until you trust the agent (`await-approval` exists at runtime but is not valid in `gojo.yaml` yet).
+5. Prefer **pull-request** integration on shared repositories until you trust the agent, or **await-approval** when the run should pause for explicit operator approval before integration continues (optional `postApprovalMode`; default `auto-merge`).
 
 Adapters invoke the installed CLIs non-interactively and capture structured output when available. Unsupported or missing CLIs fail detection clearly instead of half-running.
 

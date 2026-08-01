@@ -59,6 +59,13 @@ configured `gojo:auto-merge` label upgrades reviewer authority to auto authority
 checks and reviewer pass are still mandatory. `fixRounds` bounds automatic
 repairs for red CI or requested changes.
 
+This is **`pull-request` mode** with a durable approval record on the opened PR.
+For a human gate **before any post-validation integration**, use
+`integration.mode: await-approval` instead: gojo commits on the run branch,
+pauses in `AwaitingApproval`, and continues with `postApprovalMode` after
+`gojo run approve` (default `auto-merge`; set `postApprovalMode: pull-request`
+to open a PR only after approval). See [Settings → Integration modes](/settings).
+
 ## Issue-driven coding away from the workstation
 
 Use a trusted `gojo:ready` label to move an actionable issue through triage,
