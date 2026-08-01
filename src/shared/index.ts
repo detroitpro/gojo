@@ -205,6 +205,8 @@ export {
 
 export { describeCron } from './cron-describe';
 
+export { parseJson, parseJsonObject } from './json';
+
 export {
   DEFAULT_SCHEDULING_POLICY,
   parseSchedulingPolicy,

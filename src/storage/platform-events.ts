@@ -7,6 +7,7 @@ import {
   type PlatformChangeEvent,
   type PlatformEventTopic,
 } from "@shared/events";
+import { parseJson } from "@shared/json";
 
 import type { Database } from "./db";
 
@@ -28,14 +29,6 @@ export interface ListPlatformChangeEventsInput {
   limit?: number;
   projectId?: string | null;
   topics?: PlatformEventTopic[];
-}
-
-function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return {};
-  }
 }
 
 function normalizeLegacyTopics(value: unknown): unknown {

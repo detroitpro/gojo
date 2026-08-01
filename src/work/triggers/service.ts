@@ -1,4 +1,5 @@
 import { AgentTriggerSchema } from '@shared/manifest';
+import { parseJson } from '@shared/json';
 import type { Run } from '@/storage/types';
 import type { CreateRunInput } from '@/runs/coordinator';
 import { createRepositories, createWorkRepositories } from '@/storage';
@@ -87,13 +88,5 @@ export class WorkTriggerService {
     }
 
     return runs;
-  }
-}
-
-function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return {};
   }
 }
