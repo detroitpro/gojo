@@ -13,6 +13,8 @@ import {
 } from '@shared/approvals';
 import type { PaginatedList } from '@shared/pagination';
 
+import { parseJsonObject } from '@shared/json';
+
 import type { Database } from './db';
 
 interface ApprovalRow {
@@ -51,17 +53,6 @@ interface ControlIntentRow {
   state: string;
   error: string | null;
   created_at: string;
-}
-
-function parseJsonObject(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 function mapApproval(row: ApprovalRow): Approval {

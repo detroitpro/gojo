@@ -4,6 +4,7 @@ import type {
   SourceConnection,
 } from "@/storage";
 import type { WorkItem } from "@shared/work";
+import { parseJsonObject } from "@shared/json";
 import type { SourceAdapter } from "@/sources";
 import type { NormalizedSourceComment } from "@/sources/write-types";
 
@@ -20,19 +21,8 @@ export interface CommentIntentObservation {
 const COMMAND =
   /^\/gojo\s+(approve|merge|reject|hold|claim)(?:\s+([\s\S]+))?$/i;
 
-function parseConfig(connection: SourceConnection): Record<string, unknown> {
-  try {
-    const value = JSON.parse(connection.configJson) as unknown;
-    return value && typeof value === "object"
-      ? (value as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 function trustedActors(connection: SourceConnection): Set<string> {
-  const configured = parseConfig(connection)["controlTrustedActors"];
+  const configured = parseJsonObject(connection.configJson)["controlTrustedActors"];
   return new Set(
     Array.isArray(configured)
       ? configured
