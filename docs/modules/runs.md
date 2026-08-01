@@ -88,6 +88,14 @@ reviewer, or auto authority; `autonomyLabels.auto` opts a linked issue into auto
 authority. Direct forge auto-merge configuration is not part of PR creation;
 all merges use this control path.
 
+`await-approval` mode commits on the run branch (like `commit-only`), transitions
+the run to `AwaitingApproval`, and returns without opening a PR. Operators
+approve or reject via `gojo run approve|reject` or the Runs UI. On approval,
+`integrateAndFinish` resumes with `postApprovalMode` from the manifest (default
+`auto-merge`; also `commit-only` or `pull-request`). This is separate from
+`pull-request` with `approval: manual`, which opens a PR first and uses the
+durable approval control plane.
+
 ## Impact accounting
 
 After integration the coordinator persists two canonical record sets (accounting failures never fail the run):
