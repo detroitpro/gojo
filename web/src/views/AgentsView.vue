@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { disableAgent, enableAgent, listAgents, listProjects, runAgent } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import EnabledBadge from "@/components/status/EnabledBadge.vue";
 import RunHistoryStrip from "@/components/RunHistoryStrip.vue";
 import SortableTh from "@/components/SortableTh.vue";
@@ -234,12 +235,10 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Agents</h1>
-        <div class="subtitle">Manifest-synced and API-created agents across all projects</div>
-      </div>
-    </header>
+    <PageHeader
+      title="Agents"
+      subtitle="Manifest-synced and API-created agents across all projects"
+    />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

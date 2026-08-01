@@ -13,6 +13,7 @@ import {
   subscribeRunEvents,
 } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import RunActivityFeed from "@/components/RunActivityFeed.vue";
 import RunTimelineChart from "@/components/RunTimelineChart.vue";
 import SortableTh from "@/components/SortableTh.vue";
@@ -34,7 +35,7 @@ import {
 import { impactCategoryLabel } from "@/lib/impact-format";
 import { approvalStatus } from "@/lib/status-icons";
 import type { PhaseKey } from "@/lib/run-phases";
-import { ArrowLeft, Ban, Check, RotateCcw, X } from "lucide-vue-next";
+import { Ban, Check, RotateCcw, X } from "lucide-vue-next";
 import type {
   Attempt,
   Approval,
@@ -531,9 +532,12 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>{{ run?.agentName || `Run ${runId.slice(0, 14)}…` }}</h1>
+    <PageHeader
+      :title="run?.agentName || `Run ${runId.slice(0, 14)}…`"
+      back-to="/runs"
+      back-label="Runs"
+    >
+      <template #subtitle>
         <div v-if="run" class="subtitle run-meta">
           <StateBadge :state="run.state" />
           <span class="muted">{{ run.projectName || "Unknown project" }}</span>
@@ -547,9 +551,8 @@ onUnmounted(() => {
           <span class="muted">·</span>
           <span class="mono muted" :title="run.id">{{ run.id.slice(0, 12) }}…</span>
         </div>
-      </div>
-      <div class="toolbar">
-        <AppButton size="sm" :icon="ArrowLeft" @click="router.push('/runs')">Back</AppButton>
+      </template>
+      <template v-if="canCancel || canApprove || canRetry" #actions>
         <AppButton
           v-if="canCancel"
           variant="danger"
@@ -582,8 +585,8 @@ onUnmounted(() => {
         >
           Retry
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="loading && !run" class="empty">Loading…</div>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listImpactItems, listProjects } from "@/api";
+import PageHeader from "@/components/PageHeader.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import TablePager from "@/components/TablePager.vue";
 import UiIcon from "@/components/UiIcon.vue";
@@ -172,14 +173,10 @@ void loadProjects();
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Impact</h1>
-        <div class="subtitle">
-          Individual impact items behind dashboard category totals
-        </div>
-      </div>
-    </header>
+    <PageHeader
+      title="Impact"
+      subtitle="Individual impact items behind dashboard category totals"
+    />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

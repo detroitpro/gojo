@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { getQueue, listAgents, listProjects, listRuns, runAgent } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import SortableTh from "@/components/SortableTh.vue";
 import StateBadge from "@/components/StateBadge.vue";
 import TablePager from "@/components/TablePager.vue";
@@ -281,9 +282,8 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Runs</h1>
+    <PageHeader title="Runs">
+      <template #subtitle>
         <div class="subtitle">
           <template v-if="selectedAgent">
             {{ selectedAgent.name
@@ -291,8 +291,8 @@ useLiveRefresh({
           </template>
           <template v-else>Execution history</template>
         </div>
-      </div>
-      <div v-if="agentFilter" class="toolbar">
+      </template>
+      <template v-if="agentFilter" #actions>
         <AppButton
           variant="primary"
           size="sm"
@@ -305,8 +305,8 @@ useLiveRefresh({
         >
           Enqueue run
         </AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
 

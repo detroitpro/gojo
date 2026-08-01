@@ -23,6 +23,7 @@ import {
   verifyBackup,
 } from "@/api";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import StatGrid from "@/components/StatGrid.vue";
 import StatTile from "@/components/StatTile.vue";
 import NotificationChannelsPanel from "@/components/NotificationChannelsPanel.vue";
@@ -463,12 +464,7 @@ onMounted(load);
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Settings</h1>
-        <div class="subtitle">Instance configuration</div>
-      </div>
-    </header>
+    <PageHeader title="Settings" subtitle="Instance configuration" />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="message" class="alert alert-info">{{ message }}</div>

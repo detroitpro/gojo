@@ -11,6 +11,7 @@ import {
 } from "@/api";
 import ActionMenu, { type ActionMenuItem } from "@/components/ActionMenu.vue";
 import AppButton from "@/components/AppButton.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
 import ModalDialog from "@/components/ModalDialog.vue";
@@ -301,15 +302,14 @@ useLiveRefresh({
 
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Projects</h1>
-        <div class="subtitle">Registered repositories — sync manifests, check health, open details</div>
-      </div>
-      <div class="toolbar">
+    <PageHeader
+      title="Projects"
+      subtitle="Registered repositories — sync manifests, check health, open details"
+    >
+      <template #actions>
         <AppButton variant="primary" size="sm" :icon="Plus" @click="openAdd">Add project</AppButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
     <div v-if="notice" class="alert alert-success">{{ notice }}</div>
