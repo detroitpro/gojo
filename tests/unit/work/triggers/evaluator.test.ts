@@ -107,4 +107,24 @@ describe('work trigger evaluator', () => {
       }),
     ).toMatchObject({ eligible: false, reason: 'missing-required-label' });
   });
+
+  test('rejects issues that lack a trusted authorization label actor', () => {
+    expect(
+      evaluateIssueLabelTrigger({
+        trigger,
+        item: {
+          kind: 'issue',
+          delivery: 'open',
+          labels: ['gojo:ready', 'gojo:validated', 'area:api'],
+        },
+        previousLabels: [],
+        openClaims: 0,
+        labelActors: [],
+      }),
+    ).toEqual({
+      eligible: false,
+      authorizationLabel: 'gojo:ready',
+      reason: 'missing-authorization',
+    });
+  });
 });

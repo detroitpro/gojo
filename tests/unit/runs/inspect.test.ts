@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AppContext } from "@/app/context";
 import { resolvePaths } from "@/config/paths";
 import { commitAll, configLocal, getHead, initRepo } from "@/git/git";
-import { getRunArtifacts, getRunDiff } from "@/runs/inspect";
+import { getRunArtifacts, getRunDiff, resolveRunHandoffSummary } from "@/runs/inspect";
 import { Database, createRepositories } from "@/storage";
 import { RunState } from "@shared/run-states";
 
@@ -91,6 +91,125 @@ describe("runs/inspect", () => {
     const diff = await getRunDiff(ctx, run.id);
 
     expect(diff.files).toContain("delta.txt");
+    db.close();
+  });
+
+  test("resolveRunHandoffSummary reads merged artifact handoff.json", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-handoff-artifact-"));
+    const { ctx, db } = minimalCtx(tempDir);
+    const runId = "run-handoff-artifact";
+    const dir = join(ctx.paths.artifacts, runId);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "handoff.json"),
+      JSON.stringify({ summary: "Shipped fix", status: "completed" }),
+    );
+
+    expect(resolveRunHandoffSummary(ctx, runId)).toEqual({
+      summary: "Shipped fix",
+      status: "completed",
+    });
+    db.close();
+  });
+
+  test("resolveRunHandoffSummary falls back to attempt handoff when artifact is absent", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-handoff-attempt-"));
+    const { ctx, db } = minimalCtx(tempDir);
+    const project = ctx.repos.projects.create({
+      name: "demo",
+      repoPath: join(tempDir, "repo"),
+    });
+    const task = ctx.repos.agents.create({
+      projectId: project.id,
+      name: "task",
+      prompt: "work",
+    });
+    const run = ctx.repos.runs.create({
+      projectId: project.id,
+      agentId: task.id,
+      idempotencyKey: "inspect-handoff-fallback",
+      trigger: "manual",
+      state: RunState.Failed,
+    });
+    const attempt = ctx.repos.attempts.create({
+      runId: run.id,
+      attemptNumber: 1,
+    });
+    ctx.repos.attempts.update(attempt.id, {
+      handoffJson: JSON.stringify({ summary: "Validation failed", status: "failed" }),
+    });
+
+    expect(resolveRunHandoffSummary(ctx, run.id)).toEqual({
+      summary: "Validation failed",
+      status: "failed",
+    });
+    db.close();
+  });
+
+  test("resolveRunHandoffSummary skips corrupt artifact json and uses attempt handoff", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-handoff-corrupt-"));
+    const { ctx, db } = minimalCtx(tempDir);
+    const runId = "run-handoff-corrupt";
+    const dir = join(ctx.paths.artifacts, runId);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "handoff.json"), "{ not-json");
+
+    const project = ctx.repos.projects.create({
+      name: "demo",
+      repoPath: join(tempDir, "repo"),
+    });
+    const task = ctx.repos.agents.create({
+      projectId: project.id,
+      name: "task",
+      prompt: "work",
+    });
+    const run = ctx.repos.runs.create({
+      projectId: project.id,
+      agentId: task.id,
+      idempotencyKey: "inspect-handoff-corrupt",
+      trigger: "manual",
+      state: RunState.Failed,
+    });
+    const attempt = ctx.repos.attempts.create({
+      runId: run.id,
+      attemptNumber: 1,
+    });
+    ctx.repos.attempts.update(attempt.id, {
+      handoffJson: JSON.stringify({ summary: "From attempt", status: "failed" }),
+    });
+
+    expect(resolveRunHandoffSummary(ctx, run.id)).toEqual({
+      summary: "From attempt",
+      status: "failed",
+    });
+    db.close();
+  });
+
+  test("getRunDiff throws when attempt workspace is unavailable", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-diff-missing-"));
+    const { ctx, db } = minimalCtx(tempDir);
+    const project = ctx.repos.projects.create({
+      name: "demo",
+      repoPath: join(tempDir, "repo"),
+    });
+    const task = ctx.repos.agents.create({
+      projectId: project.id,
+      name: "task",
+      prompt: "work",
+    });
+    const run = ctx.repos.runs.create({
+      projectId: project.id,
+      agentId: task.id,
+      idempotencyKey: "inspect-diff-missing",
+      trigger: "manual",
+      state: RunState.Failed,
+    });
+    ctx.repos.attempts.create({
+      runId: run.id,
+      attemptNumber: 1,
+    });
+
+    await expect(getRunDiff(ctx, run.id)).rejects.toThrow("attempt workspace not available");
     db.close();
   });
 });
