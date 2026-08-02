@@ -101,7 +101,8 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 | --- | --- |
 | `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `artifacts` returns handoff, validation, and failure JSON) |
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
-| `gojo run approve\|reject [--reason]` | Approve or reject runs in `await-approval` integration |
+| `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
+| `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |
 | `gojo approval list\|show\|approve\|reject\|hold` | Inspect and decide platform-owned PR approvals |
 | `gojo work claim <workItemId> --agent <name-or-id>` | Explicitly enqueue an issue against an eligible issue-triggered agent |
 
