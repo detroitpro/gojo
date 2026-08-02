@@ -51,4 +51,8 @@ describe('parseFailurePolicy', () => {
     controller.abort();
     await expect(promise).rejects.toThrow('aborted');
   });
+
+  test('sleep resolves after the delay elapses', async () => {
+    await expect(sleep(1)).resolves.toBeUndefined();
+  });
 });
