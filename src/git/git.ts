@@ -97,11 +97,44 @@ export async function getBranch(cwd: string): Promise<string> {
   return result.stdout;
 }
 
+const FETCH_REF_LOCK_MAX_ATTEMPTS = 4;
+const FETCH_REF_LOCK_BASE_DELAY_MS = 250;
+
+/** True when concurrent fetches raced updating the same remote-tracking ref. */
+export function isRefLockRaceError(stderr: string): boolean {
+  return (
+    stderr.includes('cannot lock ref')
+    || stderr.includes('unable to update local ref')
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export async function fetch(
   cwd: string,
   remote = 'origin',
 ): Promise<void> {
-  await execGitOrThrow(cwd, ['fetch', remote], 'fetch');
+  const args = ['fetch', remote];
+  for (let attempt = 1; attempt <= FETCH_REF_LOCK_MAX_ATTEMPTS; attempt++) {
+    const result = await execGit(cwd, args);
+    if (result.exitCode === 0) {
+      return;
+    }
+
+    const retryable = isRefLockRaceError(result.stderr);
+    if (!retryable || attempt === FETCH_REF_LOCK_MAX_ATTEMPTS) {
+      throwIfFailed('fetch', result, args);
+    }
+
+    await sleep(FETCH_REF_LOCK_BASE_DELAY_MS * attempt);
+  }
 }
 
 /** Resolve the SHA of `remote/branch` (after fetch). */
