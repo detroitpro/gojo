@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
+import { parseJsonObject } from "@shared/json";
+
 import { listAdapters } from "@/agents";
 import type { AppContext } from "@/app/context";
 import {
@@ -200,26 +202,23 @@ export function resolveTool(name: string, cwd?: string): DoctorToolCheck {
 function parseValidationSteps(
   json: string,
 ): Array<{ name: string; command: string }> {
-  try {
-    const parsed = JSON.parse(json) as { steps?: unknown };
-    if (!Array.isArray(parsed.steps)) {
-      return [];
-    }
-    const steps: Array<{ name: string; command: string }> = [];
-    for (const step of parsed.steps) {
-      if (!step || typeof step !== "object") {
-        continue;
-      }
-      const record = step as Record<string, unknown>;
-      if (typeof record["name"] !== "string" || typeof record["command"] !== "string") {
-        continue;
-      }
-      steps.push({ name: record["name"], command: record["command"] });
-    }
-    return steps;
-  } catch {
+  const parsed = parseJsonObject(json);
+  const stepsValue = parsed["steps"];
+  if (!Array.isArray(stepsValue)) {
     return [];
   }
+  const steps: Array<{ name: string; command: string }> = [];
+  for (const step of stepsValue) {
+    if (!step || typeof step !== "object") {
+      continue;
+    }
+    const record = step as Record<string, unknown>;
+    if (typeof record["name"] !== "string" || typeof record["command"] !== "string") {
+      continue;
+    }
+    steps.push({ name: record["name"], command: record["command"] });
+  }
+  return steps;
 }
 
 export function validationToolsForAgents(
@@ -469,13 +468,7 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
       ) {
         return [];
       }
-      const config = (() => {
-        try {
-          return JSON.parse(connection.configJson) as Record<string, unknown>;
-        } catch {
-          return {};
-        }
-      })();
+      const config = parseJsonObject(connection.configJson);
       const secretName =
         typeof config["tokenSecretName"] === "string"
           ? config["tokenSecretName"]

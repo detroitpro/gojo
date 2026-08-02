@@ -1,3 +1,5 @@
+import { parseJson } from "@shared/json";
+
 import type { AppContext } from "@/app/context";
 import type { NotificationChannel } from "@/notifications/dispatcher";
 import { resolveRunHandoffSummary } from "@/runs/inspect";
@@ -88,14 +90,7 @@ function resolveRouting(
     return projectRouting;
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(agent.notificationsJson);
-  } catch {
-    return projectRouting;
-  }
-
-  const parsed = safeParseNotificationsConfig(raw);
+  const parsed = safeParseNotificationsConfig(parseJson(agent.notificationsJson));
   if (!parsed.success || !hasRoutes(parsed.data)) {
     return projectRouting;
   }
@@ -135,14 +130,9 @@ export function wireNotificationHooks(ctx: AppContext): NotificationHookHandle {
         return;
       }
 
-      let manifestRaw: unknown = {};
-      try {
-        manifestRaw = JSON.parse(project.manifestJson || "{}") as unknown;
-      } catch {
-        return;
-      }
-
-      const parsed = safeParseProjectManifest(manifestRaw);
+      const parsed = safeParseProjectManifest(
+        parseJson(project.manifestJson || "{}"),
+      );
       const agent = ctx.repos.agents.findById(run.agentId);
       const notifications = resolveRouting(
         agent,

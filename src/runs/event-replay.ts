@@ -1,3 +1,4 @@
+import { parseJson as parseJsonLenient } from "@shared/json";
 import type { RunEvent, RunEventCursor } from "@shared/ws";
 
 import type { RunEventHistory } from "./events";
@@ -18,14 +19,6 @@ export interface ReplayRunEventsInput {
   parseJson?: (value: string) => unknown;
 }
 
-function defaultParseJson(value: string): unknown {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return {};
-  }
-}
-
 /**
  * Replay durable work_events + in-memory agent output for a run, using
  * namespaced cursors so the two id spaces never collide.
@@ -36,7 +29,7 @@ export function replayRunEvents(input: ReplayRunEventsInput): {
   finished: boolean;
 } {
   const after = input.after ?? { durable: 0, live: 0 };
-  const parseJson = input.parseJson ?? defaultParseJson;
+  const parseJson = input.parseJson ?? parseJsonLenient;
   const events: RunEvent[] = [];
   let durableCursor = after.durable;
   let liveCursor = after.live;
