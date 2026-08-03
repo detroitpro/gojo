@@ -20,7 +20,10 @@ import { RunEventBus, RunEventHistory } from "@/runs/events";
 import { isTerminal, RunState } from "@shared/run-states";
 import { AgentTriggerSchema } from "@shared/manifest";
 import type { Approval } from "@shared/approvals";
-import { safeParseAgentHandoffReport } from "@shared/handoff";
+import {
+  extractHandoffSubjectActions,
+  recoverAgentHandoffReport,
+} from "@shared/handoff";
 import { Scheduler } from "@/scheduler/scheduler";
 import { nextOccurrence } from "@/scheduler/cron";
 import { SecretStore } from "@/secrets/store";
@@ -584,20 +587,24 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       const approval = approvals.findBySubject("pull-request", subject.workItemId);
       if (!approval) return;
       const attempt = repos.attempts.listByRun(run.id).at(-1);
-      const handoff = (() => {
+      const rawHandoff = (() => {
         try {
           return attempt?.handoffJson
-            ? safeParseAgentHandoffReport(JSON.parse(attempt.handoffJson) as unknown)
+            ? (JSON.parse(attempt.handoffJson) as unknown)
             : null;
         } catch {
           return null;
         }
       })();
+      const recovered = rawHandoff
+        ? recoverAgentHandoffReport(rawHandoff)
+        : { report: null, warnings: [] as string[] };
+      const subjectActions =
+        recovered.report?.subjectActions ??
+        (rawHandoff ? extractHandoffSubjectActions(rawHandoff) : null);
       if (
         trigger.data.on === "issue-label" &&
-        (run.state !== RunState.Succeeded ||
-          !handoff?.success ||
-          !handoff.data.subjectActions)
+        (run.state !== RunState.Succeeded || !subjectActions)
       ) {
         await applySubjectActions(subject.workItemId, {
           addLabels: ["gojo:blocked"],
@@ -607,27 +614,33 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         });
         return;
       }
-      if (handoff?.success && handoff.data.subjectActions) {
-        await applySubjectActions(subject.workItemId, handoff.data.subjectActions);
+      if (subjectActions) {
+        await applySubjectActions(subject.workItemId, subjectActions);
       }
       if (trigger.data.on !== "pull-request-checks-settled") return;
-      if (!handoff?.success || !handoff.data.subjectActions?.verdict) {
+      if (!subjectActions?.verdict) {
         approvals.escalate(
           approval.id,
           "Reviewer finished without a valid subjectActions verdict",
         );
         return;
       }
-      const verdict = handoff.data.subjectActions.verdict;
+      const verdict = subjectActions.verdict;
+      const summary =
+        recovered.report?.summary ??
+        (typeof (rawHandoff as { summary?: unknown } | null)?.summary ===
+        "string"
+          ? (rawHandoff as { summary: string }).summary
+          : "");
+      const unresolvedIssues = recovered.report?.unresolvedIssues ?? [];
       await approvals.recordReview(approval.id, verdict, {
         reviewerRunId: run.id,
-        summary: handoff.data.summary,
-        unresolvedIssues: handoff.data.unresolvedIssues,
+        summary,
+        unresolvedIssues,
       });
       if (verdict === "changes-requested") {
         await enqueueFixRound(approvals.findById(approval.id) ?? approval, {
-          reviewSummary:
-            handoff.data.subjectActions.comment ?? handoff.data.summary,
+          reviewSummary: subjectActions.comment ?? summary,
         });
       }
     })().catch((error) => {

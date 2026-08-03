@@ -138,7 +138,7 @@ Handoff schema v2 adds `impact.items` — structured outcome claims the dashboar
 }
 ```
 
-Categories: `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`. Claims whose `evidence.files` match the real diff are marked **corroborated**; machine-detectable changes (deps, docs, tests) are recorded as **verified** platform facts. Speculative or duplicate claims stay labeled **claimed** — tell agents not to pad.
+Categories (**exact enum**): `dependency-update`, `bug-fix`, `bug-prevention`, `documentation`, `test-coverage`, `security`, `feature`, `performance`, `maintenance`. Omit `impact` if unsure — invented values like `code-quality` are rejected. Claims whose `evidence.files` match the real diff are marked **corroborated**; machine-detectable changes (deps, docs, tests) are recorded as **verified** platform facts. Speculative or duplicate claims stay labeled **claimed** — tell agents not to pad.
 
 ## Source-side effects use schema v3 (`subjectActions`)
 
@@ -155,7 +155,7 @@ Report-only and issue-driven agents must not call forge APIs with write tokens. 
 }
 ```
 
-Review agents return a single `verdict`: `pass`, `changes-requested`, or `reject` (optionally with a `comment`). Triage agents use labels + comments; implementation agents usually omit `subjectActions` and rely on `pull-request` integration. v2 `impact.items` and v3 `subjectActions` can coexist. Full workflow: [Issue-driven agents](/issue-driven-agents).
+Review agents return a single `verdict`: `pass`, `changes-requested`, or `reject` (optionally with a `comment`). Triage agents use labels + comments; implementation agents usually omit `subjectActions` and rely on `pull-request` integration. v2 `impact.items` and v3 `subjectActions` can coexist. The platform drops invalid optional `impact` so a valid review verdict still applies. Full workflow: [Issue-driven agents](/issue-driven-agents). Golden review example in the gojo dogfood repo: `.gojo/examples/handoff.review.v3.json`.
 
 ### Minimal Hard rules sketch
 

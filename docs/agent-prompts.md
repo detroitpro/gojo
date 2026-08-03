@@ -36,4 +36,8 @@ The handoff and its assets are run output, not repository content — the integr
 
 ## Handoff schema v3 (`subjectActions`)
 
-`normalizeAgentHandoff` accepts schema v1–v3 ([`src/shared/handoff.ts`](../src/shared/handoff.ts)). v3 adds optional `subjectActions` (`addLabels`, `removeLabels`, `comment`, `verdict`) for issue-driven triage/review agents: the platform validates and applies forge mutations with managed credentials instead of injecting write tokens into adapter processes. User-facing guide: [`site/src/pages/agent-prompts.md`](../site/src/pages/agent-prompts.md) and [`site/src/pages/issue-driven-agents.md`](../site/src/pages/issue-driven-agents.md).
+`normalizeAgentHandoff` / `recoverAgentHandoffReport` accept schema v1–v3 ([`src/shared/handoff.ts`](../src/shared/handoff.ts)). v3 adds optional `subjectActions` (`addLabels`, `removeLabels`, `comment`, `verdict`) for issue-driven triage/review agents: the platform validates and applies forge mutations with managed credentials instead of injecting write tokens into adapter processes.
+
+Review/merge policy uses `recoverAgentHandoffReport`: invalid optional `impact` / `assets` / `prUrl` are dropped so a valid `subjectActions.verdict` still applies (invented impact categories must not escalate a passed review). Golden example: [`.gojo/examples/handoff.review.v3.json`](../.gojo/examples/handoff.review.v3.json). Cursor skill: [`.cursor/skills/gojo-handoff/SKILL.md`](../.cursor/skills/gojo-handoff/SKILL.md).
+
+User-facing guide: [`site/src/pages/agent-prompts.md`](../site/src/pages/agent-prompts.md) and [`site/src/pages/issue-driven-agents.md`](../site/src/pages/issue-driven-agents.md).

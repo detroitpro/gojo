@@ -156,9 +156,9 @@ Write `.gojo/agents/<key>.md`:
 2. …
 
 ## Required handoff
-Write `.gojo/handoff.json` (schemaVersion 2). Include `summary` (what / why / value),
+Write `.gojo/handoff.json` (prefer schemaVersion 3; 2 is fine for impact-only). Include `summary` (what / why / value),
 `filesChanged`, `decisions`, `unresolvedIssues` / `recommendedNextActions`,
-`agentAssessment`, `status`: `"completed"`. Prefer one `impact.items` entry per concrete subject.
+`agentAssessment`, `status`: `"completed"`. Prefer one `impact.items` entry per concrete subject using only the allowed categories (see gojo-handoff skill). Review agents need `subjectActions.verdict`.
 ```
 
 Starting limits (tighten for riskier repos):

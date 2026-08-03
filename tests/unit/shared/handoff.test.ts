@@ -3,8 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   AgentHandoffReportSchema,
   extractHandoffImpactItems,
+  extractHandoffSubjectActions,
   normalizeAgentHandoff,
   parseAgentHandoffReport,
+  recoverAgentHandoffReport,
   safeParseAgentHandoffReport,
 } from '../../../src/shared/handoff';
 
@@ -249,5 +251,65 @@ describe('extractHandoffImpactItems', () => {
     const { items, invalid } = extractHandoffImpactItems({ summary: 'hi' });
     expect(items).toEqual([]);
     expect(invalid).toBe(false);
+  });
+});
+
+describe('recoverAgentHandoffReport', () => {
+  test('keeps subjectActions when impact category is invalid', () => {
+    const recovered = recoverAgentHandoffReport({
+      ...validHandoff,
+      schemaVersion: 3,
+      subjectActions: {
+        verdict: 'pass',
+        comment: 'LGTM',
+      },
+      impact: {
+        items: [
+          {
+            category: 'code-quality',
+            subject: 'decks',
+            summary: 'Thinned route shell',
+          },
+        ],
+      },
+    });
+
+    expect(recovered.report).not.toBeNull();
+    expect(recovered.report?.subjectActions?.verdict).toBe('pass');
+    expect(recovered.report?.impact).toBeUndefined();
+    expect(recovered.warnings.some((warning) => warning.includes('impact'))).toBe(
+      true,
+    );
+  });
+
+  test('still fails when required core fields are missing', () => {
+    const recovered = recoverAgentHandoffReport({
+      schemaVersion: 3,
+      subjectActions: { verdict: 'pass' },
+      impact: {
+        items: [{ category: 'code-quality', subject: 'x', summary: 'y' }],
+      },
+    });
+    expect(recovered.report).toBeNull();
+    expect(recovered.warnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe('extractHandoffSubjectActions', () => {
+  test('extracts valid subjectActions from otherwise invalid handoff', () => {
+    const actions = extractHandoffSubjectActions({
+      summary: '',
+      subjectActions: { verdict: 'changes-requested', comment: 'Fix tests' },
+    });
+    expect(actions?.verdict).toBe('changes-requested');
+    expect(actions?.comment).toBe('Fix tests');
+  });
+
+  test('returns null for invalid subjectActions', () => {
+    expect(
+      extractHandoffSubjectActions({
+        subjectActions: { verdict: 'looks-good-to-me' },
+      }),
+    ).toBeNull();
   });
 });

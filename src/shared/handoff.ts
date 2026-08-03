@@ -198,6 +198,85 @@ export function normalizeAgentHandoff(input: unknown): NormalizedHandoff {
   return { report: null, warnings };
 }
 
+/** Optional top-level fields that must not invalidate the rest of a handoff. */
+const RECOVERABLE_OPTIONAL_KEYS = new Set(['impact', 'assets', 'prUrl']);
+
+function formatHandoffIssues(
+  issues: { path: PropertyKey[]; message: string }[],
+): string[] {
+  return issues
+    .slice(0, MAX_NORMALIZE_WARNINGS)
+    .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`);
+}
+
+/**
+ * Parse a handoff for platform consumers (review verdicts, subjectActions).
+ * Drops invalid optional sections (`impact`, `assets`, `prUrl`) and retries so a
+ * bad category inventing like `code-quality` cannot erase a valid verdict.
+ */
+export function recoverAgentHandoffReport(input: unknown): NormalizedHandoff {
+  const first = AgentHandoffReportSchema.safeParse(input);
+  if (first.success) {
+    return { report: first.data, warnings: [] };
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { report: null, warnings: formatHandoffIssues(first.error.issues) };
+  }
+
+  const recoverablePaths = first.error.issues.filter(
+    (issue) =>
+      issue.path.length > 0 &&
+      typeof issue.path[0] === 'string' &&
+      RECOVERABLE_OPTIONAL_KEYS.has(issue.path[0]),
+  );
+  if (recoverablePaths.length === 0) {
+    return { report: null, warnings: formatHandoffIssues(first.error.issues) };
+  }
+
+  const stripped: Record<string, unknown> = {
+    ...(input as Record<string, unknown>),
+  };
+  const dropped = new Set<string>();
+  for (const issue of recoverablePaths) {
+    const key = issue.path[0];
+    if (typeof key === 'string' && key in stripped) {
+      delete stripped[key];
+      dropped.add(key);
+    }
+  }
+
+  const retry = AgentHandoffReportSchema.safeParse(stripped);
+  if (!retry.success) {
+    return { report: null, warnings: formatHandoffIssues(first.error.issues) };
+  }
+
+  const warnings = [
+    ...[...dropped].map(
+      (key) => `handoff-validation: ${key} section failed validation and was ignored`,
+    ),
+    ...formatHandoffIssues(recoverablePaths),
+  ];
+  return { report: retry.data, warnings };
+}
+
+/**
+ * Leniently extract valid subjectActions from a raw handoff payload when the
+ * full document cannot be recovered.
+ */
+export function extractHandoffSubjectActions(
+  input: unknown,
+): HandoffSubjectActions | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return null;
+  }
+  const subjectActions = (input as Record<string, unknown>)['subjectActions'];
+  if (subjectActions === undefined || subjectActions === null) {
+    return null;
+  }
+  const parsed = HandoffSubjectActionsSchema.safeParse(subjectActions);
+  return parsed.success ? parsed.data : null;
+}
+
 /**
  * Leniently extract valid impact items from an arbitrary handoff payload,
  * so a handoff that fails full validation can still contribute claims.

@@ -1132,7 +1132,7 @@ The platform assigns trust levels rather than accepting claims at face value:
 * **corroborated** — agent claim whose `evidence.files` intersect the actual changed files
 * **claimed** — everything else (typical for subjective categories such as `bug-prevention`)
 
-Schema v1 handoffs (no `impact`) remain valid; invalid impact metadata is dropped with a recorded normalization warning and never fails otherwise valid work. Merge outcomes are tracked separately from run success: a run counts as "merged automation" only when its integration record reaches `merged` (direct auto-merge, or PR merge observed by the reconciler) — never because the run succeeded.
+Schema v1 handoffs (no `impact`) remain valid; invalid impact metadata is dropped with a recorded normalization warning and never fails otherwise valid work. The same recovery applies when applying schema v3 `subjectActions` (review verdicts / labels): invalid optional `impact` / `assets` / `prUrl` must not erase a valid `subjectActions.verdict`. Merge outcomes are tracked separately from run success: a run counts as "merged automation" only when its integration record reaches `merged` (direct auto-merge, or PR merge observed by the reconciler) — never because the run succeeded.
 
 The platform should provide future agents with:
 

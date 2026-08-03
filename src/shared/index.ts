@@ -105,8 +105,10 @@ export {
   HandoffValidationStepSchema,
   HandoffValidationStepStatusSchema,
   extractHandoffImpactItems,
+  extractHandoffSubjectActions,
   normalizeAgentHandoff,
   parseAgentHandoffReport,
+  recoverAgentHandoffReport,
   safeParseAgentHandoffReport,
 } from './handoff';
 export type {
