@@ -23,6 +23,16 @@ Digest agents ([`.gojo/agents/activity-digest.md`](../.gojo/agents/activity-dige
 
 Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
 
+## Canonical verify (validation ↔ CI)
+
+Each project surface should expose **one locally-runnable check command** (`yarn verify`, `make verify-*`, or `scripts/verify-*.sh`). Both the CI pipeline and `validationProfiles` in `gojo.yaml` invoke that same command so “what gojo checks before opening a PR” cannot drift from “what CI requires.”
+
+- PR-opening agents: profile = surface verify + `handoff-exists`.
+- Report-only agents: handoff-only (or artifact checks) is enough.
+- Steps that need CI-only services (live DB migrate, Docker, secrets) stay in CI; the repair-round loop (`subject.feedback` + fix rounds) is the backstop for those.
+- Dogfood reference: gojo’s own [`scripts/ci-check.sh`](../scripts/ci-check.sh) is used by CI and the `full-check` validation profile.
+- Validation steps are injected into the adapter prompt as the definition of done — agents should run them and fix failures before writing the handoff.
+
 ## Handoff → PR body
 
 `pull-request` integration opens a PR via [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts) and the agent’s `integration.prTool` (`gh` or `tea`; default `gh`). Adapters must not run the PR CLI themselves; they write `.gojo/handoff.json`.

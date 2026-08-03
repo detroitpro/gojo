@@ -45,7 +45,10 @@ validationProfiles:
       - name: noop
         command: "true"
         timeout: 30s
-  # add repo-specific profiles (check, smoke, typecheck, …)
+  # Prefer one canonical verify per surface, shared with CI:
+  #   scripts/verify.sh / yarn verify / make verify
+  #   then profile = that command + handoff-exists for PR agents.
+  # Do not hand-enumerate lint/test/build per agent — they drift from CI.
 
 agents: {}
 schedules: {}
@@ -61,7 +64,7 @@ Sync path: `gojo.yaml` then `.gojo/project.yaml`. Keys are durable identities; r
 | Agent (work unit) | `description`, `profile`, `promptFile`, `validationProfile` |
 | Schedule | `agent`, `cron`, `timezone` |
 | Profile | `adapter` (`shell` / `cursor` / `claude-code`) |
-| Validation profile | `steps[]` with `name` + `command` |
+| Validation profile | `steps[]` with `name` + `command` (prefer the repo’s canonical verify script, same as CI) |
 
 ## Recommended agent defaults
 
