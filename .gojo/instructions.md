@@ -74,3 +74,12 @@ Report concrete outcomes so the dashboard can account for them. Rules:
 ## Source-side actions (`subjectActions`, schema v3)
 
 Issue triage/review agents must set `subjectActions` so gojo can apply forge mutations with platform credentials. Review agents need exactly one `verdict`: `pass`, `changes-requested`, or `reject` (optional `comment`). Triage agents use `addLabels` / `removeLabels` / `comment`. Do not invent verdict strings.
+
+## Repair rounds (CI / reviewer feedback)
+
+When `subject.kind` is `pull-request` and `subject.feedback` is present (checks or review summary):
+
+- Treat the run as **repair-only** on the existing PR branch — do not open a new scope or invent unrelated work.
+- Read the PR body, `subject.feedback`, and `git log` / diff vs the target base.
+- Fix the cited CI or reviewer findings; keep the diff small.
+- Still write `.gojo/handoff.json` (prefer schemaVersion 3).

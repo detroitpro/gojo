@@ -24,6 +24,12 @@ import {
   extractHandoffSubjectActions,
   recoverAgentHandoffReport,
 } from "@shared/handoff";
+import {
+  fixRoundEscalateReason,
+  formatChecksSummary,
+  resolveApprovalForIntegration,
+  resolveFixRoundSubject,
+} from "@/control/fix-rounds";
 import { Scheduler } from "@/scheduler/scheduler";
 import { nextOccurrence } from "@/scheduler/cron";
 import { SecretStore } from "@/secrets/store";
@@ -330,12 +336,18 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     approval: Approval,
     feedback: { checksSummary?: string; reviewSummary?: string },
   ): Promise<boolean> => {
+    const evidenceAgentId =
+      typeof approval.evidence["implementingAgentId"] === "string"
+        ? approval.evidence["implementingAgentId"]
+        : null;
     const implementingRun = approval.runId
       ? repos.runs.findById(approval.runId)
       : null;
     const implementingAgent = implementingRun
       ? repos.agents.findById(implementingRun.agentId)
-      : null;
+      : evidenceAgentId
+        ? repos.agents.findById(evidenceAgentId)
+        : null;
     const maxRounds =
       typeof approval.evidence["fixRounds"] === "number"
         ? approval.evidence["fixRounds"]
@@ -356,18 +368,22 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         return null;
       }
     })();
-    if (
-      !implementingRun ||
-      !implementingAgent ||
-      approval.attempts >= maxRounds ||
-      !resumeBranch ||
-      !originalSubject?.workItemId
-    ) {
+    const subjectWorkItemId = resolveFixRoundSubject({
+      originalSubjectWorkItemId: originalSubject?.workItemId,
+      approvalWorkItemId: approval.workItemId,
+    });
+    const escalateReason = fixRoundEscalateReason({
+      hasImplementingRun: Boolean(implementingRun || evidenceAgentId),
+      hasImplementingAgent: Boolean(implementingAgent),
+      attempts: approval.attempts,
+      maxRounds,
+      resumeBranch,
+      subjectWorkItemId,
+    });
+    if (escalateReason || !implementingAgent || !resumeBranch || !subjectWorkItemId) {
       approvals.escalate(
         approval.id,
-        approval.attempts >= maxRounds
-          ? "Automated fix-round cap reached"
-          : "Pull request branch or original issue context is unavailable",
+        escalateReason ?? "Fix-round subject is unavailable",
         feedback,
       );
       return false;
@@ -377,8 +393,8 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       projectId: approval.projectId,
       agentId: implementingAgent.id,
       trigger: "work",
-      idempotencyKey: `fix:${approval.workItemId}:${implementingAgent.id}:${next.attempts}`,
-      subjectWorkItemId: originalSubject.workItemId,
+      idempotencyKey: `fix:${approval.workItemId ?? subjectWorkItemId}:${implementingAgent.id}:${next.attempts}`,
+      subjectWorkItemId,
       resumeBranch,
       subjectFeedback: {
         round: next.attempts,
@@ -388,20 +404,40 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     approvals.assignRun(approval.id, fixRun.id);
     return true;
   };
+  const resolveApproval = (integration: {
+    runId: string;
+    prUrl: string | null;
+  }): Approval | null =>
+    resolveApprovalForIntegration({
+      integrationRunId: integration.runId,
+      integrationPrUrl: integration.prUrl,
+      findByRun: (runId) => approvals.findByRun(runId),
+      findBySubject: (subjectType, subjectId) =>
+        approvals.findBySubject(subjectType, subjectId),
+      findWorkItemByWebUrl: (webUrl) => work.items.findByWebUrl(webUrl),
+      findAttemptPrUrl: (runId) =>
+        repos.attempts
+          .listByRun(runId)
+          .map((attempt) => attempt.prUrl)
+          .find((value): value is string => Boolean(value)) ?? null,
+    });
   const integrationReconciler = new IntegrationStatusReconciler({
     db,
     platformEvents,
     fetchStatus: async (integration) => {
       const run = repos.runs.findById(integration.runId);
-      let approval = approvals.findByRun(integration.runId);
+      let approval = resolveApproval(integration);
       let workItem = approval?.workItemId
         ? work.items.findById(approval.workItemId)
         : null;
       if (!workItem) {
-        const prUrl = repos.attempts
-          .listByRun(integration.runId)
-          .map((attempt) => attempt.prUrl)
-          .find((value): value is string => Boolean(value));
+        const prUrl =
+          integration.prUrl ??
+          repos.attempts
+            .listByRun(integration.runId)
+            .map((attempt) => attempt.prUrl)
+            .find((value): value is string => Boolean(value)) ??
+          null;
         workItem = prUrl ? work.items.findByWebUrl(prUrl) : null;
         if (approval && workItem) {
           approval = approvals.attachWorkItem(approval.id, workItem.id);
@@ -411,12 +447,15 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       return mergeService.getPullRequestState(run.projectId, workItem.id);
     },
     fetchChecks: async (integration) => {
-      let approval = approvals.findByRun(integration.runId);
+      let approval = resolveApproval(integration);
       if (approval && !approval.workItemId) {
-        const prUrl = repos.attempts
-          .listByRun(integration.runId)
-          .map((attempt) => attempt.prUrl)
-          .find((value): value is string => Boolean(value));
+        const prUrl =
+          integration.prUrl ??
+          repos.attempts
+            .listByRun(integration.runId)
+            .map((attempt) => attempt.prUrl)
+            .find((value): value is string => Boolean(value)) ??
+          null;
         const item = prUrl ? work.items.findByWebUrl(prUrl) : null;
         if (item) approval = approvals.attachWorkItem(approval.id, item.id);
       }
@@ -426,7 +465,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       return mergeService.getChecks(approval.projectId, approval.workItemId);
     },
     onChecksSettled: async (integration, checks) => {
-      const approval = approvals.findByRun(integration.runId);
+      const approval = resolveApproval(integration);
       if (!approval) return;
       if (approval.checksState === checks.status) return;
       await approvals.recordChecks(approval.id, checks.status, {
@@ -434,18 +473,32 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         observedAt: new Date().toISOString(),
       });
 
+      const evidenceAgentId =
+        typeof approval.evidence["implementingAgentId"] === "string"
+          ? approval.evidence["implementingAgentId"]
+          : null;
+      const evidenceAgentName =
+        typeof approval.evidence["implementingAgentName"] === "string"
+          ? approval.evidence["implementingAgentName"]
+          : null;
       const implementingRun = repos.runs.findById(integration.runId);
       const implementingAgent = implementingRun
         ? repos.agents.findById(implementingRun.agentId)
-        : null;
-      if (!implementingRun || !implementingAgent) {
+        : evidenceAgentId
+          ? repos.agents.findById(evidenceAgentId)
+          : evidenceAgentName
+            ? repos.agents
+                .listByProject(approval.projectId)
+                .find((agent) => agent.name === evidenceAgentName) ?? null
+            : null;
+      if (!implementingAgent) {
         approvals.escalate(approval.id, "Implementing run or agent no longer exists");
         return;
       }
 
       if (checks.status === "failure") {
         await enqueueFixRound(approval, {
-          checksSummary: JSON.stringify(checks.checks),
+          checksSummary: formatChecksSummary(checks.checks),
         });
         return;
       }

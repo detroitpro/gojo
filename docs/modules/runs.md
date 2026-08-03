@@ -85,11 +85,23 @@ approval autonomy `auto`, and skips the checks-settled reviewer. Otherwise,
 once checks settle, a configured `pull-request-checks-settled` reviewer runs
 against the PR branch. Red checks or
 `changes-requested` can resume the implementing agent on that exact branch up to
-`integration.fixRounds`. The platform alone revalidates live checks and invokes
-the source adapter merge operation. `integration.approval` selects manual,
-reviewer, or auto authority; `autonomyLabels.auto` opts a linked issue into auto
-authority. Direct forge auto-merge configuration is not part of PR creation;
-all merges use this control path.
+`integration.fixRounds`.
+
+Repair rounds are **PR-native**: the fix run checks out `resumeBranch` (mode
+becomes `update-pull-request` — push only, no second PR) and takes as subject
+the original issue when the implementing run had one, otherwise the approval’s
+pull-request work item (schedule-driven maintain agents). After a fix round
+reassigns `approval.runId`, the reconciler still finds the approval by PR URL /
+subject so subsequent green checks enqueue review and further red checks can
+consume remaining `fixRounds`. Cap / missing branch / missing subject escalate
+with distinct reasons (`src/control/fix-rounds.ts`). Check failure feedback is
+formatted as name + details + URL for the agent (`formatChecksSummary`).
+
+The platform alone revalidates live checks and invokes the source adapter merge
+operation. `integration.approval` selects manual, reviewer, or auto authority;
+`autonomyLabels.auto` opts a linked issue into auto authority. Direct forge
+auto-merge configuration is not part of PR creation; all merges use this control
+path.
 
 `await-approval` mode commits on the run branch (like `commit-only`), transitions
 the run to `AwaitingApproval`, and returns without opening a PR. Operators

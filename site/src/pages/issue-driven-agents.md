@@ -23,7 +23,9 @@ normal source-side label, comment, and merge path.
 4. The implementation run ends and its worktree is removed. No model process
    waits for CI.
 5. Gojo polls source checks. Red checks can start a bounded repair run on the
-   existing PR branch.
+   existing PR branch (same branch, push-only — no second PR). Schedule-driven
+   maintain agents repair against the PR itself; issue-driven agents keep the
+   original issue as the subject and still resume the PR branch.
 6. After checks settle, **review** inspects the diff and CI evidence and returns
    `pass`, `changes-requested`, or `reject`.
 7. Requested changes can start another bounded repair round. Reaching the round
@@ -230,8 +232,10 @@ from commits.
 - Implement only the validated brief and add focused tests.
 - Run the configured checks and write a schema-version-3 handoff.
 - Never merge, enable source auto-merge, use forge tokens, or weaken checks.
-- On repair rounds, address the supplied CI or reviewer evidence on the existing
-  PR branch.
+- On repair rounds (`subject.kind === "pull-request"` with `subject.feedback`),
+  treat the run as repair-only: read the PR body and feedback, fix CI/review
+  findings on the existing branch, do not expand scope, and still write a
+  handoff.
 
 **Review prompt**
 
