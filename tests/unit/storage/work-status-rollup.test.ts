@@ -84,6 +84,79 @@ describe("storage/work-status-rollup", () => {
     db.close();
   });
 
+  test("countsAtKind aggregates the same kind across projects", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const projectA = repos.projects.create({ name: "a", repoPath: "/tmp/a" });
+    const projectB = repos.projects.create({ name: "b", repoPath: "/tmp/b" });
+    const work = createWorkRepositories(db);
+    const rollup = createWorkStatusRollup(db);
+
+    work.items.create({
+      projectId: projectA.id,
+      kind: "run",
+      title: "run-a",
+      execution: "running",
+    });
+    work.items.create({
+      projectId: projectB.id,
+      kind: "run",
+      title: "run-b",
+      execution: "queued",
+    });
+
+    const bucket = previousClosedHour(new Date().toISOString());
+    stampStateEvents(db, projectA.id, bucket);
+    stampStateEvents(db, projectB.id, bucket);
+
+    const counts = rollup.countsAtKind("run", bucket);
+    expect(counts.working).toBe(1);
+    expect(counts.queued).toBe(1);
+    db.close();
+  });
+
+  test("rebuild with from deletes buckets at or after the cutoff", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const olderProject = repos.projects.create({ name: "older", repoPath: "/tmp/older" });
+    const newerProject = repos.projects.create({ name: "newer", repoPath: "/tmp/newer" });
+    const work = createWorkRepositories(db);
+    const rollup = createWorkStatusRollup(db);
+
+    work.items.create({
+      projectId: olderProject.id,
+      kind: "run",
+      title: "older-run",
+      execution: "running",
+    });
+    work.items.create({
+      projectId: newerProject.id,
+      kind: "run",
+      title: "newer-run",
+      execution: "queued",
+    });
+
+    const olderBucket = "2026-01-01T10:00:00.000Z";
+    const newerBucket = "2026-01-01T12:00:00.000Z";
+    stampStateEvents(db, olderProject.id, olderBucket);
+    stampStateEvents(db, newerProject.id, newerBucket);
+
+    rollup.countsAt(olderProject.id, olderBucket);
+    rollup.countsAt(newerProject.id, newerBucket);
+
+    const deleted = rollup.rebuild({ from: newerBucket });
+    expect(deleted).toBeGreaterThan(0);
+
+    const remaining = db
+      .connection()
+      .query("SELECT bucket_at FROM work_status_rollup")
+      .all() as Array<{ bucket_at: string }>;
+    expect(remaining.every((row) => row.bucket_at < newerBucket)).toBe(true);
+    db.close();
+  });
+
   test("materializeClosedHour pins the previous hour", () => {
     const db = Database.open(":memory:");
     db.migrate();

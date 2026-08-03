@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
 
-import { assembleAgentPrompt } from '@/runs/prompt-assembly';
+import { assembleAgentPrompt, resolveInstructionFilePath } from '@/runs/prompt-assembly';
 
 function tempWorkspace(): string {
   return mkdtempSync(join(tmpdir(), 'gojo-prompt-'));
@@ -82,6 +82,14 @@ describe('assembleAgentPrompt', () => {
         validationSteps: [],
       }),
     ).toThrow(/missing\.md/);
+  });
+
+  test('resolveInstructionFilePath rejects absolute paths', () => {
+    const root = tempWorkspace();
+    expect(() => resolveInstructionFilePath(root, '/etc/passwd')).toThrow(
+      /Invalid instruction file path/,
+    );
+    expect(() => resolveInstructionFilePath(root, '  ')).toThrow(/Invalid instruction file path/);
   });
 
   test('AI: rejects instruction paths that escape the workspace', () => {

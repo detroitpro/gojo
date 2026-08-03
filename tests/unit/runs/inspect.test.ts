@@ -185,6 +185,21 @@ describe("runs/inspect", () => {
     db.close();
   });
 
+  test("resolveRunHandoffSummary returns nulls when handoff has no usable fields", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-handoff-empty-"));
+    const { ctx, db } = minimalCtx(tempDir);
+    const runId = "run-handoff-empty";
+    const dir = join(ctx.paths.artifacts, runId);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "handoff.json"), JSON.stringify({}));
+
+    expect(resolveRunHandoffSummary(ctx, runId)).toEqual({
+      summary: null,
+      status: null,
+    });
+    db.close();
+  });
+
   test("getRunDiff throws when attempt workspace is unavailable", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "gojo-inspect-diff-missing-"));
     const { ctx, db } = minimalCtx(tempDir);
