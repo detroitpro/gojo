@@ -22,7 +22,7 @@ Configured in `~/.gojo/config/instance.yaml` and the **Settings** screen.
 | Setting | What it does | When to change |
 | --- | --- | --- |
 | **Bind host / port** | Where the API and web UI listen (default `127.0.0.1:7430`) | LAN bind or origin for a tunnel — run `gojo setup` on loopback first |
-| **Public base URL** | Canonical URL browsers and agents use (`GOJO_API_URL`) | Required when bind is not loopback — e.g. `https://gojo.example.com` or `http://192.168.x.x:7430` |
+| **Public base URL** | Canonical URL for the browser UI and CSRF. Adapters receive `GOJO_API_URL` as `apiBaseUrl` (`<publicBaseUrl>/api/v1`; loopback default `http://127.0.0.1:7430/api/v1`) — see `gojo instance show` | Required when bind is not loopback — e.g. `https://gojo.example.com` or `http://192.168.x.x:7430` |
 | **Trusted proxies** | Who may set `X-Forwarded-*` (token `cloudflare` expands to CF ranges; Tunnel often needs `127.0.0.1`) | When Cloudflare or another reverse proxy terminates TLS |
 | **Allowed origins / IP allowlist / Cookie Secure** | CORS/CSRF origins, optional client IP lock, Secure cookie mode (`auto`/`always`/`never`) | Hardening remote access |
 | **Global pause** | Stops new scheduled work; emergency stop | Incidents, maintenance, runaway agents |
@@ -58,6 +58,9 @@ In the web UI, **Projects** is a list of registered repos. **Open** a project fo
 | `project.defaultBranch` | Target branch for integration |
 | `repository.syncBeforeRun` | Fetch + fast-forward base from origin, then re-sync the manifest before preparing a worktree (required for merged healer PRs to take effect) |
 | `repository.requireCleanBase` | Refuse dirty base clones |
+| `repository.submodules` | Initialize git submodules before runs |
+| `repository.gitLfs` | Run `git lfs pull` before runs |
+| `source.apiUrl` | Override the derived forge HTTP API URL when the git remote host differs (common for self-hosted Forgejo on a non-443 port) |
 | `instructions` | `files` + `scheduledRunNotice` prepended to AI agent prompts at run time (shell skipped; missing files fail the run) |
 
 Conflicts between manifest and admin overrides should stay visible in audit/history.
@@ -150,7 +153,11 @@ Adapter subprocesses should not `git push origin main`. The **merge queue** seri
 
 For `pull-request`, `approval: manual|reviewer|auto`,
 `autonomyLabels.auto`, and `fixRounds` configure the durable approval and
-bounded repair policy.
+bounded repair policy. Forge-specific fields: `prTool` (`gh` | `tea`; default
+`gh`), optional `prLogin` / `prRemote` / `prApiUrl` / `prRepo` / `prMergeStyle`
+for tea/Forgejo hosts, and `prAutoMerge: true` to schedule native
+merge-when-checks-succeed (skips the checks-settled reviewer). See
+[Advanced usage](/advanced-usage).
 
 ## Secrets
 
@@ -161,7 +168,10 @@ bounded repair policy.
 
 ## Notification channels
 
-Manifest routes name channels (`onSuccess`, `onFailure`, `onDisabled`). Channel endpoints (webhook URLs, Slack hooks) are configured on the instance under **Settings → Notification channels**, not committed to git.
+Manifest routes name channels (`onSuccess`, `onFailure`, `onDisabled`,
+`onApprovalNeeded`). Channel endpoints (webhook URLs, Slack hooks) are
+configured on the instance under **Settings → Notification channels**, not
+committed to git.
 
 See [Notifications](/notifications) for the guided setup, provider webhook URLs, test sends, delivery retries, and auto-disable routing.
 
