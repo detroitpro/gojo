@@ -82,7 +82,7 @@ written by any code path.
 - `POST /api/v1/work/:id/recheck`
 - `POST /api/v1/work/:id/resolve`
 - `gojo project work|status <id>`
-- `gojo approval list|show|approve|reject|hold`
+- `gojo approval list|show|approve|reject|hold|set-autonomy`
 - `gojo work claim <work-item-id> --agent <agent-id>`
 - `gojo project work <id> [--kind …] [--provenance gojo-agent|human|bot|external] [--delivery none|draft|open|review|blocked|merged|closed] [--attention none|approval|blocked|sync-error|stale] [--history]` (first page only; API adds paging and more filters)
 

@@ -63,6 +63,26 @@ describe('control approval service', () => {
     expect(service.findById(approval.id)?.state).toBe('applied');
   });
 
+  test('setAutonomy to reviewer merges when checks and review already pass', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-autonomy',
+      autonomy: 'manual',
+      checksState: 'pending',
+    });
+    await service.recordChecks(approval.id, 'success');
+    await service.recordReview(approval.id, 'pass');
+    expect(service.findById(approval.id)?.state).toBe('awaiting-human');
+    expect(merges).toHaveLength(0);
+
+    const advanced = await service.setAutonomy(approval.id, 'reviewer');
+    expect(advanced.autonomy).toBe('reviewer');
+    expect(advanced.state).toBe('applied');
+    expect(merges).toEqual([approval.id]);
+  });
+
   test('manual autonomy waits for an explicit intent after review and checks', async () => {
     const { project, service, merges } = setup({ status: 'merged' });
     const approval = service.create({

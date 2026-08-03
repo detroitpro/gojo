@@ -1,5 +1,6 @@
 import type {
   Approval,
+  ApprovalAutonomy,
   ChecksState,
   ControlIntent,
   CreateApproval,
@@ -86,6 +87,36 @@ export class ApprovalService {
   attachWorkItem(approvalId: string, workItemId: string): Approval {
     const updated = this.approvals.update(approvalId, { workItemId });
     if (!updated) throw new Error(`Approval not found: ${approvalId}`);
+    this.onChange?.(updated);
+    return updated;
+  }
+
+  /**
+   * Update snapshotted autonomy (e.g. after flipping agent `approval:` in the
+   * manifest) and re-run advance when checks/review already allow merge.
+   */
+  async setAutonomy(
+    approvalId: string,
+    autonomy: ApprovalAutonomy,
+  ): Promise<Approval> {
+    const approval = this.requireApproval(approvalId);
+    const updated = this.approvals.update(approval.id, {
+      autonomy,
+      lastError: null,
+    })!;
+    this.onChange?.(updated);
+    return this.advance(updated);
+  }
+
+  /** Merge keys into approval evidence without changing state. */
+  patchEvidence(
+    approvalId: string,
+    evidence: Record<string, unknown>,
+  ): Approval {
+    const approval = this.requireApproval(approvalId);
+    const updated = this.approvals.update(approval.id, {
+      evidence: { ...approval.evidence, ...evidence },
+    })!;
     this.onChange?.(updated);
     return updated;
   }

@@ -93,7 +93,11 @@ import {
   parseSortParamsFromUrl,
 } from "@shared/pagination";
 import { safeParseSchedulingPolicy } from "@shared/scheduling";
-import { ApprovalStateSchema } from "@shared/approvals";
+import {
+  ApprovalAutonomySchema,
+  ApprovalStateSchema,
+} from "@shared/approvals";
+import { agentConfiguredAutonomy } from "@/control/fix-rounds";
 import {
   compareWindowToMs,
   parseCompareWindow,
@@ -695,20 +699,58 @@ export async function handleApiRequest(
           ? ctx.work.items.findById(approval.workItemId)
           : null;
         const run = approval.runId ? ctx.repos.runs.findById(approval.runId) : null;
-        const agent = run ? ctx.repos.agents.findById(run.agentId) : null;
+        const evidenceAgentId =
+          typeof approval.evidence["implementingAgentId"] === "string"
+            ? approval.evidence["implementingAgentId"]
+            : null;
+        const agent = run
+          ? ctx.repos.agents.findById(run.agentId)
+          : evidenceAgentId
+            ? ctx.repos.agents.findById(evidenceAgentId)
+            : null;
         const project = ctx.repos.projects.findById(approval.projectId);
+        const agentAutonomy = agent
+          ? agentConfiguredAutonomy(agent.integrationJson)
+          : null;
         return {
           ...approval,
           workTitle: workItem?.title ?? null,
           workUrl: workItem?.webUrl ?? null,
           agentName: agent?.name ?? null,
           projectName: project?.name ?? null,
+          agentAutonomy,
+          autonomyMismatch:
+            agentAutonomy !== null && agentAutonomy !== approval.autonomy,
         };
       }),
       total: result.total,
       limit: result.limit,
       offset: result.offset,
     });
+  }
+
+  const approvalAutonomyMatch = pathname.match(
+    /^\/api\/v1\/approvals\/([^/]+)\/autonomy$/,
+  );
+  if (method === "POST" && approvalAutonomyMatch) {
+    if (!auth) return failure("unauthorized", "Authentication required", 401);
+    const approvalId = approvalAutonomyMatch[1] ?? "";
+    const approval = ctx.approvals.findById(approvalId);
+    if (!approval) return failure("not_found", "Approval not found", 404);
+    const body = await readJsonBody<{ autonomy?: string }>(request);
+    const parsedAutonomy = ApprovalAutonomySchema.safeParse(body?.autonomy);
+    if (!parsedAutonomy.success) {
+      return failure(
+        "validation_error",
+        "autonomy must be manual, reviewer, or auto",
+        400,
+      );
+    }
+    const updated = await ctx.approvals.setAutonomy(
+      approval.id,
+      parsedAutonomy.data,
+    );
+    return success({ approval: updated });
   }
 
   const approvalActionMatch = pathname.match(

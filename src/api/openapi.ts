@@ -295,6 +295,13 @@ export const openApiDocument = {
     "/api/v1/approvals/{id}/hold": {
       post: { summary: "Hold a pending integration" },
     },
+    "/api/v1/approvals/{id}/autonomy": {
+      post: {
+        summary: "Update snapshotted approval autonomy and re-advance when ready",
+        description:
+          "Body: `{ \"autonomy\": \"manual\" | \"reviewer\" | \"auto\" }`. Use after changing agent `approval:` in gojo.yaml so open rows can catch up.",
+      },
+    },
     "/api/v1/control/intents": {
       post: { summary: "Submit an audited control intent" },
     },
