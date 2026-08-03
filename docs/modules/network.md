@@ -16,7 +16,7 @@ See PRD §19.4–19.5 and §25.14.
 | Field | Purpose |
 |-------|---------|
 | `bindHost` / `bindPort` | Listen address (default `127.0.0.1:7430`) |
-| `publicBaseUrl` | Canonical URL for UI, CSRF/CORS default origin, and agent `GOJO_API_URL`. **Required when bind is non-loopback.** |
+| `publicBaseUrl` | Canonical URL for UI and CSRF/CORS default origin. Agent `GOJO_API_URL` is `resolveApiBaseUrl` → `${publicBaseUrl}/api/v1` (loopback binds fall back to `http://127.0.0.1:${bindPort}/api/v1`). **Required when bind is non-loopback.** |
 | `trustedProxies` | CIDRs/IPs (or token `cloudflare`) allowed to set `X-Forwarded-For` / `X-Forwarded-Proto` |
 | `allowedOrigins` | CORS + CSRF Origin allowlist (empty = origin of `publicBaseUrl`) |
 | `ipAllowlist` | Optional client IP allowlist after proxy resolution (empty = any) |
