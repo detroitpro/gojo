@@ -26,25 +26,42 @@ profiles:
 
 Point each **agent** at the right `profile`. Keep high-privilege secrets off the reviewer profile.
 
+## Self-hosted forge API URL
+
+When the git remote host is not the Forgejo/Gitea HTTP API (common for SSH
+remotes on a non-443 port), set the project-level source API URL once:
+
+```yaml
+source:
+  apiUrl: http://192.168.5.251:3001
+```
+
+Gojo uses this for source sync, approvals, and platform merges. Per-agent
+`integration.prApiUrl` is still required for the tea CLI when opening PRs.
+
 ## Approval before merge
 
 For anything that touches production branches:
 
 ```yaml
-integration:
-  mode: pull-request
-  targetBranch: main
-  prTool: tea # or gh
-  prLogin: home
-  prRemote: origin
-  prApiUrl: http://192.168.5.251:3001
-  prRepo: detroitpro/rhystic-gaming
-  prMergeStyle: squash
-  approval: reviewer
-  autonomyLabels:
-    auto: gojo:auto-merge
-  fixRounds: 2
-  requireAllValidations: true
+source:
+  apiUrl: http://192.168.5.251:3001
+agents:
+  maintain-quality:
+    integration:
+      mode: pull-request
+      targetBranch: main
+      prTool: tea # or gh
+      prLogin: home
+      prRemote: origin
+      prApiUrl: http://192.168.5.251:3001
+      prRepo: detroitpro/rhystic-gaming
+      prMergeStyle: squash
+      approval: reviewer
+      autonomyLabels:
+        auto: gojo:auto-merge
+      fixRounds: 2
+      requireAllValidations: true
 ```
 
 Use `pull-request` so the coding agent can push and exit. Gojo durably polls

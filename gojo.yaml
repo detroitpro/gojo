@@ -110,6 +110,8 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
+      approval: reviewer
+      fixRounds: 2
       requireAllValidations: true
     failurePolicy:
       maxAttemptsPerRun: 1
@@ -128,6 +130,8 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
+      approval: reviewer
+      fixRounds: 2
       requireAllValidations: true
     failurePolicy:
       maxAttemptsPerRun: 2
@@ -149,6 +153,8 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
+      approval: reviewer
+      fixRounds: 2
       requireAllValidations: true
     failurePolicy:
       maxAttemptsPerRun: 2
@@ -170,6 +176,8 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
+      approval: reviewer
+      fixRounds: 2
       requireAllValidations: true
     failurePolicy:
       maxAttemptsPerRun: 2
@@ -191,6 +199,8 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
+      approval: reviewer
+      fixRounds: 2
       requireAllValidations: true
     failurePolicy:
       maxAttemptsPerRun: 2
@@ -250,7 +260,7 @@ agents:
       mode: pull-request
       targetBranch: main
       prTool: gh
-      approval: reviewer
+      approval: manual
       autonomyLabels:
         auto: gojo:auto-merge
       fixRounds: 2

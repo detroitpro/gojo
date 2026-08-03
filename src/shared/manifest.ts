@@ -21,6 +21,17 @@ export const RepositoryConfigSchema = z.object({
 
 export type RepositoryConfig = z.infer<typeof RepositoryConfigSchema>;
 
+/**
+ * Project-level source connection overrides. Use `apiUrl` when the forge API
+ * is not reachable at the URL derived from the git remote host (common for
+ * self-hosted Forgejo on a non-443 port or plain HTTP).
+ */
+export const SourceConfigSchema = z.object({
+  apiUrl: z.string().url().optional(),
+});
+
+export type SourceConfig = z.infer<typeof SourceConfigSchema>;
+
 export const InstructionsConfigSchema = z.object({
   files: z.array(z.string()).optional(),
   scheduledRunNotice: z.string().optional(),
@@ -246,6 +257,8 @@ export const ProjectManifestSchema = z.object({
   version: ManifestVersionSchema,
   project: ProjectConfigSchema,
   repository: RepositoryConfigSchema,
+  /** Overrides for the repository source connection derived from the remote. */
+  source: SourceConfigSchema.optional(),
   instructions: InstructionsConfigSchema.optional(),
   /** Adapter+model configurations (was top-level `agents:` pre-rebrand). */
   profiles: z.record(ProfileConfigSchema),

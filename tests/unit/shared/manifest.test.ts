@@ -217,6 +217,24 @@ describe('ProjectManifest', () => {
     expect(result.success).toBe(false);
   });
 
+  test('accepts optional source.apiUrl for self-hosted forges', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      source: { apiUrl: 'http://192.168.5.251:3001' },
+    });
+    expect(manifest.source?.apiUrl).toBe('http://192.168.5.251:3001');
+  });
+
+  test('rejects invalid source.apiUrl', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      source: { apiUrl: 'not-a-url' },
+    });
+    expect(result.success).toBe(false);
+  });
+
   test('accepts issue and pull-request trigger contracts with approval policy', () => {
     const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
     const agents = parsed['agents'] as Record<string, Record<string, unknown>>;

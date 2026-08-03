@@ -227,6 +227,71 @@ describe("sources/runtime", () => {
     db.close();
   });
 
+  test("uses manifest source.apiUrl and self-heals a mismatched connection base URL", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "forgejo-apiurl",
+      repoPath: "/tmp/forgejo-apiurl",
+      remoteUrl: "ssh://git@192.168.5.251:2222/detroitpro/heka.git",
+      manifestJson: JSON.stringify({
+        version: 1,
+        project: { name: "forgejo-apiurl", defaultBranch: "main" },
+        repository: {
+          remote: "origin",
+          syncBeforeRun: true,
+          requireCleanBase: true,
+          submodules: false,
+          gitLfs: false,
+        },
+        source: { apiUrl: "http://192.168.5.251:3001" },
+        profiles: { cursor: { adapter: "cursor" } },
+        validationProfiles: {
+          handoff: { steps: [{ name: "handoff", command: "true" }] },
+        },
+        agents: {
+          noop: {
+            description: "noop",
+            profile: "cursor",
+            promptFile: ".gojo/agents/noop.md",
+            validationProfile: "handoff",
+          },
+        },
+      }),
+    });
+    const work = createWorkRepositories(db);
+    const stale = work.connections.create({
+      name: "192.168.5.251",
+      adapter: "forgejo",
+      baseUrl: "https://192.168.5.251",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: false,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    work.sources.create({
+      projectId: project.id,
+      connectionId: stale.id,
+      kind: "repository",
+      externalKey: "detroitpro/heka",
+      displayName: "detroitpro/heka",
+    });
+
+    const configured = ensureProjectRepositorySource(db, project.id);
+    expect(configured?.connectionId).toBe(stale.id);
+    expect(work.connections.findById(stale.id)).toMatchObject({
+      baseUrl: "http://192.168.5.251:3001",
+    });
+    expect(
+      work.connections.list().filter((connection) => connection.adapter === "forgejo"),
+    ).toHaveLength(1);
+    db.close();
+  });
+
   test("consolidates a legacy repository source into its configured source", () => {
     const db = Database.open(":memory:");
     db.migrate();

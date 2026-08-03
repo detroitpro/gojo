@@ -716,6 +716,15 @@ export function createWorkRepositories(db: Database) {
         .run(configJson, nowIso(), id);
       return this.findById(id);
     },
+
+    updateBaseUrl(id: string, baseUrl: string | null): SourceConnection | null {
+      const existing = this.findById(id);
+      if (!existing) return null;
+      sqlite
+        .query("UPDATE source_connections SET base_url = ?, updated_at = ? WHERE id = ?")
+        .run(baseUrl, nowIso(), id);
+      return this.findById(id);
+    },
   };
 
   const sources = {

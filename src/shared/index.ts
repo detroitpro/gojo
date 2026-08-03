@@ -154,6 +154,7 @@ export {
   RepositoryConfigSchema,
   safeParseProjectManifest,
   ScheduleConfigSchema,
+  SourceConfigSchema,
   ValidationProfileSchema,
   ValidationStepSchema,
 } from './manifest';
@@ -175,6 +176,7 @@ export type {
   ProjectManifest,
   RepositoryConfig,
   ScheduleConfig,
+  SourceConfig,
   ValidationProfile,
   ValidationStep,
 } from './manifest';

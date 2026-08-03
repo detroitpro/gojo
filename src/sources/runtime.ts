@@ -9,6 +9,7 @@ import {
   type ProjectSource,
   type SourceConnection,
 } from "@/storage";
+import { safeParseProjectManifest } from "@shared/manifest";
 import type { WorkItem, WorkRecheckResult, WorkResolveInput } from "@shared/work";
 import {
   SourceCapabilitiesSchema,
@@ -30,6 +31,22 @@ import {
   type SourceAdapter,
   type SourceGetItemResult,
 } from "./types";
+
+function resolveConfiguredSourceApiUrl(
+  manifestJson: string | null | undefined,
+  derivedBaseUrl: string,
+): string {
+  if (!manifestJson) return derivedBaseUrl;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(manifestJson) as unknown;
+  } catch {
+    return derivedBaseUrl;
+  }
+  const parsed = safeParseProjectManifest(raw);
+  const apiUrl = parsed.success ? parsed.data.source?.apiUrl : undefined;
+  return apiUrl ?? derivedBaseUrl;
+}
 
 const ACTIVE_SYNC_INTERVAL_MS = 60_000;
 const ERROR_SYNC_INTERVAL_MS = 2 * 60_000;
@@ -756,7 +773,8 @@ export function ensureProjectRepositorySource(db: Database, projectId: string): 
   }
   if (!remote) return null;
   const identity = parseRepositoryRemote(remote);
-  const baseUrl = providerBaseUrl(identity);
+  const derivedBaseUrl = providerBaseUrl(identity);
+  const baseUrl = resolveConfiguredSourceApiUrl(project.manifestJson, derivedBaseUrl);
   const repositorySources = work.sources
     .listByProject(project.id)
     .filter((source) => source.kind === "repository");
@@ -768,6 +786,22 @@ export function ensureProjectRepositorySource(db: Database, projectId: string): 
           item.adapter === identity.adapter &&
           item.baseUrl === baseUrl,
       ) ?? null;
+  if (!connection) {
+    // Self-heal a connection that was created from a stale derived URL (same
+    // adapter + host name, different base URL) instead of creating a duplicate.
+    const stale =
+      work.connections
+        .list()
+        .find(
+          (item) =>
+            item.adapter === identity.adapter &&
+            item.name === identity.host &&
+            item.baseUrl !== baseUrl,
+        ) ?? null;
+    if (stale) {
+      connection = work.connections.updateBaseUrl(stale.id, baseUrl);
+    }
+  }
   if (!connection) {
     connection = work.connections.create({
       name: identity.host,

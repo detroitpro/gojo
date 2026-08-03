@@ -27,9 +27,28 @@ merge a pull request. Agent processes never receive forge write credentials.
 Only the source/control services resolve the connection token and execute these
 mutations.
 
+## Connection base URL
+
+Repository identities are normalized from HTTPS or SSH remotes. The source
+connection API base URL is derived from the remote host by default
+(`https://api.github.com`, `https://<host>/api/v4` for GitLab,
+`https://<host>` for Forgejo). Self-hosted forges that expose the API on a
+different scheme or port override this with a project-level manifest field:
+
+```yaml
+source:
+  apiUrl: http://192.168.5.251:3001
+```
+
+`ensureProjectRepositorySource` prefers `source.apiUrl` over the derived URL
+and self-heals an existing connection for the same adapter + host when the
+stored `base_url` differs, so a stale derived row does not spawn a duplicate.
+Per-agent `integration.prApiUrl` remains the tea/PR CLI setting and does not
+own the connection-level URL.
+
 ## Synchronization truth
 
-Repository identities are normalized from HTTPS or SSH remotes. Sync runs on a
+Sync runs on a
 one-minute repair loop independently of the scheduler lease. Active resources
 are fetched with provider pagination. Successful observations remain current.
 An active snapshot is authoritative only when pagination completes
