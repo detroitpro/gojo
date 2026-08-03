@@ -101,10 +101,18 @@ interface IntegrationConfig {
   prApiUrl?: string;
   prRepo?: string;
   prMergeStyle?: 'squash' | 'merge' | 'rebase';
+  /** Native forge merge-when-checks-succeed after PR create. */
+  prAutoMerge?: boolean;
   approval?: 'manual' | 'reviewer' | 'auto';
   autonomyLabels?: { auto?: string };
   fixRounds?: number;
 }
+
+export type SchedulePullRequestAutoMerge = (input: {
+  projectId: string;
+  workItemId: string;
+  style?: 'squash' | 'merge' | 'rebase';
+}) => Promise<{ status: 'merged' | 'scheduled' | 'blocked'; detail?: string | null }>;
 
 interface ActiveRunContext {
   controller: AbortController;
@@ -169,6 +177,7 @@ export class RunCoordinator {
     | ((runId: string) => { token: string; id: string } | null)
     | null;
   private readonly revokeAgentToken: ((tokenId: string) => void) | null;
+  private readonly schedulePullRequestAutoMerge: SchedulePullRequestAutoMerge | null;
 
   constructor(deps: {
     db: Database;
@@ -179,6 +188,7 @@ export class RunCoordinator {
     apiBaseUrl?: string;
     issueAgentToken?: (runId: string) => { token: string; id: string } | null;
     revokeAgentToken?: (tokenId: string) => void;
+    schedulePullRequestAutoMerge?: SchedulePullRequestAutoMerge;
   }) {
     this.paths = deps.paths;
     this.db = deps.db;
@@ -191,6 +201,7 @@ export class RunCoordinator {
     this.apiBaseUrl = deps.apiBaseUrl ?? null;
     this.issueAgentToken = deps.issueAgentToken ?? null;
     this.revokeAgentToken = deps.revokeAgentToken ?? null;
+    this.schedulePullRequestAutoMerge = deps.schedulePullRequestAutoMerge ?? null;
   }
 
   async createRun(input: CreateRunInput): Promise<Run> {
@@ -858,7 +869,7 @@ export class RunCoordinator {
         }) ?? attempt;
     }
 
-    this.recordIntegrationOutcome({
+    await this.recordIntegrationOutcome({
       run,
       attempt,
       agent: input.agent,
@@ -916,14 +927,14 @@ export class RunCoordinator {
   }
 
   /** Persist the canonical integration outcome for a run. Never fails the run. */
-  private recordIntegrationOutcome(input: {
+  private async recordIntegrationOutcome(input: {
     run: Run;
     attempt: Attempt;
     agent: Agent;
     mode: IntegrationMode;
     integration: IntegrationConfig;
     result: IntegrateResult;
-  }): void {
+  }): Promise<void> {
     const { result } = input;
 
     let status: RunIntegrationStatus;
@@ -1014,17 +1025,60 @@ export class RunCoordinator {
           const runContext = this.work.runContexts.findByRun(input.run.id);
           const subject = parseRunSubject(runContext?.subjectJson ?? null);
           const autoLabel = input.integration.autonomyLabels?.auto;
+          const wantsNativeAutoMerge = Boolean(input.integration.prAutoMerge);
+          let autoMergeRequested = false;
+          let prAutoMergeError: string | null = null;
+          if (wantsNativeAutoMerge && this.schedulePullRequestAutoMerge) {
+            try {
+              const scheduled = await this.schedulePullRequestAutoMerge({
+                projectId: input.run.projectId,
+                workItemId: externalWork.id,
+                style: input.integration.prMergeStyle ?? 'squash',
+              });
+              if (scheduled.status === 'scheduled' || scheduled.status === 'merged') {
+                autoMergeRequested = true;
+              } else {
+                prAutoMergeError = scheduled.detail ?? 'Native auto-merge was blocked';
+              }
+            } catch (error) {
+              prAutoMergeError =
+                error instanceof Error ? error.message : String(error);
+            }
+          } else if (wantsNativeAutoMerge) {
+            prAutoMergeError = 'Native auto-merge scheduler is not configured';
+          }
+          if (autoMergeRequested) {
+            this.repos.runIntegrations.upsertForRun({
+              runId: input.run.id,
+              attemptId: input.attempt.id,
+              mode: input.mode,
+              provider,
+              apiUrl: input.integration.prApiUrl ?? null,
+              repo: input.integration.prRepo ?? null,
+              prNumber: realPrUrl ? extractPrNumber(realPrUrl) : null,
+              prUrl: result.prUrl ?? null,
+              status,
+              autoMergeRequested: true,
+              commitSha: result.commitSha,
+              openedAt: nowIso,
+              nextCheckAt: initialNextCheckAt(now),
+            });
+          }
           const autonomy =
-            autoLabel && subject?.labels.includes(autoLabel)
-              ? "auto"
-              : input.integration.approval ?? "manual";
+            wantsNativeAutoMerge ||
+            input.integration.approval === 'auto' ||
+            Boolean(autoLabel && subject?.labels.includes(autoLabel))
+              ? 'auto'
+              : input.integration.approval ?? 'manual';
           const approval = this.approvals.create({
             projectId: input.run.projectId,
             subjectType: "pull-request",
             subjectId: externalWork.id,
             runId: input.run.id,
             workItemId: externalWork.id,
-            reason: `Review pull request from ${input.agent.name}`,
+            reason: wantsNativeAutoMerge
+              ? `Auto-merge pull request from ${input.agent.name}`
+              : `Review pull request from ${input.agent.name}`,
             autonomy,
             state: "pending-review",
             checksState: "pending",
@@ -1036,6 +1090,9 @@ export class RunCoordinator {
               implementingAgentName: input.agent.name,
               resumeBranch: input.attempt.branchName,
               fixRounds: input.integration.fixRounds ?? 0,
+              prAutoMerge: wantsNativeAutoMerge,
+              ...(prAutoMergeError ? { prAutoMergeError } : {}),
+              ...(autoMergeRequested ? { nativeAutoMerge: 'scheduled' } : {}),
             },
           });
           this.platformEvents?.append({

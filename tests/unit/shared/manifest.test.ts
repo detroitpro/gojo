@@ -217,6 +217,50 @@ describe('ProjectManifest', () => {
     expect(result.success).toBe(false);
   });
 
+  test('accepts integration.prAutoMerge for pull-request mode', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          integration: {
+            mode: 'pull-request',
+            targetBranch: 'main',
+            prTool: 'tea',
+            prApiUrl: 'http://192.168.5.251:3001',
+            prRepo: 'detroitpro/rhystic-gaming',
+            prMergeStyle: 'squash',
+            prAutoMerge: true,
+          },
+        },
+      },
+    });
+    expect(manifest.agents['dependency-maintenance']?.integration?.prAutoMerge).toBe(true);
+  });
+
+  test('rejects prAutoMerge outside pull-request mode', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const result = ProjectManifestSchema.safeParse({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          integration: {
+            mode: 'commit-only',
+            targetBranch: 'main',
+            prAutoMerge: true,
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
   test('accepts optional source.apiUrl for self-hosted forges', () => {
     const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
     const manifest = parseProjectManifest({

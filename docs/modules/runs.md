@@ -79,8 +79,11 @@ environment:
 `pull-request` mode pushes the run branch, then opens a PR with `integration.prTool` from the agent manifest (`gh` → `gh pr create`, `tea` → `tea pulls create`; default `gh`). Optional `prLogin` / `prRemote` are passed through for tea. Title/body come from handoff via `buildPrDescription`. The PR URL is stored on the attempt (`pr_url`) and handoff (`prUrl`). If the CLI is missing or create fails, the run **fails** (integration phase) with a `local://pr/<branch>` placeholder recorded for recovery — it does not report Succeeded.
 
 PR integration creates a durable approval. The reconciler polls source checks
-without keeping an agent process alive. Once checks settle, a configured
-`pull-request-checks-settled` reviewer runs against the PR branch. Red checks or
+without keeping an agent process alive. When `integration.prAutoMerge` is true,
+gojo schedules native forge merge-when-checks-succeed after PR create, stamps
+approval autonomy `auto`, and skips the checks-settled reviewer. Otherwise,
+once checks settle, a configured `pull-request-checks-settled` reviewer runs
+against the PR branch. Red checks or
 `changes-requested` can resume the implementing agent on that exact branch up to
 `integration.fixRounds`. The platform alone revalidates live checks and invokes
 the source adapter merge operation. `integration.approval` selects manual,

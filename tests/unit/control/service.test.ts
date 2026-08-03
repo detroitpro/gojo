@@ -29,7 +29,7 @@ describe('control approval service', () => {
     return { project, service, merges };
   }
 
-  test('auto autonomy merges only after green checks and reviewer pass', async () => {
+  test('auto autonomy merges after green checks without a reviewer verdict', async () => {
     const { project, service, merges } = setup({ status: 'merged' });
     const approval = service.create({
       projectId: project.id,
@@ -39,11 +39,26 @@ describe('control approval service', () => {
       checksState: 'pending',
     });
 
-    await service.recordReview(approval.id, 'pass', { reviewerRunId: 'run-review' });
+    await service.recordChecks(approval.id, 'success', { checkSuite: 'ci-1' });
+    expect(merges).toEqual([approval.id]);
+    expect(service.findById(approval.id)?.state).toBe('applied');
+  });
+
+  test('reviewer autonomy still requires a passing review before merge', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-1b',
+      autonomy: 'reviewer',
+      checksState: 'pending',
+    });
+
+    await service.recordChecks(approval.id, 'success', { checkSuite: 'ci-1' });
     expect(merges).toHaveLength(0);
     expect(service.findById(approval.id)?.state).toBe('pending-review');
 
-    await service.recordChecks(approval.id, 'success', { checkSuite: 'ci-1' });
+    await service.recordReview(approval.id, 'pass', { reviewerRunId: 'run-review' });
     expect(merges).toEqual([approval.id]);
     expect(service.findById(approval.id)?.state).toBe('applied');
   });

@@ -26,6 +26,26 @@ profiles:
 
 Point each **agent** at the right `profile`. Keep high-privilege secrets off the reviewer profile.
 
+## Native forge auto-merge (low-risk agents)
+
+For agents with a small blast radius (for example a date/time bump), enable the
+forge’s merge-when-checks-succeed path per agent:
+
+```yaml
+integration:
+  mode: pull-request
+  targetBranch: main
+  prTool: tea
+  prApiUrl: http://192.168.5.251:3001
+  prRepo: detroitpro/rhystic-gaming
+  prMergeStyle: squash
+  prAutoMerge: true
+```
+
+Gojo schedules native auto-merge through the source adapter after the PR opens
+and skips the checks-settled reviewer. Use `approval: reviewer` (without
+`prAutoMerge`) when an independent agent verdict is required before merge.
+
 ## Self-hosted forge API URL
 
 When the git remote host is not the Forgejo/Gitea HTTP API (common for SSH

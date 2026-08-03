@@ -134,6 +134,10 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     // load context to fix instance.yaml; server start gates refuse to listen.
     apiBaseUrl = null;
   }
+  const mergeService = new MergeService({
+    db,
+    resolveSecret: resolveSourceSecret,
+  });
   const coordinator = new RunCoordinator({
     db,
     paths,
@@ -161,6 +165,8 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       }
       users.revokeApiToken(admin.id, tokenId);
     },
+    schedulePullRequestAutoMerge: (input) =>
+      mergeService.scheduleWhenChecksSucceed(input),
   });
   const workTriggers = new WorkTriggerService({
     db,
@@ -220,10 +226,6 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         },
       });
     },
-  });
-  const mergeService = new MergeService({
-    db,
-    resolveSecret: resolveSourceSecret,
   });
   const approvals = new ApprovalService({
     db,
@@ -442,6 +444,11 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         await enqueueFixRound(approval, {
           checksSummary: JSON.stringify(checks.checks),
         });
+        return;
+      }
+
+      // Native / policy auto-merge: recordChecks already advanced the approval.
+      if (approval.autonomy === "auto") {
         return;
       }
 

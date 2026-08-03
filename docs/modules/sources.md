@@ -79,6 +79,15 @@ credentials. For pull requests, source sync also
 polls comments from trusted issue-label actors and converts exact
 `/gojo approve|merge|hold|reject` commands into idempotent control intents.
 
+Agents may set `integration.prAutoMerge: true` (pull-request mode only). After
+the PR is created, gojo calls the adapter `mergePullRequest` with
+`whenChecksSucceed: true` (Forgejo `merge_when_checks_succeed`, GitHub
+`enablePullRequestAutoMerge`, GitLab `merge_when_pipeline_succeeds`) using the
+connection write token — never agent env. The approval is stamped
+`autonomy: auto` so checks-settled reviewers are skipped; the forge merges when
+CI is green. If native scheduling fails, the platform `MergeService` still
+merges on green checks without a reviewer.
+
 ## Provenance
 
 Adapters map forge author type to `human` or `bot`. Pull/merge requests whose

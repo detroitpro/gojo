@@ -227,8 +227,19 @@ export class ApprovalService {
     return this.intents.create({ ...input, state, error });
   }
 
+  private readyToAdvance(approval: Approval): boolean {
+    if (approval.checksState !== 'success') {
+      return false;
+    }
+    // Native / policy auto-merge: green checks are enough (no reviewer).
+    if (approval.autonomy === 'auto') {
+      return true;
+    }
+    return approval.reviewVerdict === 'pass';
+  }
+
   private async advance(approval: Approval): Promise<Approval> {
-    if (approval.checksState !== 'success' || approval.reviewVerdict !== 'pass') {
+    if (!this.readyToAdvance(approval)) {
       return approval;
     }
     if (approval.autonomy === 'manual') {
@@ -243,7 +254,7 @@ export class ApprovalService {
   }
 
   private async applyMerge(approval: Approval): Promise<Approval> {
-    if (approval.checksState !== 'success' || approval.reviewVerdict !== 'pass') {
+    if (!this.readyToAdvance(approval)) {
       return approval;
     }
     const applying = this.approvals.update(approval.id, {

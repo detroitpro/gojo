@@ -64,6 +64,9 @@ describe('control merge service', () => {
       },
       async mergePullRequest(input) {
         merges.push(input);
+        if (input.whenChecksSucceed) {
+          return { status: 'scheduled', detail: null };
+        }
         return { status: 'merged', detail: null, mergeSha: 'abc123' };
       },
     };
@@ -113,5 +116,26 @@ describe('control merge service', () => {
       detail: 'Required checks are failure',
     });
     expect(merges).toHaveLength(0);
+  });
+
+  test('schedules native auto-merge without requiring green checks first', async () => {
+    const { approval, service, merges } = setup('pending');
+    const workItemId = approval.workItemId!;
+
+    expect(
+      await service.scheduleWhenChecksSucceed({
+        projectId: approval.projectId,
+        workItemId,
+        style: 'squash',
+      }),
+    ).toEqual({ status: 'scheduled', detail: null });
+    expect(merges).toEqual([
+      expect.objectContaining({
+        whenChecksSucceed: true,
+        style: 'squash',
+        deleteBranch: true,
+        token: 'secret-token',
+      }),
+    ]);
   });
 });

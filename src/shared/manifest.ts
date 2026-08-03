@@ -94,38 +94,54 @@ export type PrTool = z.infer<typeof PrToolSchema>;
 
 const PostApprovalModeSchema = z.enum(['commit-only', 'pull-request', 'auto-merge']);
 
-export const AgentIntegrationSchema = z.object({
-  mode: z.enum(['commit-only', 'pull-request', 'auto-merge', 'await-approval']),
-  targetBranch: z.string().min(1),
-  requireAllValidations: z.boolean().optional(),
-  /** Integration mode used after an operator approves an await-approval run. */
-  postApprovalMode: PostApprovalModeSchema.optional(),
-  /** Authority required before the platform may merge an agent-authored PR. */
-  approval: z.enum(['manual', 'reviewer', 'auto']).optional(),
-  /** Labels that opt a linked source issue into a stronger authority policy. */
-  autonomyLabels: z
-    .object({
-      auto: z.string().min(1),
-    })
-    .optional(),
-  /** Maximum automated repair rounds after red CI or requested changes. */
-  fixRounds: z.number().int().min(0).optional(),
-  /**
-   * CLI used when `mode` is `pull-request`.
-   * `gh` = GitHub CLI; `tea` = Gitea/Forgejo tea CLI. Default: `gh`.
-   */
-  prTool: PrToolSchema.optional(),
-  /** Tea `--login` (Forgejo/Gitea account alias). Ignored for `gh`. */
-  prLogin: z.string().min(1).optional(),
-  /** Tea `--remote` for host discovery. Ignored for `gh`. Default at runtime: `origin`. */
-  prRemote: z.string().min(1).optional(),
-  /** Forgejo/Gitea base URL (e.g. `http://192.168.5.251:3001`). */
-  prApiUrl: z.string().url().optional(),
-  /** Forgejo repo slug `owner/name`. */
-  prRepo: z.string().min(3).optional(),
-  /** Platform merge style after approval. Default: squash. */
-  prMergeStyle: z.enum(['squash', 'merge', 'rebase']).optional(),
-});
+export const AgentIntegrationSchema = z
+  .object({
+    mode: z.enum(['commit-only', 'pull-request', 'auto-merge', 'await-approval']),
+    targetBranch: z.string().min(1),
+    requireAllValidations: z.boolean().optional(),
+    /** Integration mode used after an operator approves an await-approval run. */
+    postApprovalMode: PostApprovalModeSchema.optional(),
+    /** Authority required before the platform may merge an agent-authored PR. */
+    approval: z.enum(['manual', 'reviewer', 'auto']).optional(),
+    /** Labels that opt a linked source issue into a stronger authority policy. */
+    autonomyLabels: z
+      .object({
+        auto: z.string().min(1),
+      })
+      .optional(),
+    /** Maximum automated repair rounds after red CI or requested changes. */
+    fixRounds: z.number().int().min(0).optional(),
+    /**
+     * CLI used when `mode` is `pull-request`.
+     * `gh` = GitHub CLI; `tea` = Gitea/Forgejo tea CLI. Default: `gh`.
+     */
+    prTool: PrToolSchema.optional(),
+    /** Tea `--login` (Forgejo/Gitea account alias). Ignored for `gh`. */
+    prLogin: z.string().min(1).optional(),
+    /** Tea `--remote` for host discovery. Ignored for `gh`. Default at runtime: `origin`. */
+    prRemote: z.string().min(1).optional(),
+    /** Forgejo/Gitea base URL (e.g. `http://192.168.5.251:3001`). */
+    prApiUrl: z.string().url().optional(),
+    /** Forgejo repo slug `owner/name`. */
+    prRepo: z.string().min(3).optional(),
+    /** Platform / native forge merge style. Default: squash. */
+    prMergeStyle: z.enum(['squash', 'merge', 'rebase']).optional(),
+    /**
+     * When true (pull-request mode only), ask the forge to merge once checks
+     * succeed (Forgejo/GitHub/GitLab native auto-merge). Skips the reviewer
+     * agent; approval autonomy becomes `auto`.
+     */
+    prAutoMerge: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.prAutoMerge && value.mode !== 'pull-request') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'prAutoMerge requires integration.mode pull-request',
+        path: ['prAutoMerge'],
+      });
+    }
+  });
 
 export type AgentIntegration = z.infer<typeof AgentIntegrationSchema>;
 
