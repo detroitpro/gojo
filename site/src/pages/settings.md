@@ -58,8 +58,8 @@ In the web UI, **Projects** is a list of registered repos. **Open** a project fo
 | `project.defaultBranch` | Target branch for integration |
 | `repository.syncBeforeRun` | Fetch + fast-forward base from origin, then re-sync the manifest before preparing a worktree (required for merged healer PRs to take effect) |
 | `repository.requireCleanBase` | Refuse dirty base clones |
-| `repository.submodules` | Initialize git submodules before runs |
-| `repository.gitLfs` | Run `git lfs pull` before runs |
+| `repository.submodules` | Manifest field only today — accepted in `gojo.yaml` but not yet applied at workspace prep (PRD §25.16) |
+| `repository.gitLfs` | Manifest field only today — accepted in `gojo.yaml` but not yet applied at workspace prep (PRD §25.16) |
 | `source.apiUrl` | Override the derived forge HTTP API URL when the git remote host differs (common for self-hosted Forgejo on a non-443 port) |
 | `instructions` | `files` + `scheduledRunNotice` prepended to AI agent prompts at run time (shell skipped; missing files fail the run) |
 
