@@ -114,4 +114,75 @@ describe("storage/work-status-rollup", () => {
     expect(rows.some((row) => row.bucket_at === closed)).toBe(true);
     db.close();
   });
+
+  test("countsAtKind aggregates state across projects for a kind", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const projectA = repos.projects.create({ name: "rollup-a", repoPath: "/tmp/rollup-a" });
+    const projectB = repos.projects.create({ name: "rollup-b", repoPath: "/tmp/rollup-b" });
+    const work = createWorkRepositories(db);
+    const rollup = createWorkStatusRollup(db);
+
+    work.items.create({
+      projectId: projectA.id,
+      kind: "run",
+      title: "running",
+      execution: "running",
+    });
+    work.items.create({
+      projectId: projectB.id,
+      kind: "run",
+      title: "queued",
+      execution: "queued",
+    });
+    work.items.create({
+      projectId: projectA.id,
+      kind: "issue",
+      title: "open issue",
+      delivery: "open",
+      syncState: "current",
+    });
+
+    const bucket = previousClosedHour(new Date().toISOString());
+    stampStateEvents(db, projectA.id, bucket);
+    stampStateEvents(db, projectB.id, bucket);
+
+    const runCounts = rollup.countsAtKind("run", bucket);
+    expect(runCounts.working).toBe(1);
+    expect(runCounts.queued).toBe(1);
+    db.close();
+  });
+
+  test("rebuild deletes by from timestamp and project filter combinations", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "rebuild-filters", repoPath: "/tmp/rebuild-filters" });
+    const work = createWorkRepositories(db);
+    const rollup = createWorkStatusRollup(db);
+
+    work.items.create({
+      projectId: project.id,
+      kind: "run",
+      title: "run",
+      execution: "running",
+    });
+
+    const bucket = previousClosedHour(new Date().toISOString());
+    stampStateEvents(db, project.id, bucket);
+    rollup.countsAt(project.id, bucket);
+
+    const rowCount = () =>
+      (db.connection().query("SELECT COUNT(*) AS n FROM work_status_rollup").get() as { n: number }).n;
+
+    expect(rowCount()).toBeGreaterThan(0);
+    expect(rollup.rebuild({ from: bucket })).toBeGreaterThan(0);
+    expect(rowCount()).toBe(0);
+
+    rollup.countsAt(project.id, bucket);
+    expect(rollup.rebuild({ projectId: project.id, from: bucket })).toBeGreaterThan(0);
+    expect(rowCount()).toBe(0);
+    db.close();
+  });
 });
