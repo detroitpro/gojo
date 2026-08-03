@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { AppContext } from "@/app/context";
 import { diffNameOnly } from "@/git/git";
+import { parseJson } from "@shared/json";
 
 export interface RunDiffResult {
   files: string[];
@@ -51,13 +52,9 @@ function readHandoffFields(value: unknown): RunHandoffSummary | null {
 export function resolveRunHandoffSummary(ctx: AppContext, runId: string): RunHandoffSummary {
   const artifactPath = join(ctx.paths.artifacts, runId, "handoff.json");
   if (existsSync(artifactPath)) {
-    try {
-      const fields = readHandoffFields(JSON.parse(readFileSync(artifactPath, "utf8")));
-      if (fields) {
-        return fields;
-      }
-    } catch {
-      // Fall through to the attempt record.
+    const fields = readHandoffFields(parseJson(readFileSync(artifactPath, "utf8")));
+    if (fields) {
+      return fields;
     }
   }
 
@@ -67,13 +64,9 @@ export function resolveRunHandoffSummary(ctx: AppContext, runId: string): RunHan
     if (!raw) {
       continue;
     }
-    try {
-      const fields = readHandoffFields(JSON.parse(raw));
-      if (fields) {
-        return fields;
-      }
-    } catch {
-      continue;
+    const fields = readHandoffFields(parseJson(raw));
+    if (fields) {
+      return fields;
     }
   }
 
@@ -89,13 +82,13 @@ export function getRunArtifacts(ctx: AppContext, runId: string): RunArtifactsRes
     path: dir,
     exists: existsSync(dir),
     handoff: existsSync(handoffPath)
-      ? (JSON.parse(readFileSync(handoffPath, "utf8")) as unknown)
+      ? parseJson(readFileSync(handoffPath, "utf8"), null)
       : null,
     validation: existsSync(validationPath)
-      ? (JSON.parse(readFileSync(validationPath, "utf8")) as unknown)
+      ? parseJson(readFileSync(validationPath, "utf8"), null)
       : null,
     failure: existsSync(failurePath)
-      ? (JSON.parse(readFileSync(failurePath, "utf8")) as unknown)
+      ? parseJson(readFileSync(failurePath, "utf8"), null)
       : null,
   };
 }

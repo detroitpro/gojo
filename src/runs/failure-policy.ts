@@ -1,3 +1,4 @@
+import { parseJsonObject } from '@shared/json';
 import type { AgentFailurePolicy, AgentSelfHeal } from '@shared/manifest';
 
 export interface ParsedFailurePolicy extends AgentFailurePolicy {
@@ -10,47 +11,43 @@ const BACKOFF_MAX_MS = 5 * 60_000;
 
 /** Parse failure_policy_json (may also embed selfHeal). */
 export function parseFailurePolicy(json: string): ParsedFailurePolicy {
-  try {
-    const raw = JSON.parse(json) as Record<string, unknown>;
-    const policy: ParsedFailurePolicy = {};
+  const raw = parseJsonObject(json);
+  const policy: ParsedFailurePolicy = {};
 
-    if (typeof raw['maxAttemptsPerRun'] === 'number' && raw['maxAttemptsPerRun'] > 0) {
-      policy.maxAttemptsPerRun = Math.floor(raw['maxAttemptsPerRun']);
-    }
-    if (
-      typeof raw['disableAfterConsecutiveFailedRuns'] === 'number' &&
-      raw['disableAfterConsecutiveFailedRuns'] > 0
-    ) {
-      policy.disableAfterConsecutiveFailedRuns = Math.floor(
-        raw['disableAfterConsecutiveFailedRuns'],
-      );
-    }
-    if (raw['backoff'] === 'exponential' || raw['backoff'] === 'linear' || raw['backoff'] === 'none') {
-      policy.backoff = raw['backoff'];
-    }
-
-    const heal = raw['selfHeal'];
-    if (heal && typeof heal === 'object' && heal !== null) {
-      const record = heal as Record<string, unknown>;
-      if (typeof record['agent'] === 'string' && record['agent'].length > 0) {
-        policy.selfHeal = {
-          agent: record['agent'],
-          ...(typeof record['afterConsecutiveFailedRuns'] === 'number' &&
-          record['afterConsecutiveFailedRuns'] > 0
-            ? {
-                afterConsecutiveFailedRuns: Math.floor(
-                  record['afterConsecutiveFailedRuns'],
-                ),
-              }
-            : {}),
-        };
-      }
-    }
-
-    return policy;
-  } catch {
-    return {};
+  if (typeof raw['maxAttemptsPerRun'] === 'number' && raw['maxAttemptsPerRun'] > 0) {
+    policy.maxAttemptsPerRun = Math.floor(raw['maxAttemptsPerRun']);
   }
+  if (
+    typeof raw['disableAfterConsecutiveFailedRuns'] === 'number' &&
+    raw['disableAfterConsecutiveFailedRuns'] > 0
+  ) {
+    policy.disableAfterConsecutiveFailedRuns = Math.floor(
+      raw['disableAfterConsecutiveFailedRuns'],
+    );
+  }
+  if (raw['backoff'] === 'exponential' || raw['backoff'] === 'linear' || raw['backoff'] === 'none') {
+    policy.backoff = raw['backoff'];
+  }
+
+  const heal = raw['selfHeal'];
+  if (heal && typeof heal === 'object' && heal !== null) {
+    const record = heal as Record<string, unknown>;
+    if (typeof record['agent'] === 'string' && record['agent'].length > 0) {
+      policy.selfHeal = {
+        agent: record['agent'],
+        ...(typeof record['afterConsecutiveFailedRuns'] === 'number' &&
+        record['afterConsecutiveFailedRuns'] > 0
+          ? {
+              afterConsecutiveFailedRuns: Math.floor(
+                record['afterConsecutiveFailedRuns'],
+              ),
+            }
+          : {}),
+      };
+    }
+  }
+
+  return policy;
 }
 
 export function maxAttemptsFor(policy: ParsedFailurePolicy): number {

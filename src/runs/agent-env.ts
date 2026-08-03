@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { parse as parseDotenv } from 'dotenv';
 
+import { parseJson } from '@shared/json';
 import {
   AgentEnvironmentSchema,
   type AgentEnvironment,
@@ -22,10 +23,8 @@ export function parseAgentEnvironmentConfig(
   if (!environmentJson || environmentJson.trim() === '' || environmentJson.trim() === '{}') {
     return null;
   }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(environmentJson) as unknown;
-  } catch {
+  const raw = parseJson(environmentJson, null);
+  if (raw === null) {
     return null;
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {

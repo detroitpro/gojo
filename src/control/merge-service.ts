@@ -1,4 +1,5 @@
 import type { Approval } from '@shared/approvals';
+import { parseJsonObject } from '@shared/json';
 import { MergeQueue } from '@/integration/queue';
 import {
   SourceAdapterRegistry,
@@ -143,7 +144,7 @@ export class MergeService {
         detail: `Source adapter ${connection.adapter} cannot merge pull requests`,
       };
     }
-    const config = parseConfig(connection.configJson);
+    const config = parseJsonObject(connection.configJson);
     const secretName =
       typeof config['tokenSecretName'] === 'string'
         ? config['tokenSecretName']
@@ -187,7 +188,7 @@ export class MergeService {
     if (!source || !connection || !adapter?.getDiff) {
       throw new Error('Source adapter cannot provide pull request diffs');
     }
-    const config = parseConfig(connection.configJson);
+    const config = parseJsonObject(connection.configJson);
     const secretName =
       typeof config['tokenSecretName'] === 'string' ? config['tokenSecretName'] : null;
     const token =
@@ -221,7 +222,7 @@ export class MergeService {
     if (!source || !connection || !adapter?.getChecks) {
       throw new Error('Source adapter cannot provide pull request checks');
     }
-    const config = parseConfig(connection.configJson);
+    const config = parseJsonObject(connection.configJson);
     const secretName =
       typeof config['tokenSecretName'] === 'string' ? config['tokenSecretName'] : null;
     const token =
@@ -258,7 +259,7 @@ export class MergeService {
     if (!source || !connection || !adapter?.getItem) {
       throw new Error("Source adapter cannot inspect pull request state");
     }
-    const config = parseConfig(connection.configJson);
+    const config = parseJsonObject(connection.configJson);
     const secretName =
       typeof config["tokenSecretName"] === "string"
         ? config["tokenSecretName"]
@@ -285,17 +286,6 @@ export class MergeService {
             ? "closed"
             : "open",
     };
-  }
-}
-
-function parseConfig(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
   }
 }
 
