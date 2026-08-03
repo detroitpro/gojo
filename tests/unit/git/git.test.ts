@@ -1,9 +1,11 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describeUnlessCloud } from '../../support/cloud';
+
+import * as supervisor from '@/process/supervisor';
 
 import {
   addWorktree,
@@ -13,11 +15,13 @@ import {
   createOrphanSafe,
   diffNameOnly,
   execGit,
+  fetch,
   fetchAndFastForwardBranch,
   getBranch,
   getHead,
   GitError,
   initRepo,
+  isRefLockRaceError,
   isRepo,
   removeWorktree,
   resolveRemoteTrackingRef,
@@ -126,6 +130,88 @@ describeUnlessCloud('git/git', () => {
 
     const branch = await getBranch(repo);
     expect(branch).toBe(orphanBranch);
+  });
+
+  test('isRefLockRaceError detects concurrent fetch stderr', () => {
+    expect(
+      isRefLockRaceError(
+        "error: cannot lock ref 'refs/remotes/origin/main': is at d8e4867 but expected 75a5d10",
+      ),
+    ).toBe(true);
+    expect(
+      isRefLockRaceError(
+        '! 75a5d10..d8e4867  main -> origin/main  (unable to update local ref)',
+      ),
+    ).toBe(true);
+    expect(isRefLockRaceError('fatal: not a git repository')).toBe(false);
+  });
+
+  test('fetch retries ref-lock races then succeeds', async () => {
+    const repo = await createTempRepo();
+    let calls = 0;
+    const spy = spyOn(supervisor, 'runProcess').mockImplementation(async () => {
+      calls += 1;
+      if (calls < 3) {
+        return {
+          exitCode: 1,
+          signal: null,
+          stdout: '',
+          stderr:
+            "error: cannot lock ref 'refs/remotes/origin/main': is at abc but expected def",
+          timedOut: false,
+          canceled: false,
+          durationMs: 1,
+        };
+      }
+      return {
+        exitCode: 0,
+        signal: null,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+        canceled: false,
+        durationMs: 1,
+      };
+    });
+
+    await expect(fetch(repo)).resolves.toBeUndefined();
+    expect(calls).toBe(3);
+    spy.mockRestore();
+  });
+
+  test('fetch stops retrying after max attempts on persistent ref-lock races', async () => {
+    const repo = await createTempRepo();
+    const spy = spyOn(supervisor, 'runProcess').mockImplementation(async () => ({
+      exitCode: 1,
+      signal: null,
+      stdout: '',
+      stderr:
+        "error: cannot lock ref 'refs/remotes/origin/main': is at abc but expected def",
+      timedOut: false,
+      canceled: false,
+      durationMs: 1,
+    }));
+
+    await expect(fetch(repo)).rejects.toBeInstanceOf(GitError);
+    expect(spy.mock.calls.length).toBe(4);
+    spy.mockRestore();
+  });
+
+  test('fetch does not retry unrelated git failures', async () => {
+    const repo = await createTempRepo();
+    const spy = spyOn(supervisor, 'runProcess').mockImplementation(async () => ({
+      exitCode: 128,
+      signal: null,
+      stdout: '',
+      stderr: 'fatal: not a git repository',
+      timedOut: false,
+      canceled: false,
+      durationMs: 1,
+    }));
+
+    await expect(fetch(repo)).rejects.toBeInstanceOf(GitError);
+    expect(spy.mock.calls.length).toBe(1);
+    spy.mockRestore();
   });
 
   test('throws GitError on failure', async () => {
