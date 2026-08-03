@@ -1,3 +1,4 @@
+import { parseJson } from "@shared/json";
 import {
   DEFAULT_SCHEDULING_POLICY,
   parseSchedulingPolicy,
@@ -22,11 +23,7 @@ export function getInstanceSetting(db: Database, key: string): unknown {
     return undefined;
   }
 
-  try {
-    return JSON.parse(row.value_json) as unknown;
-  } catch {
-    return undefined;
-  }
+  return parseJson(row.value_json, undefined);
 }
 
 export function setInstanceSetting(db: Database, key: string, value: unknown): void {
