@@ -124,4 +124,57 @@ describe('work trigger service', () => {
     ).toHaveLength(0);
     expect(enqueues).toBe(0);
   });
+
+  test('re-applies gojo:in-progress when a claim run already exists', async () => {
+    db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const work = createWorkRepositories(db);
+    const project = repos.projects.create({ name: 'trigger-demo', repoPath: '/tmp/trigger' });
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: 'implement-issue',
+      prompt: 'implement',
+      triggerJson: JSON.stringify({
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 1,
+      }),
+    });
+    const issue = work.items.create({
+      projectId: project.id,
+      kind: 'issue',
+      title: 'Claimed issue',
+      delivery: 'open',
+      labels: ['gojo:ready'],
+    });
+    repos.runs.create({
+      projectId: project.id,
+      agentId: agent.id,
+      idempotencyKey: `implement:${issue.id}:${agent.id}`,
+      trigger: 'work',
+      state: 'Running',
+    });
+
+    const labels: string[] = [];
+    const service = new WorkTriggerService({
+      db,
+      enqueue: async () => {
+        throw new Error('must not enqueue');
+      },
+    });
+
+    expect(
+      await service.observe({
+        workItemId: issue.id,
+        previousLabels: [],
+        labelActors: [],
+        addLabels: async (add) => {
+          labels.push(...add);
+        },
+      }),
+    ).toHaveLength(0);
+    expect(labels).toEqual(['gojo:in-progress']);
+  });
 });
