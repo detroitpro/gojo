@@ -102,7 +102,7 @@ Your repo ends up with two kinds of gojo files:
 | `gojo.yaml` | `.gojo/handoff.json` |
 | `.gojo/agents/**` | `.gojo/run.sh` |
 | `.gojo/instructions.md` | `.gojo/assets/` |
-| `.gojo/labels.md` | |
+| `.gojo/labels.md` | `.gojo/context/subject.json` (issue/PR-triggered runs only) |
 
 Registration files are your configuration — a fresh clone should describe your agents completely. The generated files are per-run scratch that gojo also stores as run artifacts, so the copies in your repo are disposable.
 

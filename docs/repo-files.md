@@ -32,6 +32,7 @@ worktree is disposable.
 | `.gojo/handoff.json` | The agent, per the handoff contract; read back by `readHandoffIfPresent` |
 | `.gojo/run.sh` | The shell adapter, materialized from the agent prompt |
 | `.gojo/assets/` | The agent, for long PR bodies and reports; copied to `artifacts/<runId>/assets/` |
+| `.gojo/context/subject.json` | The platform, for issue- or PR-triggered runs — an immutable snapshot of the untrusted source subject (labels, title, body); excluded from commits |
 
 `GENERATED_WORKSPACE_PATHS` enumerates these; directory entries end with `/`.
 
