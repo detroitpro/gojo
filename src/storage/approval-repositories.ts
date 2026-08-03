@@ -100,6 +100,7 @@ function mapControlIntent(row: ControlIntentRow): ControlIntent {
 export interface UpdateApprovalInput {
   runId?: string | null;
   workItemId?: string | null;
+  autonomy?: Approval['autonomy'];
   state?: ApprovalState;
   reviewVerdict?: ReviewVerdict | null;
   checksState?: ChecksState | null;
@@ -225,6 +226,7 @@ export function createApprovalRepository(db: Database) {
           input.workItemId !== undefined
             ? input.workItemId
             : (existing.workItemId ?? null),
+        autonomy: input.autonomy ?? existing.autonomy,
         state: input.state ?? existing.state,
         reviewVerdict:
           input.reviewVerdict !== undefined ? input.reviewVerdict : existing.reviewVerdict,
@@ -240,7 +242,7 @@ export function createApprovalRepository(db: Database) {
       };
       sqlite
         .query(
-          `UPDATE approvals SET run_id = ?, work_item_id = ?, state = ?, review_verdict = ?, checks_state = ?,
+          `UPDATE approvals SET run_id = ?, work_item_id = ?, autonomy = ?, state = ?, review_verdict = ?, checks_state = ?,
            evidence_json = ?, decided_by = ?, decided_via = ?, note = ?,
            attempts = ?, next_attempt_at = ?, last_error = ?, updated_at = ?
            WHERE id = ?`,
@@ -248,6 +250,7 @@ export function createApprovalRepository(db: Database) {
         .run(
           next.runId,
           next.workItemId,
+          next.autonomy,
           next.state,
           next.reviewVerdict,
           next.checksState,

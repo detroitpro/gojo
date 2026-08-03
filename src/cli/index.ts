@@ -20,7 +20,10 @@ import { ensureProjectRepositorySource } from "@/sources";
 import { getAgentDetail, listIntegrationsPage } from "@/storage/paged-lists";
 import { migrateProjectVocab, type MigrateVocabResult } from "@/app/migrate-vocab";
 import { DEFAULT_PAGE_LIMIT } from "@shared/pagination";
-import { ApprovalStateSchema } from "@shared/approvals";
+import {
+  ApprovalAutonomySchema,
+  ApprovalStateSchema,
+} from "@shared/approvals";
 import {
   installService,
   resolveServiceLaunch,
@@ -603,6 +606,23 @@ async function runApprovalCommand(
         intent,
         approval: ctx.approvals.findById(approval.id),
       });
+      return;
+    }
+    if (sub === "set-autonomy") {
+      const autonomyArg = parsed.positional[1] ?? getFlagString(parsed, "autonomy");
+      const parsedAutonomy = ApprovalAutonomySchema.safeParse(autonomyArg);
+      if (!parsedAutonomy.success) {
+        die(
+          "usage: gojo approval set-autonomy <id> <manual|reviewer|auto>",
+          format,
+          ExitCode.Usage,
+        );
+      }
+      const updated = await ctx.approvals.setAutonomy(
+        approval.id,
+        parsedAutonomy.data,
+      );
+      printOutput(format, { approval: updated });
       return;
     }
     die(

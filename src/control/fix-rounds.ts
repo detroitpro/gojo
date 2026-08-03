@@ -49,6 +49,55 @@ export function fixRoundEscalateReason(input: FixRoundGateInput): string | null 
   return null;
 }
 
+const RETRYABLE_FIX_ROUND_STALL_ERRORS = [
+  'Fix-round subject is unavailable',
+  'Pull request branch is unavailable',
+  // Pre–fix-round-unstick escalate text (legacy rows).
+  'Pull request branch or original issue context is unavailable',
+] as const;
+
+/**
+ * True when an approval was left awaiting-human after a fix-round gate failure
+ * that the current platform can likely retry (resumeBranch still present).
+ * Retries at most once per approval (`evidence.fixRoundStallRetried`).
+ */
+export function isRetryableFixRoundStall(input: {
+  state: string;
+  reviewVerdict: string | null;
+  lastError: string | null;
+  evidence: Record<string, unknown>;
+}): boolean {
+  if (input.state !== 'awaiting-human') return false;
+  if (input.reviewVerdict !== 'changes-requested') return false;
+  if (input.evidence['fixRoundStallRetried'] === true) return false;
+  const resume =
+    typeof input.evidence['resumeBranch'] === 'string'
+      ? input.evidence['resumeBranch'].trim()
+      : '';
+  if (!resume) return false;
+  const err = input.lastError?.trim() ?? '';
+  return RETRYABLE_FIX_ROUND_STALL_ERRORS.some((message) => err === message);
+}
+
+/** Parse `integration.approval` from an agent row's integrationJson. */
+export function agentConfiguredAutonomy(
+  integrationJson: string,
+): 'manual' | 'reviewer' | 'auto' | null {
+  try {
+    const parsed = JSON.parse(integrationJson) as { approval?: unknown };
+    if (
+      parsed.approval === 'manual' ||
+      parsed.approval === 'reviewer' ||
+      parsed.approval === 'auto'
+    ) {
+      return parsed.approval;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 /**
  * Resolve the approval that owns an open PR integration after runId may have
  * been reassigned to a fix run. Prefer run lookup, then PR URL → subject.

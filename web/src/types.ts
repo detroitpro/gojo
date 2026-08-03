@@ -56,6 +56,9 @@ export interface Approval {
   workUrl?: string | null;
   agentName?: string | null;
   projectName?: string | null;
+  /** Current agent integration.approval from gojo.yaml (may differ from snapshotted autonomy). */
+  agentAutonomy?: "manual" | "reviewer" | "auto" | null;
+  autonomyMismatch?: boolean;
 }
 
 export interface User {

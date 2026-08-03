@@ -29,10 +29,19 @@ reviewer. A passing verdict either applies immediately under reviewer/auto
 authority or enters `awaiting-human` under manual authority. Merge revalidates
 live checks; failures remain durable with evidence and never silently drop.
 
+Autonomy is **snapshotted** when the PR opens from `integration.approval`.
+Changing the agent manifest later does not rewrite open rows — use
+`gojo approval set-autonomy <id> <manual|reviewer|auto>` (or
+`POST /api/v1/approvals/:id/autonomy`) to catch up; when checks are green and
+review is `pass`, reviewer/auto re-advances into merge.
+
 Repair runs are fresh short-lived runs attached to the same remote PR branch.
 The approval row temporarily detaches from the old integration while a repair
 is queued, then follows the new run so stale polling cannot double-enqueue a
-round.
+round. Approvals left `awaiting-human` after a fix-round subject/branch gate
+failure (including the legacy escalate string) are retried once on the next
+reconcile tick when `resumeBranch` is still present
+(`evidence.fixRoundStallRetried`).
 
 ## Boundaries
 

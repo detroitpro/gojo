@@ -167,6 +167,15 @@ export const COMMAND_GROUPS: CommandGroup[] = [
       { path: "approval approve", summary: "Approve and merge", usage: "gojo approval approve <id> [--note <text>]" },
       { path: "approval reject", summary: "Reject an approval", usage: "gojo approval reject <id> [--note <text>]" },
       { path: "approval hold", summary: "Hold an approval", usage: "gojo approval hold <id> [--note <text>]" },
+      {
+        path: "approval set-autonomy",
+        summary: "Update snapshotted autonomy and re-advance when ready",
+        usage: "gojo approval set-autonomy <id> <manual|reviewer|auto>",
+        notes: [
+          "Autonomy is snapshotted when the PR opens; use this after changing agent approval: in gojo.yaml.",
+          "When checks are green and review is pass, reviewer/auto will merge immediately.",
+        ],
+      },
     ],
   },
   {

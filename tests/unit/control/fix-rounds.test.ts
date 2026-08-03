@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  agentConfiguredAutonomy,
   fixRoundEscalateReason,
   formatChecksSummary,
+  isRetryableFixRoundStall,
   resolveApprovalForIntegration,
   resolveFixRoundSubject,
 } from '@/control/fix-rounds';
@@ -150,6 +152,74 @@ describe('resolveApprovalForIntegration', () => {
         findWorkItemByWebUrl: () => null,
       }),
     ).toBeNull();
+  });
+});
+
+describe('isRetryableFixRoundStall', () => {
+  test('matches current and legacy subject/branch escalate messages', () => {
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'changes-requested',
+        lastError: 'Fix-round subject is unavailable',
+        evidence: { resumeBranch: 'gojo/x', fixRounds: 2 },
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'changes-requested',
+        lastError: 'Pull request branch or original issue context is unavailable',
+        evidence: { resumeBranch: 'gojo/x', fixRounds: 2 },
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'changes-requested',
+        lastError: 'Pull request branch is unavailable',
+        evidence: { resumeBranch: 'gojo/x', fixRounds: 2 },
+      }),
+    ).toBe(true);
+  });
+
+  test('skips when already retried, missing resumeBranch, or wrong state', () => {
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'changes-requested',
+        lastError: 'Fix-round subject is unavailable',
+        evidence: {
+          resumeBranch: 'gojo/x',
+          fixRounds: 2,
+          fixRoundStallRetried: true,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'changes-requested',
+        lastError: 'Fix-round subject is unavailable',
+        evidence: { fixRounds: 2 },
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableFixRoundStall({
+        state: 'awaiting-human',
+        reviewVerdict: 'pass',
+        lastError: 'Fix-round subject is unavailable',
+        evidence: { resumeBranch: 'gojo/x', fixRounds: 2 },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('agentConfiguredAutonomy', () => {
+  test('reads approval from integration JSON', () => {
+    expect(agentConfiguredAutonomy('{"approval":"reviewer"}')).toBe('reviewer');
+    expect(agentConfiguredAutonomy('{"mode":"pull-request"}')).toBeNull();
+    expect(agentConfiguredAutonomy('not-json')).toBeNull();
   });
 });
 

@@ -99,6 +99,7 @@ export const ControlIntentSchema = SubmitControlIntentSchema.extend({
 
 export type Approval = z.infer<typeof ApprovalSchema>;
 export type CreateApproval = z.infer<typeof CreateApprovalSchema>;
+export type ApprovalAutonomy = z.infer<typeof ApprovalAutonomySchema>;
 export type ApprovalState = z.infer<typeof ApprovalStateSchema>;
 export type ReviewVerdict = z.infer<typeof ReviewVerdictSchema>;
 export type ChecksState = z.infer<typeof ChecksStateSchema>;

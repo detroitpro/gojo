@@ -139,10 +139,30 @@ async function toggleDiff(approval: Approval) {
         <dl class="approval-evidence">
           <div><dt>Checks</dt><dd>{{ approval.checksState || "unknown" }}</dd></div>
           <div><dt>Review</dt><dd>{{ approval.reviewVerdict || "pending" }}</dd></div>
-          <div><dt>Authority</dt><dd>{{ approval.autonomy }}</dd></div>
+          <div>
+            <dt>Authority</dt>
+            <dd>
+              {{ approval.autonomy }}
+              <span
+                v-if="approval.autonomyMismatch && approval.agentAutonomy"
+                class="authority-mismatch"
+                :title="`Agent config is now ${approval.agentAutonomy}; this approval still has ${approval.autonomy} from when the PR opened.`"
+              >
+                (agent: {{ approval.agentAutonomy }})
+              </span>
+            </dd>
+          </div>
           <div><dt>Fix rounds</dt><dd>{{ approval.attempts }}</dd></div>
         </dl>
 
+        <p
+          v-if="approval.autonomyMismatch && approval.agentAutonomy"
+          class="hint"
+        >
+          Snapshotted authority differs from the agent’s current
+          <code>approval: {{ approval.agentAutonomy }}</code>. Use
+          <code>gojo approval set-autonomy</code> to catch up open rows.
+        </p>
         <p v-if="approval.lastError" class="error">{{ approval.lastError }}</p>
         <pre v-if="openDiffId === approval.id" class="approval-diff">{{ diffText }}</pre>
 
@@ -211,3 +231,18 @@ async function toggleDiff(approval: Approval) {
     />
   </div>
 </template>
+
+<style scoped>
+.authority-mismatch {
+  color: var(--color-warning, #b45309);
+  font-size: 0.85em;
+}
+.hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-muted, #64748b);
+}
+.hint code {
+  font-size: 0.9em;
+}
+</style>

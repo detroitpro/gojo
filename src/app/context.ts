@@ -27,6 +27,7 @@ import {
 import {
   fixRoundEscalateReason,
   formatChecksSummary,
+  isRetryableFixRoundStall,
   resolveApprovalForIntegration,
   resolveFixRoundSubject,
 } from "@/control/fix-rounds";
@@ -709,11 +710,50 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     });
   });
 
+  const recoverStuckFixRounds = async (): Promise<void> => {
+    const stuck = approvals.list({
+      state: "awaiting-human",
+      limit: 50,
+      offset: 0,
+    });
+    for (const approval of stuck.items) {
+      if (
+        !isRetryableFixRoundStall({
+          state: approval.state,
+          reviewVerdict: approval.reviewVerdict,
+          lastError: approval.lastError,
+          evidence: approval.evidence,
+        })
+      ) {
+        continue;
+      }
+      // Mark before enqueue so a crash mid-retry does not loop forever.
+      const marked = approvals.patchEvidence(approval.id, {
+        fixRoundStallRetried: true,
+      });
+      const review =
+        typeof marked.evidence["review"] === "object" &&
+        marked.evidence["review"] !== null
+          ? (marked.evidence["review"] as { summary?: unknown })
+          : null;
+      const feedback = {
+        ...(typeof review?.summary === "string"
+          ? { reviewSummary: review.summary }
+          : {}),
+      };
+      await enqueueFixRound(marked, feedback);
+    }
+  };
+
   const scheduler = new Scheduler({
     db,
     leaseHolderId,
     isPaused: () => isInstancePaused(db),
-    reconcileIntegrations: (now) => integrationReconciler.reconcile(now),
+    reconcileIntegrations: async (now) => {
+      const summary = await integrationReconciler.reconcile(now);
+      await recoverStuckFixRounds();
+      return summary;
+    },
     onCancelActive: async (scheduleId) => {
       const active = repos.runs
         .listNonTerminal()

@@ -32,6 +32,7 @@ export {
 } from './approvals';
 export type {
   Approval,
+  ApprovalAutonomy,
   ApprovalState,
   ChecksState,
   ControlIntent,
