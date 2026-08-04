@@ -116,6 +116,16 @@ export const COMMAND_GROUPS: CommandGroup[] = [
       { path: "project list", summary: "List projects", usage: "gojo project list" },
       { path: "project inspect", summary: "Inspect one project", usage: "gojo project inspect <id>" },
       { path: "project sync", summary: "Sync manifest into DB", usage: "gojo project sync <id>" },
+      {
+        path: "project enable",
+        summary: "Enable project (runtime gate)",
+        usage: "gojo project enable <id>",
+      },
+      {
+        path: "project disable",
+        summary: "Disable project (runtime gate)",
+        usage: "gojo project disable <id>",
+      },
       { path: "project doctor", summary: "Project health checks", usage: "gojo project doctor <id>" },
       {
         path: "project work",

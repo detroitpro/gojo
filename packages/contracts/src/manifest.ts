@@ -7,6 +7,8 @@ export type ManifestVersion = z.infer<typeof ManifestVersionSchema>;
 export const ProjectConfigSchema = z.object({
   name: z.string().min(1),
   defaultBranch: z.string().min(1),
+  /** When false, Sync gates all new work for the project. Omitted ⇒ true. */
+  enabled: z.boolean().default(true),
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
@@ -243,6 +245,8 @@ export const AgentConfigSchema = z.object({
   profile: z.string().min(1),
   promptFile: z.string().min(1),
   validationProfile: z.string().min(1),
+  /** When false, Sync disables this agent. Omitted ⇒ true. Ops toggles until next Sync. */
+  enabled: z.boolean().default(true),
   concurrency: AgentConcurrencySchema.optional(),
   trigger: AgentTriggerSchema.optional(),
   integration: AgentIntegrationSchema.optional(),
@@ -264,6 +268,8 @@ export const ScheduleConfigSchema = z.object({
   agent: z.string().min(1),
   cron: z.string().min(1),
   timezone: z.string().min(1),
+  /** When false, Sync disables this schedule. Omitted ⇒ true. Ops toggles until next Sync. */
+  enabled: z.boolean().default(true),
 });
 
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;

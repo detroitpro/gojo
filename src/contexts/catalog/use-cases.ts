@@ -133,6 +133,52 @@ export const SyncProject = defineCommand<
   },
 });
 
+export const EnableProject = defineCommand<
+  z.infer<typeof IdInputSchema>,
+  unknown,
+  AppRuntime
+>({
+  name: "catalog.projects.enable",
+  input: IdInputSchema,
+  output: z.any(),
+  http: { method: "POST", path: "/api/v1/projects/{id}/enable" },
+  cli: { group: "project", command: "enable" },
+  async handle(input, runtime) {
+    const result = await runtime.catalog.setProjectEnabled({
+      id: input.id,
+      enabled: true,
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true as const,
+      value: { project: runtime.catalog.store.toProjectDetail(result.value.project) },
+    };
+  },
+});
+
+export const DisableProject = defineCommand<
+  z.infer<typeof IdInputSchema>,
+  unknown,
+  AppRuntime
+>({
+  name: "catalog.projects.disable",
+  input: IdInputSchema,
+  output: z.any(),
+  http: { method: "POST", path: "/api/v1/projects/{id}/disable" },
+  cli: { group: "project", command: "disable" },
+  async handle(input, runtime) {
+    const result = await runtime.catalog.setProjectEnabled({
+      id: input.id,
+      enabled: false,
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true as const,
+      value: { project: runtime.catalog.store.toProjectDetail(result.value.project) },
+    };
+  },
+});
+
 // -------- Agents --------
 
 export const ListAgents = defineQuery<
@@ -526,6 +572,8 @@ export const catalogUseCases = [
   CreateProject,
   DeleteProject,
   SyncProject,
+  EnableProject,
+  DisableProject,
   GetProjectDoctor,
   ListAgents,
   GetAgent,

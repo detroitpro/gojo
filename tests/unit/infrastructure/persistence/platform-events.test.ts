@@ -10,7 +10,7 @@ describe("storage/platform-change-events", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(14);
+    expect(SCHEMA_VERSION).toBe(15);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 7)).toBe(true);
     expect(db.tableNames()).toContain("platform_change_events");
     db.close();

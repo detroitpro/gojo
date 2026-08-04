@@ -265,7 +265,7 @@ export function listProjectsPage(
     .query(
       `SELECT
          p.id, p.name, p.repo_path, p.remote_url, p.default_branch,
-         p.manifest_json, p.created_at, p.updated_at,
+         p.manifest_json, p.enabled, p.created_at, p.updated_at,
          (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id) AS agent_count,
          (SELECT COUNT(*) FROM agents a WHERE a.project_id = p.id AND a.enabled = 1) AS enabled_agent_count,
          (SELECT COUNT(*) FROM schedules s
@@ -291,6 +291,7 @@ export function listProjectsPage(
         repoPath: project.repoPath,
         remoteUrl: project.remoteUrl,
         defaultBranch: project.defaultBranch,
+        enabled: project.enabled,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
         agentCount: row.agent_count,

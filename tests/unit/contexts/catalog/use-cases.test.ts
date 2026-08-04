@@ -4,6 +4,7 @@ import { FixedClock, InMemoryUnitOfWork } from "@/kernel";
 import { browseFilesystemQuery } from "@/contexts/catalog/application/browse-filesystem";
 import { deleteProjectCommand } from "@/contexts/catalog/application/delete-project";
 import { setAgentEnabledCommand } from "@/contexts/catalog/application/set-agent-enabled";
+import { setProjectEnabledCommand } from "@/contexts/catalog/application/set-project-enabled";
 import { setScheduleEnabledCommand } from "@/contexts/catalog/application/set-schedule-enabled";
 import { syncProjectCommand } from "@/contexts/catalog/application/sync-project";
 import { testAdapterCommand } from "@/contexts/catalog/application/test-adapter";
@@ -25,6 +26,7 @@ function stubStore(over: Partial<CatalogStore>): CatalogStore {
     listProjects: notImplemented("listProjects"),
     findProject: notImplemented("findProject"),
     toProjectDetail: notImplemented("toProjectDetail"),
+    updateProjectEnabled: notImplemented("updateProjectEnabled"),
     deleteProject: notImplemented("deleteProject"),
     syncProjectFromManifest: notImplemented("syncProjectFromManifest"),
     ensureProjectRepositorySource: notImplemented("ensureProjectRepositorySource"),
@@ -53,6 +55,7 @@ const project: Project = {
   remoteUrl: null,
   defaultBranch: "main",
   manifestJson: "{}",
+  enabled: true,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
@@ -152,6 +155,43 @@ describe("contexts/catalog sync-project", () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.value.events).toHaveLength(1);
+    }
+  });
+});
+
+describe("contexts/catalog set-project-enabled", () => {
+  test("returns not_found when project missing", async () => {
+    const store = stubStore({ findProject: () => null });
+    const res = await setProjectEnabledCommand(
+      { store, clock: clock(), uow: new InMemoryUnitOfWork() },
+      { id: "missing", enabled: false },
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("not_found");
+  });
+
+  test("emits project.updated with the requested enabled flag", async () => {
+    const store = stubStore({
+      findProject: () => project,
+      updateProjectEnabled: (_id, enabled) => ({ ...project, enabled }),
+    });
+    const uow = new InMemoryUnitOfWork();
+    const res = await setProjectEnabledCommand(
+      { store, clock: clock(), uow },
+      { id: project.id, enabled: false },
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.project.enabled).toBe(false);
+      expect(res.value.events).toHaveLength(1);
+      const event = res.value.events[0]!;
+      expect(event.type).toBe("project.updated");
+      expect(event.entityId).toBe(project.id);
+      expect(event.projectId).toBe(project.id);
+      expect(event.data).toEqual({ enabled: false });
+      expect(event.topics).toEqual(
+        expect.arrayContaining(["dashboard", "projects", "agents", "schedules"]),
+      );
     }
   });
 });

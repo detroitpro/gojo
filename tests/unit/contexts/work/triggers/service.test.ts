@@ -129,6 +129,47 @@ describe('work trigger service', () => {
     expect(enqueues).toBe(0);
   });
 
+  test('does not enqueue when the project is disabled', async () => {
+    db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const work = createWorkRepositories(db);
+    const project = repos.projects.create({ name: 'trigger-demo', repoPath: '/tmp/trigger' });
+    repos.projects.update(project.id, { enabled: false });
+    repos.agents.create({
+      projectId: project.id,
+      name: 'implement-issue',
+      prompt: 'implement',
+      triggerJson: JSON.stringify({
+        on: 'issue-label',
+        requireLabels: ['gojo:ready'],
+        trustedActors: ['detroitpro'],
+        maxOpenClaims: 1,
+      }),
+    });
+    const issue = work.items.create({
+      projectId: project.id,
+      kind: 'issue',
+      title: 'Issue',
+      delivery: 'open',
+      labels: ['gojo:ready'],
+    });
+    const service = new WorkTriggerService({
+      db,
+      enqueue: async () => {
+        throw new Error('must not enqueue');
+      },
+    });
+
+    expect(
+      await service.observe({
+        workItemId: issue.id,
+        previousLabels: [],
+        labelActors: [{ label: 'gojo:ready', action: 'add', actor: 'detroitpro' }],
+      }),
+    ).toHaveLength(0);
+  });
+
   test('re-applies gojo:in-progress when a claim run already exists', async () => {
     db = Database.open(':memory:');
     db.migrate();

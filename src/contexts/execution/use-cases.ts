@@ -244,6 +244,14 @@ export const EnqueueAgentRun = defineCommand<
   async handle(input, runtime) {
     const agent = runtime.ctx.repos.agents.findById(input.id);
     if (!agent) return useCaseFailure("not_found", "Agent not found", 404);
+    if (!agent.enabled) {
+      return useCaseFailure("conflict", "Agent is disabled", 409);
+    }
+    const project = runtime.ctx.repos.projects.findById(agent.projectId);
+    if (!project) return useCaseFailure("not_found", "Project not found", 404);
+    if (!project.enabled) {
+      return useCaseFailure("conflict", "Project is disabled", 409);
+    }
     const run = await runtime.ctx.coordinator.enqueueRun({
       projectId: agent.projectId,
       agentId: agent.id,

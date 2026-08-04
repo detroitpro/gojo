@@ -49,12 +49,23 @@ and provenance are explained in [Project visibility and sources](/project-visibi
 
 The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: profiles, agents, validation profiles, schedules, notifications. **Sync** upserts by name into the database and **soft-disables** agents and schedules missing from the manifest (rows are kept for history). Prefer frequency-free keys — put cadence in `cron` / `timezone` only (see [Agent prompts](/agent-prompts)).
 
+Optional `enabled` flags (default `true` when omitted) are also applied on Sync — **YAML wins** over prior ops toggles:
+
+| Location | Effect |
+| --- | --- |
+| `project.enabled` | Project-level gate: blocks new scheduled, work-trigger, heal, and API runs for the whole project (does not flip child agent/schedule rows) |
+| `agents.<name>.enabled` | Sets that agent’s runtime `enabled` |
+| `schedules.<name>.enabled` | Sets that schedule’s runtime `enabled` |
+
+UI/CLI **Enable/Disable** write the database only (they do not edit the repo’s YAML). The next Sync reapplies the manifest if it disagrees.
+
 ### Projects UI
 
-In the web UI, **Projects** is a list of registered repos. **Open** a project for overview, health (doctor checklist), and a structured view of the synced manifest (not a raw JSON dump). **Sync** reloads the manifest and shows counts (profiles / agents / schedules). **Remove** unregisters the project from gojo — it does **not** delete the git working tree (you confirm in a dialog first).
+In the web UI, **Projects** is a list of registered repos. **Open** a project for overview, health (doctor checklist), and a structured view of the synced manifest (not a raw JSON dump). **Sync** reloads the manifest and shows counts (profiles / agents / schedules). **Enable/Disable** pauses or resumes new work for that project without unregistering it. **Remove** unregisters the project from gojo (CASCADE-deletes gojo history for that project) — it does **not** delete the git working tree (you confirm in a dialog first). Prefer Disable over Remove when you only want schedules to stop.
 
 | Area | Meaning |
 | --- | --- |
+| `project.enabled` | When `false`, gate all new work for the project after Sync (or via ops Disable) |
 | `project.defaultBranch` | Target branch for integration |
 | `repository.syncBeforeRun` | Fetch + fast-forward base from origin, then re-sync the manifest before preparing a worktree (required for merged healer PRs to take effect) |
 | `repository.requireCleanBase` | Refuse dirty base clones |
@@ -98,10 +109,11 @@ An **agent** is the unit of work: prompt, profile, validation profile, concurren
 
 ### Agents UI
 
-In the web UI, **Agents** lists synced agents with success rate and last run. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency/environment policy JSON (environment shows file path and variable **names** only), linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting).
+In the web UI, **Agents** lists synced agents with success rate and last run. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency/environment policy JSON (environment shows file path and variable **names** only), linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting). Runtime Enable/Disable lasts until the next Sync if `agents.<name>.enabled` in YAML disagrees.
 
 | Field | Role |
 | --- | --- |
+| `enabled` | Optional; default `true`. Sync sets the agent’s runtime enabled flag |
 | `profile` | Name of a `profiles:` entry (adapter + timeout + model) |
 | `promptFile` | Instructions or script content delivered to the adapter — write with [constrained limits](/agent-prompts) |
 | `validationProfile` | Ordered checks after the adapter exits |
@@ -191,7 +203,7 @@ After first setup there is a single local admin. Sign in with username/password 
 
 - Localhost bind until you deliberately expose the port
 - Auth required after first setup
-- Global and per-project pause
+- Global instance pause (Settings) and per-project / per-agent / per-schedule `enabled` (YAML + ops toggles; Sync applies YAML)
 - Minimal environment for adapter subprocesses
 - Don't let adapters edit gojo's own config, service units, or other projects
 

@@ -41,6 +41,7 @@ export interface CatalogStore {
   listProjects(input: ListProjectsPageInput): PaginatedList<ProjectListRow>;
   findProject(id: string): Project | null;
   toProjectDetail(project: Project): ProjectDetailRow;
+  updateProjectEnabled(id: string, enabled: boolean): Project | null;
   deleteProject(id: string): boolean;
 
   syncProjectFromManifest(project: Project): ProjectSyncResult;

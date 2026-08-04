@@ -46,6 +46,11 @@ export function decideHealEnqueue(opts: {
     return { shouldEnqueue: false, reason: 'healer agent excluded from healing' };
   }
 
+  const project = repos.projects.findById(failedAgent.projectId);
+  if (!project?.enabled) {
+    return { shouldEnqueue: false, reason: 'project is disabled' };
+  }
+
   const healer = repos.agents.findEnabledByProjectAndName(failedAgent.projectId, selfHeal.agent);
 
   if (!healer) {

@@ -10,6 +10,7 @@ export {
   AGENT_UPDATED_TOPICS,
   PROJECT_DELETED_TOPICS,
   PROJECT_SYNCED_TOPICS,
+  PROJECT_UPDATED_TOPICS,
   SCHEDULE_UPDATED_TOPICS,
 } from "./domain/events";
 
@@ -41,6 +42,13 @@ export type {
   SetAgentEnabledOutput,
 } from "./application/set-agent-enabled";
 export { setAgentEnabledCommand } from "./application/set-agent-enabled";
+
+export type {
+  SetProjectEnabledDeps,
+  SetProjectEnabledInput,
+  SetProjectEnabledOutput,
+} from "./application/set-project-enabled";
+export { setProjectEnabledCommand } from "./application/set-project-enabled";
 
 export type { ListSchedulesInput } from "./application/list-schedules";
 export { listSchedulesQuery } from "./application/list-schedules";

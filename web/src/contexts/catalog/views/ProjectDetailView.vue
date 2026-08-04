@@ -5,6 +5,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import ProjectImpactSection from "@/contexts/catalog/components/ProjectImpactSection.vue";
 import {
   deleteProject,
+  disableProject,
+  enableProject,
   getProject,
   listAgents,
   syncProject,
@@ -17,10 +19,11 @@ import PageHeader from "@/ui/PageHeader.vue";
 import ConfirmDialog from "@/ui/ConfirmDialog.vue";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useSoftLoading } from "@/platform/useSoftLoading";
+import EnabledBadge from "@/ui/status/EnabledBadge.vue";
 import HealthBadge from "@/ui/status/HealthBadge.vue";
 import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
 import { computeProjectHealth, parseManifestView } from "@/kernel/project-manifest";
-import { Calendar, ListTodo, Play, RefreshCw, Trash2 } from "lucide-vue-next";
+import { Calendar, ListTodo, Play, Power, RefreshCw, Trash2 } from "lucide-vue-next";
 import type { Agent, Project, ProjectSyncResult } from "@/contexts/catalog/types";
 import type { ProjectDoctorResult } from "@/contexts/operations/types";
 
@@ -135,6 +138,27 @@ async function runSync() {
   }
 }
 
+async function toggleEnabled() {
+  if (!project.value) {
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    project.value = project.value.enabled
+      ? await disableProject(project.value.id)
+      : await enableProject(project.value.id);
+    notice.value = project.value.enabled
+      ? "Project enabled (runtime). Next Sync reapplies gojo.yaml if it disagrees."
+      : "Project disabled (runtime). Schedules and triggers stay off until enable or Sync.";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to update project";
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function confirmRemove() {
   if (!project.value) {
     return;
@@ -197,6 +221,21 @@ bindStoreRefresh(catalogStore, load);
           Sync
         </AppButton>
         <AppButton
+          size="sm"
+          :icon="Power"
+          :loading="busy"
+          loading-label="Working…"
+          :disabled="!project"
+          :title="
+            project
+              ? 'Runtime toggle — lasts until the next Sync if the manifest disagrees'
+              : undefined
+          "
+          @click="toggleEnabled()"
+        >
+          {{ project?.enabled === false ? "Enable" : "Disable" }}
+        </AppButton>
+        <AppButton
           variant="danger"
           size="sm"
           :icon="Trash2"
@@ -220,6 +259,15 @@ bindStoreRefresh(catalogStore, load);
         </div>
         <div class="panel-body">
           <dl class="project-meta">
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <EnabledBadge :enabled="project.enabled !== false" />
+                <span v-if="project.enabled === false" class="muted text-sm">
+                  — new scheduled, work, and API runs are blocked
+                </span>
+              </dd>
+            </div>
             <div>
               <dt>Repository</dt>
               <dd class="mono">{{ project.repoPath }}</dd>

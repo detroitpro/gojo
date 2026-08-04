@@ -293,6 +293,7 @@ describe("paged-lists", () => {
     const demo = page.items.find((row) => row.id === project.id);
     const bare = page.items.find((row) => row.id === empty.id);
 
+    expect(demo?.enabled).toBe(true);
     expect(demo?.agentCount).toBe(2);
     expect(demo?.enabledAgentCount).toBe(1);
     expect(demo?.scheduleCount).toBe(2);

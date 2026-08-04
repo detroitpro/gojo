@@ -22,7 +22,7 @@ describe("storage/work-ledger", () => {
     const db = Database.open(":memory:");
     db.migrate();
 
-    expect(SCHEMA_VERSION).toBe(14);
+    expect(SCHEMA_VERSION).toBe(15);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 6)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 8)).toBe(true);
     expect(SCHEMA_MIGRATIONS.some((migration) => migration.version === 10)).toBe(true);

@@ -39,6 +39,8 @@ export class WorkTriggerService {
   async observe(input: ObserveWorkItemInput): Promise<Run[]> {
     const item = this.work.items.findById(input.workItemId);
     if (!item) return [];
+    const project = this.repos.projects.findById(item.projectId);
+    if (!project?.enabled) return [];
     const runs: Run[] = [];
 
     for (const agent of this.repos.agents.listByProject(item.projectId)) {

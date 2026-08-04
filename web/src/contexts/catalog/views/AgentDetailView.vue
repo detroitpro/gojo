@@ -151,7 +151,8 @@ bindStoreRefresh(catalogStore, load);
         <div class="panel-body">
           <p class="mb-3">
             Agent config is owned by the project manifest — edit YAML (or ask an agent), then Sync.
-            This page is for ops inspect and enable/disable only.
+            Enable/Disable here is a runtime ops toggle; the next Sync reapplies
+            <span class="mono">agents.&lt;name&gt;.enabled</span> from YAML if set.
           </p>
           <dl class="project-meta">
             <div>
