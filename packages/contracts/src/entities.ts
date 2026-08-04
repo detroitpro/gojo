@@ -25,6 +25,8 @@ export interface Project {
   remoteUrl: string | null;
   defaultBranch: string;
   manifestJson: string;
+  /** Project-level gate; when false, no new scheduled/work/API runs enqueue. */
+  enabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,6 +37,7 @@ export interface CreateProjectInput {
   remoteUrl?: string | null;
   defaultBranch?: string;
   manifestJson?: string;
+  enabled?: boolean;
 }
 
 export interface UpdateProjectInput {
@@ -43,6 +46,7 @@ export interface UpdateProjectInput {
   remoteUrl?: string | null;
   defaultBranch?: string;
   manifestJson?: string;
+  enabled?: boolean;
 }
 
 export interface Agent {

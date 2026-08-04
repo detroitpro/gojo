@@ -5,6 +5,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import {
   createProject,
   deleteProject,
+  disableProject,
+  enableProject,
   listProjects,
   syncProject,
 } from "@/contexts/catalog/contract";
@@ -21,6 +23,7 @@ import { bindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useCatalogStore } from "@/contexts/catalog/contract";
 import { useServerTable } from "@/platform/useServerTable";
 import { type SortOrder } from "@/kernel/pagination";
+import EnabledBadge from "@/ui/status/EnabledBadge.vue";
 import HealthBadge from "@/ui/status/HealthBadge.vue";
 import {
   computeProjectHealth,
@@ -167,6 +170,11 @@ function rowActions(project: Project): ActionMenuItem[] {
       disabled: busyId.value === project.id,
     },
     {
+      id: "toggle-enabled",
+      label: project.enabled === false ? "Enable" : "Disable",
+      disabled: busyId.value === project.id,
+    },
+    {
       id: "remove",
       label: "Remove",
       danger: true,
@@ -258,9 +266,31 @@ async function sync(project: Project) {
   }
 }
 
+async function toggleEnabled(project: Project) {
+  busyId.value = project.id;
+  error.value = "";
+  notice.value = "";
+  try {
+    if (project.enabled === false) {
+      await enableProject(project.id);
+      notice.value = `${project.name}: enabled (runtime). Next Sync reapplies gojo.yaml if it disagrees.`;
+    } else {
+      await disableProject(project.id);
+      notice.value = `${project.name}: disabled (runtime). New runs stay off until enable or Sync.`;
+    }
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to update project";
+  } finally {
+    busyId.value = null;
+  }
+}
+
 function onAction(project: Project, actionId: string) {
   if (actionId === "sync") {
     void sync(project);
+  } else if (actionId === "toggle-enabled") {
+    void toggleEnabled(project);
   } else if (actionId === "remove") {
     removeTarget.value = project;
   }
@@ -351,6 +381,7 @@ bindStoreRefresh(catalogStore, load);
           <thead>
             <tr>
               <SortableTh column="name" label="Name" :sort="sort" :order="order" @sort="setSort" />
+              <th>Status</th>
               <th>Repo path</th>
               <SortableTh
                 column="defaultBranch"
@@ -386,6 +417,9 @@ bindStoreRefresh(catalogStore, load);
                   {{ project.name }}
                 </RouterLink>
                 <div class="mono muted text-sm">{{ project.id.slice(0, 10) }}…</div>
+              </td>
+              <td>
+                <EnabledBadge :enabled="project.enabled !== false" />
               </td>
               <td class="mono muted">{{ project.repoPath }}</td>
               <td class="mono">{{ project.defaultBranch }}</td>

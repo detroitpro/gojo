@@ -46,6 +46,10 @@ import {
   type SetAgentEnabledInput,
 } from "./application/set-agent-enabled";
 import {
+  setProjectEnabledCommand,
+  type SetProjectEnabledInput,
+} from "./application/set-project-enabled";
+import {
   setScheduleEnabledCommand,
   type SetScheduleEnabledInput,
 } from "./application/set-schedule-enabled";
@@ -101,6 +105,16 @@ export function buildCatalogModule(deps: BuildCatalogModuleDeps) {
     syncProject: async (input: SyncProjectInput) => {
       const uow = new InMemoryUnitOfWork();
       const result = await syncProjectCommand({ store, clock, uow }, input);
+      if (result.ok && deps.outbox) {
+        deps.outbox.publish(result.value.events);
+        uow.clearEvents();
+      }
+      return result;
+    },
+
+    setProjectEnabled: async (input: SetProjectEnabledInput) => {
+      const uow = new InMemoryUnitOfWork();
+      const result = await setProjectEnabledCommand({ store, clock, uow }, input);
       if (result.ok && deps.outbox) {
         deps.outbox.publish(result.value.events);
         uow.clearEvents();

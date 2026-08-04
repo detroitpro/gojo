@@ -467,6 +467,11 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         return;
       }
 
+      const project = repos.projects.findById(approval.projectId);
+      if (!project?.enabled) {
+        return;
+      }
+
       if (checks.status === "failure") {
         await enqueueFixRound(approval, {
           checksSummary: formatChecksSummary(checks.checks),
@@ -744,7 +749,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
       }
 
       const project = repos.projects.findById(agent.projectId);
-      if (!project) {
+      if (!project || !project.enabled) {
         return;
       }
 

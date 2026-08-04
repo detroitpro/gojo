@@ -34,7 +34,17 @@ Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` w
 
 Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged|committed` (and `gojo integration list --open|--merged|--committed`) as a compatibility/specialist view. Project summaries and the command center derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
 
-Agent enable/disable mirrors schedules: `POST /api/v1/agents/:id/enable|disable`, `gojo agent enable|disable <id>`, and the Agents UI row menu (Run now, View runs, View schedules, Enable/Disable). Manifest sync may still soft-disable agents absent from `gojo.yaml`.
+Enable gates for **new** work (in-flight runs continue):
+
+```
+instance.paused → project.enabled → agent.enabled → schedule.enabled
+```
+
+- **Project:** `POST /api/v1/projects/:id/enable|disable`, `gojo project enable|disable <id>`, Projects UI. Separate gate — does not cascade-flip agent/schedule rows.
+- **Agent:** `POST /api/v1/agents/:id/enable|disable`, `gojo agent enable|disable <id>`, Agents UI. Manual/API run also rejects when the agent or its project is disabled.
+- **Schedule:** `POST /api/v1/schedules/:id/enable|disable|pause`, `gojo schedule …`, Schedules UI.
+
+Manifest Sync applies optional YAML `project.enabled`, `agents.<name>.enabled`, and `schedules.<name>.enabled` (default `true` when omitted) as source of truth — ops toggles last until the next Sync that disagrees. Agents/schedules absent from `gojo.yaml` are still soft-disabled (rows kept).
 
 Agent detail (`GET /api/v1/agents/:id`, `gojo agent inspect <id>`, UI `/agents/:id`) is **ops/inspect only**: prompt and policy JSON are read-only snapshots from the last Sync. Edit `gojo.yaml` + `promptFile` in the repo (or via another agent), then Project Sync. The response includes a `source` block (`repoPath`, `manifestPath`, `promptFile`, `promptAbsolutePath`) when the agent appears in the project’s synced manifest. Schedules lists accept `agentId` for linked schedules.
 
@@ -69,7 +79,7 @@ environment:
 
 - Injects `GOJO_API_URL`, `GOJO_API_TOKEN`, `GOJO_RUN_ID`, `GOJO_AGENT_ID`, and `GOJO_PROJECT_ID` into the adapter env. `agent-run-*` tokens are short-lived, restricted to `POST /runs/:id/progress` for that run, and revoked when the attempt finishes. Progress `title` is the operator **current focus** line (not the durable work identity); the platform keeps run work `title` as the agent name. Healers diagnose failed runs via `gojo run list|inspect|artifacts` (or `$GOJO_HOME/artifacts/<runId>/`) — not via the run-scoped API token.
 - Enqueue atomically creates a Work item and immutable `run_context` snapshot (agent/prompt/manifest hash/profile/policies/base/schedule). State transitions, progress, validation, artifacts, and heal lineage remain attributable after restart or later manifest edits.
-- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts agents/schedules by name and **soft-disables** agents and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
+- On `repository.syncBeforeRun`: fetch + best-effort local ff + `syncProjectFromManifest` before prep. Worktrees branch from `origin/<base>` so a dirty primary checkout does not block runs. Local `merge --ff-only` is advisory only. Manifest sync upserts project/agent/schedule `enabled` from YAML, upserts agents/schedules by name, and **soft-disables** agents and schedules absent from `gojo.yaml` (rows are kept for history; they are not hard-deleted).
 - Workspace branch/worktree names are `gojo/<agent>/<project>/<date>/run-<fullRunId>` (optional `-aN` attempt suffix) under `$GOJO_HOME/worktrees`. Full ULID + project slug avoids collisions when many schedules fire in the same millisecond; agent stays second so allowlists like `gojo/maintain-quality` still match. Orphan paths under the worktrees root are reclaimed before `git worktree add`.
 - On failure: write `failure.json` (phase may be `workspace` when prep/sync threw while `Preparing`); if agent policy has `selfHeal`, enqueue healer when guards pass (not for heal runs / healer agent itself; not when the run never started or hit an invalid state transition; capped at 3 heal runs per project per hour). Healers must not mutate the operator checkout.
 - User-facing guide: [`site/src/pages/self-healing.md`](../../site/src/pages/self-healing.md).

@@ -63,6 +63,20 @@ export async function deleteProject(id: string): Promise<boolean> {
   return data.removed;
 }
 
+export async function enableProject(id: string): Promise<Project> {
+  const { data } = await request<{ project: Project }>(`/projects/${id}/enable`, {
+    method: "POST",
+  });
+  return data.project;
+}
+
+export async function disableProject(id: string): Promise<Project> {
+  const { data } = await request<{ project: Project }>(`/projects/${id}/disable`, {
+    method: "POST",
+  });
+  return data.project;
+}
+
 export async function listAgents(query: ListQuery = {}): Promise<PaginatedResult<Agent>> {
   const { data } = await request<{
     agents: Agent[];

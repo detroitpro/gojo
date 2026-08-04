@@ -16,6 +16,14 @@ export const PROJECT_SYNCED_TOPICS: DomainEventTopic[] = [
   "sources",
 ];
 
+export const PROJECT_UPDATED_TOPICS: DomainEventTopic[] = [
+  "dashboard",
+  "overview",
+  "projects",
+  "agents",
+  "schedules",
+];
+
 export const AGENT_UPDATED_TOPICS: DomainEventTopic[] = [
   "dashboard",
   "overview",

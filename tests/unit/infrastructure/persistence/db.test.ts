@@ -236,6 +236,30 @@ describe("storage/db", () => {
     );
   });
 
+  test("migration v15 adds projects.enabled", () => {
+    const database = openInMemory();
+    const sqlite = database.connection();
+
+    sqlite.exec("ALTER TABLE projects DROP COLUMN enabled;");
+    sqlite.query("DELETE FROM schema_migrations").run();
+    sqlite
+      .query("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)")
+      .run(14, new Date().toISOString());
+
+    database.migrate();
+
+    const projectColumns = sqlite
+      .query<{ name: string }, []>("SELECT name FROM pragma_table_info('projects')")
+      .all()
+      .map((row) => row.name);
+    expect(projectColumns).toContain("enabled");
+
+    const repos = createRepositories(database);
+    const project = repos.projects.create({ name: "gated", repoPath: "/tmp/gated" });
+    expect(repos.projects.findById(project.id)?.enabled).toBe(true);
+    expect(repos.projects.update(project.id, { enabled: false })?.enabled).toBe(false);
+  });
+
   test("migration v11 renames tasks/agent_profiles into agents/profiles", () => {
     const database = openInMemory();
     const sqlite = database.connection();

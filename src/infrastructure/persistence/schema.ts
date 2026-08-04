@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS projects (
   remote_url TEXT,
   default_branch TEXT NOT NULL DEFAULT 'main',
   manifest_json TEXT NOT NULL DEFAULT '{}',
+  enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -836,6 +837,12 @@ CREATE TABLE IF NOT EXISTS source_comment_cursors (
   last_comment_id TEXT,
   updated_at TEXT NOT NULL
 );
+`,
+  },
+  {
+    version: 15,
+    sql: `
+ALTER TABLE projects ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
 `,
   },
 ];

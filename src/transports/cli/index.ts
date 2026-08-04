@@ -705,6 +705,8 @@ async function runWorkCommand(
       .listByProject(workItem.projectId)
       .find((candidate) => candidate.id === agentRef || candidate.name === agentRef);
     if (!agent?.enabled) die("enabled agent not found", format, ExitCode.NotFound);
+    const claimProject = ctx.repos.projects.findById(agent.projectId);
+    if (!claimProject?.enabled) die("project is disabled", format, ExitCode.Conflict);
     const run = await ctx.coordinator.enqueueRun({
       projectId: workItem.projectId,
       agentId: agent.id,
@@ -788,6 +790,42 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         );
         if (!handled) {
           die("unknown project command: sync", format, ExitCode.Usage);
+        }
+        break;
+      }
+      case "enable": {
+        const id = parsed.positional[0];
+        if (!id) {
+          die("usage: gojo project enable <id>", format);
+        }
+        const handled = await tryDispatchCliUseCase(
+          getUseCaseRegistry(),
+          ctx,
+          "project",
+          "enable",
+          { id },
+          format,
+        );
+        if (!handled) {
+          die("unknown project command: enable", format, ExitCode.Usage);
+        }
+        break;
+      }
+      case "disable": {
+        const id = parsed.positional[0];
+        if (!id) {
+          die("usage: gojo project disable <id>", format);
+        }
+        const handled = await tryDispatchCliUseCase(
+          getUseCaseRegistry(),
+          ctx,
+          "project",
+          "disable",
+          { id },
+          format,
+        );
+        if (!handled) {
+          die("unknown project command: disable", format, ExitCode.Usage);
         }
         break;
       }

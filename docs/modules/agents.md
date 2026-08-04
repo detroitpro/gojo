@@ -6,11 +6,13 @@
 > `src/infrastructure/agent-adapters/`, `src/infrastructure/filesystem/`, project sync, and the enable/disable
 > mutations. HTTP + CLI callers hit registered use cases
 > (`catalog.adapters.{list,test}`, `catalog.filesystem.browse`,
-> `catalog.projects.{list,get,delete,sync}`,
+> `catalog.projects.{list,get,delete,sync,enable,disable}`,
 > `catalog.agents.{list,get,enable,disable}`,
 > `catalog.schedules.{list,enable,disable,pause}`,
 > `catalog.impact.items.list`). `syncProject` emits `project.synced` **exactly
-> once** so CLI and API no longer duplicate platform events.
+> once** so CLI and API no longer duplicate platform events. Sync applies
+> optional manifest `enabled` fields (project / agent / schedule); ops toggles
+> write SQLite only until the next Sync.
 
 ## Vocabulary
 

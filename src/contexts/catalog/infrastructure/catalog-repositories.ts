@@ -36,6 +36,7 @@ interface ProjectRow {
   remote_url: string | null;
   default_branch: string;
   manifest_json: string;
+  enabled: number;
   created_at: string;
   updated_at: string;
 }
@@ -93,6 +94,7 @@ export function mapProject(row: ProjectRow): Project {
     remoteUrl: row.remote_url,
     defaultBranch: row.default_branch,
     manifestJson: row.manifest_json,
+    enabled: boolFromInt(row.enabled ?? 1),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -208,12 +210,13 @@ export function createCatalogRepositories(db: Database): {
       const createdAt = nowIso();
       const defaultBranch = input.defaultBranch ?? "main";
       const manifestJson = input.manifestJson ?? "{}";
+      const enabled = input.enabled ?? true;
 
       sqlite
         .query(
           `INSERT INTO projects (
-            id, name, repo_path, remote_url, default_branch, manifest_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            id, name, repo_path, remote_url, default_branch, manifest_json, enabled, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -222,6 +225,7 @@ export function createCatalogRepositories(db: Database): {
           input.remoteUrl ?? null,
           defaultBranch,
           manifestJson,
+          intFromBool(enabled),
           createdAt,
           createdAt,
         );
@@ -233,6 +237,7 @@ export function createCatalogRepositories(db: Database): {
         remote_url: input.remoteUrl ?? null,
         default_branch: defaultBranch,
         manifest_json: manifestJson,
+        enabled: intFromBool(enabled),
         created_at: createdAt,
         updated_at: createdAt,
       });
@@ -264,6 +269,7 @@ export function createCatalogRepositories(db: Database): {
         remoteUrl: input.remoteUrl !== undefined ? input.remoteUrl : existing.remoteUrl,
         defaultBranch: input.defaultBranch ?? existing.defaultBranch,
         manifestJson: input.manifestJson ?? existing.manifestJson,
+        enabled: input.enabled !== undefined ? input.enabled : existing.enabled,
         updatedAt,
       };
 
@@ -271,7 +277,7 @@ export function createCatalogRepositories(db: Database): {
         .query(
           `UPDATE projects SET
             name = ?, repo_path = ?, remote_url = ?, default_branch = ?,
-            manifest_json = ?, updated_at = ?
+            manifest_json = ?, enabled = ?, updated_at = ?
           WHERE id = ?`,
         )
         .run(
@@ -280,6 +286,7 @@ export function createCatalogRepositories(db: Database): {
           next.remoteUrl,
           next.defaultBranch,
           next.manifestJson,
+          intFromBool(next.enabled),
           next.updatedAt,
           id,
         );

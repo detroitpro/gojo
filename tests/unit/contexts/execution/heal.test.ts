@@ -97,6 +97,49 @@ describe('decideHealEnqueue', () => {
     db.close();
   });
 
+  test('does not enqueue when the project is disabled', () => {
+    const db = Database.open(':memory:');
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: 'demo',
+      repoPath: '/tmp/demo',
+    });
+    repos.projects.update(project.id, { enabled: false });
+    const failing = repos.agents.create({
+      projectId: project.id,
+      name: 'deps',
+      prompt: 'do work',
+    });
+    repos.agents.create({
+      projectId: project.id,
+      name: 'self-heal',
+      prompt: 'heal',
+    });
+    const created = repos.runs.create({
+      projectId: project.id,
+      agentId: failing.id,
+      idempotencyKey: 'k-disabled-project',
+      trigger: 'manual',
+      state: RunState.Failed,
+    });
+    const run =
+      repos.runs.update(created.id, {
+        startedAt: new Date().toISOString(),
+        errorMessage: 'Agent exited with code 1',
+      }) ?? created;
+
+    const decision = decideHealEnqueue({
+      repos,
+      failedRun: run,
+      failedAgent: failing,
+      policy: { selfHeal: { agent: 'self-heal', afterConsecutiveFailedRuns: 1 } },
+    });
+    expect(decision.shouldEnqueue).toBe(false);
+    expect(decision.reason).toBe('project is disabled');
+    db.close();
+  });
+
   test('does not enqueue when healer task is missing or below failure threshold', () => {
     const db = Database.open(':memory:');
     db.migrate();
