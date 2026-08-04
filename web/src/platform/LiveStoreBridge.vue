@@ -116,10 +116,14 @@ function scheduleStores(names: readonly string[]): void {
 }
 
 const unsubscribe = platformEventHub.subscribe(ALL_TOPICS, (event) => {
-  const topic = event.topic as (typeof ALL_TOPICS)[number];
-  const targets = TOPIC_STORES[topic];
-  if (!targets) return;
-  scheduleStores(targets);
+  const stores = new Set<string>();
+  for (const topic of event.topics) {
+    const targets = TOPIC_STORES[topic as (typeof ALL_TOPICS)[number]];
+    if (!targets) continue;
+    for (const name of targets) stores.add(name);
+  }
+  if (stores.size === 0) return;
+  scheduleStores([...stores]);
 });
 
 let previousStatus: string | null = null;
