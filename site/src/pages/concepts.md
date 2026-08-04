@@ -62,7 +62,7 @@ Schedule triggers use idempotency keys so a restart doesn't double-create the sa
 
 ## Local-first control plane
 
-One gojo process holds the scheduler lease for a database. CLI, HTTP API, embedded ops UI, and notifications all share that instance. Adapter CLIs remain separate installs invoked through the `agents/` module.
+One gojo process holds the scheduler lease for a database. CLI, HTTP API, embedded ops UI, and notifications all share that instance. Adapter CLIs remain separate installs; the execution coordinator invokes them through `infrastructure/agent-adapters/` after catalog detection.
 
 ## Related
 

@@ -36,8 +36,13 @@ Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|
 
 Enable gates for **new** work (in-flight runs continue):
 
+- **Instance pause** (`instance.paused`): blocks **scheduled** enqueue only — the scheduler tick returns before processing due schedules. Manual/API runs, source-work triggers, heal enqueue, and dispatcher admission are **not** blocked by pause.
+- **Project / agent** (`project.enabled`, `agent.enabled`): checked on manual/API run, source-work triggers, scheduled `onTrigger`, and heal enqueue.
+- **Schedule** (`schedule.enabled`): checked on scheduled `onTrigger` only.
+
 ```
-instance.paused → project.enabled → agent.enabled → schedule.enabled
+scheduled path: project.enabled → agent.enabled → schedule.enabled
+manual/API + source-work + heal: project.enabled → agent.enabled
 ```
 
 - **Project:** `POST /api/v1/projects/:id/enable|disable`, `gojo project enable|disable <id>`, Projects UI. Separate gate — does not cascade-flip agent/schedule rows.
@@ -128,7 +133,7 @@ After integration the coordinator persists two canonical record sets (accounting
 - **`run_integrations`** (one compatibility row per run) — mode, provider, PR number/URL, commit SHA, and integration status. The reconciler never abandons a nonterminal PR: current opens are checked every minute and errors back off to at most fifteen minutes. The linked Work resource carries source observation/freshness and provider sync discovers human/bot work as well as gojo-created work.
 - **`run_impact_items`** (unique per `(run, category, subject)`) — built by `impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema. Verification stays an item-level concern (shown on run detail).
 
-The agent handoff is runtime-validated (`normalizeAgentHandoff` / `recoverAgentHandoffReport`, schema v1/v2/v3) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Invalid optional `impact` / `assets` / `prUrl` are dropped so review `subjectActions.verdict` still applies. Schema v3 adds bounded `subjectActions` (labels, comment, reviewer verdict); the platform validates and executes them. Aggregates are served by `storage/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
+The agent handoff is runtime-validated (`normalizeAgentHandoff` / `recoverAgentHandoffReport`, schema v1/v2/v3) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Invalid optional `impact` / `assets` / `prUrl` are dropped so review `subjectActions.verdict` still applies. Schema v3 adds bounded `subjectActions` (labels, comment, reviewer verdict); the platform validates and executes them. Aggregates are served by `contexts/operations/infrastructure/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
 
 Dashboard tiles drill into list endpoints (gateway, not dead ends):
 
@@ -141,18 +146,18 @@ Dashboard tiles drill into list endpoints (gateway, not dead ends):
 
 ## May call
 
-- `workspace/`, `git/`
-- `agents/` (adapters)
-- `validation/`
-- `integration/`
-- `storage/`
-- `app/project-sync` (manifest re-sync before run)
-- `notifications/` hooks (outcomes)
-- `process/` (indirectly via agents/validation)
+- `infrastructure/git/`, workspace prep in `contexts/execution/`
+- `infrastructure/agent-adapters/` (subprocess invocation)
+- validation runner in `contexts/execution/`
+- `contexts/delivery/` (integration, approvals, merge)
+- `infrastructure/persistence/` (repository ports)
+- `contexts/catalog/application/project-sync.ts` (manifest re-sync before run)
+- `contexts/notifications/` hooks (outcomes)
+- `infrastructure/process/` (indirectly via adapters/validation)
 
 ## Must not
 
-- Own cron / schedule tick logic (`scheduler/` does that)
+- Own cron / schedule tick logic (`contexts/scheduling/` does that)
 - Bypass validation when policy requires it
 - Let adapters write the project default branch directly
 - Centrally rewrite another project’s prompts outside that project’s git tree

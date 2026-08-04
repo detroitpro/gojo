@@ -43,6 +43,8 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo server doctor` | Git, disk, DB, adapter detection, daemon PATH tools, network warnings |
 | `gojo instance show` | Bind, publicBaseUrl, trusted proxies, resolved apiBaseUrl |
 | `gojo instance set …` | Update network fields in `instance.yaml` (restart after) |
+| `gojo instance scheduling-show` | Read admission caps (`maxConcurrentRuns`, per-project limits, stagger, load guard) |
+| `gojo instance scheduling-set …` | Update scheduling policy caps (same fields as `PATCH /api/v1/instance/scheduling`) |
 
 `gojo setup` is create-once. If an admin already exists it exits with code `3` and tells you to use `gojo auth password` instead.
 
@@ -103,7 +105,7 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |
-| `gojo approval list\|show\|approve\|reject\|hold` | Inspect and decide platform-owned PR approvals |
+| `gojo approval list\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`) |
 | `gojo work claim <workItemId> --agent <name-or-id>` | Explicitly enqueue an issue against an eligible issue-triggered agent |
 
 Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).
