@@ -5,7 +5,7 @@ import {
   GenericWebhookSourceAdapter,
   GitHubSourceAdapter,
   GitLabSourceAdapter,
-} from "@/contexts/work/sources";
+} from "@/contexts/work/contract";
 
 function requestBody(init?: RequestInit): Record<string, unknown> {
   return JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;

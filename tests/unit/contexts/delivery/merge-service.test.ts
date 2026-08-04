@@ -7,7 +7,7 @@ import { createRepositories } from "@/platform/create-repositories";
 import {
   Database
 } from '@/infrastructure/persistence';
-import { SourceAdapterRegistry, type SourceAdapter } from '@/contexts/work/sources';
+import { SourceAdapterRegistry, type SourceAdapter } from '@/contexts/work/contract';
 
 describe('control merge service', () => {
   let db: Database | null = null;

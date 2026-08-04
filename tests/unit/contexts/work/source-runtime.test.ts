@@ -10,7 +10,7 @@ import {
   ensureProjectRepositorySource,
   parseRepositoryRemote,
   type SourceAdapter,
-} from "@/contexts/work/sources";
+} from "@/contexts/work/contract";
 import { createRepositories } from "@/platform/create-repositories";
 import {
   Database
