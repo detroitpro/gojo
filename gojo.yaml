@@ -122,7 +122,7 @@ agents:
       backoff: none
 
   maintain-quality:
-    description: Refactor for module boundaries, low complexity, and expert TypeScript quality
+    description: Keep hexagonal modular-monolith boundaries honest; delete strangler debt
     profile: cursor
     promptFile: .gojo/agents/maintain-quality.md
     validationProfile: daemon-unit
