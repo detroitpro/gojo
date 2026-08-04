@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Daemon tests with a coverage *report* (no baseline fail gate).
-# Use make coverage / this script for visibility; CI and gojo validation
-# must not fail solely because coverage % moved.
+# Daemon tests with a coverage report (informational when run alone).
+# The CI gate (`scripts/ci-check.sh`) also runs coverage and fails if line
+# coverage drops below coverage-baseline.json — see check-coverage-baseline.sh.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

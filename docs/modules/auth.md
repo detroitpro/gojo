@@ -1,6 +1,15 @@
 # Module: auth
 
-**Paths:** `src/auth/`, `src/api/auth.ts`, CLI `setup` / `auth`
+**Paths:** `src/contexts/access/infrastructure/auth/`, `src/transports/http/auth.ts`, CLI `setup` / `auth`, `src/contexts/access/` (bounded context)
+
+> The **access** bounded context (`src/contexts/access/`) owns the JSON-facing
+> subset of this module. `GET /api/v1/auth/me` and `GET/POST/DELETE
+> /api/v1/auth/tokens[/{id}]` are served by registered use cases
+> (`access.me.get`, `access.tokens.list`, `access.tokens.create`,
+> `access.tokens.revoke`). Login, logout, setup, password change, and approval
+> link routes stay in `src/transports/http/router.ts` because they need `Set-Cookie` / HTML
+> transport. `src/contexts/access/infrastructure/auth/` remains as the infrastructure adapter behind the
+> `UserServicePort` (tracked in `docs/architecture/removal-backlog.md` as R18).
 
 ## Responsibility
 
@@ -43,11 +52,11 @@ credential.
 | `POST /api/v1/setup` | Public only when no users | Create first admin |
 | `POST /api/v1/auth/login` | Public | Set session cookie |
 | `POST /api/v1/auth/logout` | Public | Clear cookie |
-| `GET /api/v1/auth/me` | Required | Current user |
+| `GET /api/v1/auth/me` | Required | Current user (`access.me.get` use case) |
 | `POST /api/v1/auth/password` | Required | Change password |
-| `GET/POST/DELETE /api/v1/auth/tokens…` | Required | Token CRUD |
+| `GET/POST/DELETE /api/v1/auth/tokens…` | Required | Token CRUD (`access.tokens.*` use cases) |
 
-Resolution order in [`src/api/auth.ts`](../../src/api/auth.ts): Bearer token,
+Resolution order in [`src/transports/http/auth.ts`](../../src/transports/http/auth.ts): Bearer token,
 then session cookie.
 
 ## CLI

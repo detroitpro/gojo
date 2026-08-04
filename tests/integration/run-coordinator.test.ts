@@ -3,16 +3,20 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { setSchedulingPolicy } from '@/app/instance-settings';
-import { resolvePaths } from '@/config/paths';
-import { PlatformChangeFeed } from '@/events/platform-change-feed';
-import { commitAll, configLocal, execGit, initRepo } from '@/git/git';
+import { setSchedulingPolicy } from '@/infrastructure/persistence/instance-settings';
+import { resolvePaths } from '@/platform/config/paths';
+import { PlatformChangeFeed } from '@/platform/events/platform-change-feed';
+import { commitAll, configLocal, execGit, initRepo } from '@/infrastructure/git/git';
 import { RunState } from '@shared/run-states';
-import { RunCoordinator } from '@/runs/coordinator';
-import { RunDispatcher } from '@/runs/dispatcher';
-import { Database, createRepositories, createWorkRepositories } from '@/storage';
-import type { Agent, Project } from '@/storage/types';
-import { WorkspaceManager } from '@/workspace/manager';
+import { RunCoordinator } from '@/contexts/execution/infrastructure/coordinator';
+import { RunDispatcher } from '@/contexts/execution/application/dispatcher';
+import { createRepositories } from "@/platform/create-repositories";
+import {
+  Database
+} from '@/infrastructure/persistence';
+import { createWorkRepositories } from '@/contexts/work/contract';
+import type { Agent, Project } from '@/infrastructure/persistence/types';
+import { WorkspaceManager } from '@/contexts/execution/infrastructure/workspace/manager';
 
 describe('integration/run-coordinator', () => {
   let tempDir: string | null = null;

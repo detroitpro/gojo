@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildActivityItems } from "../../../web/src/lib/run-activity";
-import type { RunEvent } from "../../../web/src/types";
+import { buildActivityItems } from "../../../web/src/kernel/run-activity";
+import type { RunEvent } from "@gojo/contracts/types";
 
 function evt(
   type: string,

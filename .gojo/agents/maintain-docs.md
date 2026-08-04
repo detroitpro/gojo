@@ -24,7 +24,7 @@ You scour the **gojo** implementation and ensure documentation matches reality. 
 
 ## Process
 
-1. Sample source of truth: `src/cli/index.ts`, `src/shared/manifest.ts`, `src/runs/coordinator.ts`, recent site pages (self-healing, settings, CLI).
+1. Sample source of truth: `src/transports/cli/index.ts`, `packages/contracts/src/manifest.ts`, `src/contexts/execution/coordinator.ts`, recent site pages (self-healing, settings, CLI).
 2. Diff claims in `site/` and `docs/` against code; fix mismatches.
 3. Ensure Documentation nav / `docs.md` lists new pages if you add any.
 4. Run `bun run --cwd site build`.

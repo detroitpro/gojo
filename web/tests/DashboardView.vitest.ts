@@ -1,24 +1,28 @@
 // @vitest-environment happy-dom
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, test, vi } from "vitest";
 
+const refreshBindings = vi.hoisted(
+  () => [] as Array<() => void | Promise<void>>,
+);
+
 const mocks = vi.hoisted(() => ({
-  live: [] as Array<{ topics: string[]; refresh: () => Promise<void> | void }>,
   dashboard: vi.fn(),
   overview: vi.fn(),
   impact: vi.fn(),
 }));
 
-vi.mock("@/composables/useLiveQuery", () => ({
-  useLiveRefresh(options: { topics: string[]; refresh: () => Promise<void> | void }) {
-    mocks.live.push(options);
-    void options.refresh();
-    return { status: { value: "connected" }, refresh: options.refresh };
+vi.mock("@/platform/bind-store-refresh", () => ({
+  bindStoreRefresh(_store: unknown, refresh: () => Promise<void> | void) {
+    refreshBindings.push(refresh);
+    void refresh();
   },
 }));
 
-vi.mock("@/api", () => ({
+vi.mock("@/contexts/operations/contract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/contexts/operations/contract")>()),
   getDashboard: mocks.dashboard,
   getDashboardOverview: mocks.overview,
   getDashboardImpact: mocks.impact,
@@ -26,7 +30,7 @@ vi.mock("@/api", () => ({
   resumeInstance: vi.fn(),
 }));
 
-import DashboardView from "@/views/DashboardView.vue";
+import DashboardView from "@/contexts/operations/views/DashboardView.vue";
 
 function impact() {
   return {
@@ -49,8 +53,8 @@ function impact() {
 }
 
 describe("DashboardView live refresh", () => {
-  test("refreshes mounted metrics when a dashboard invalidation arrives", async () => {
-    mocks.live.length = 0;
+  test("refreshes mounted metrics when store refresh bindings run", async () => {
+    refreshBindings.length = 0;
     mocks.dashboard.mockResolvedValue({
       projects: 1,
       agents: 2,
@@ -79,7 +83,9 @@ describe("DashboardView live refresh", () => {
     });
     await router.push("/");
     await router.isReady();
-    const wrapper = mount(DashboardView, { global: { plugins: [router] } });
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [createPinia(), router] },
+    });
     await flushPromises();
     expect(wrapper.find(".status-band-primary .value").text()).toBe("1");
 
@@ -93,11 +99,8 @@ describe("DashboardView live refresh", () => {
       waitingRuns: 2,
       paused: false,
     });
-    const dashboardSubscription = mocks.live.find((entry) =>
-      entry.topics.includes("dashboard"),
-    );
-    expect(dashboardSubscription).toBeDefined();
-    await dashboardSubscription!.refresh();
+    expect(refreshBindings.length).toBeGreaterThan(0);
+    await refreshBindings[0]!();
     await flushPromises();
 
     expect(wrapper.find(".status-band-primary .value").text()).toBe("5");

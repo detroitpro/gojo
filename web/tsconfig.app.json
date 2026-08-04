@@ -19,7 +19,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../src/shared/*"]
+      "@shared/*": ["../packages/contracts/src/*"],
+      "@gojo/contracts/types": ["../packages/contracts/types.ts"],
+      "@gojo/contracts/*": ["../packages/contracts/src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]

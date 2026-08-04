@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildPhaseSegments } from "../../../web/src/lib/run-phases";
-import type { RunEvent } from "../../../web/src/types";
+import { buildPhaseSegments } from "../../../web/src/kernel/run-phases";
+import type { RunEvent } from "@gojo/contracts/types";
 
 function evt(
   type: string,

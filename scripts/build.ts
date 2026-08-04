@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 
 const root = join(import.meta.dir, "..");
 const binDir = join(root, "bin");
-const cliEntry = join(root, "src/cli/index.ts");
+const cliEntry = join(root, "src/transports/cli/index.ts");
 const outPath = join(binDir, "gojo");
 const webDir = join(root, "web");
 const webPackageJson = join(webDir, "package.json");
@@ -59,10 +59,10 @@ if (existsSync(webDist)) {
 console.log(`Built ${outPath}`);
 console.log("");
 console.log("Cross-compile targets (run from repo root):");
-console.log("  bun build src/cli/index.ts --compile --target=bun-linux-x64 --outfile bin/gojo-linux-x64");
-console.log("  bun build src/cli/index.ts --compile --target=bun-linux-arm64 --outfile bin/gojo-linux-arm64");
-console.log("  bun build src/cli/index.ts --compile --target=bun-darwin-x64 --outfile bin/gojo-darwin-x64");
-console.log("  bun build src/cli/index.ts --compile --target=bun-darwin-arm64 --outfile bin/gojo-darwin-arm64");
+console.log("  bun build src/transports/cli/index.ts --compile --target=bun-linux-x64 --outfile bin/gojo-linux-x64");
+console.log("  bun build src/transports/cli/index.ts --compile --target=bun-linux-arm64 --outfile bin/gojo-linux-arm64");
+console.log("  bun build src/transports/cli/index.ts --compile --target=bun-darwin-x64 --outfile bin/gojo-darwin-x64");
+console.log("  bun build src/transports/cli/index.ts --compile --target=bun-darwin-arm64 --outfile bin/gojo-darwin-arm64");
 console.log("");
 console.log("Compiled binaries resolve web/dist from:");
 console.log("  - GOJO_WEB_DIST");

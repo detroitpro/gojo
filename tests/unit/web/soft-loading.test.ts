@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { useSoftLoading } from "../../../web/src/composables/useSoftLoading";
+import { useSoftLoading } from "../../../web/src/platform/useSoftLoading";
 
 describe("useSoftLoading", () => {
   test("only the first begin/end pair toggles loading", () => {

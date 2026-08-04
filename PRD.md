@@ -1869,38 +1869,21 @@ The embedded web UI uses Vue and TypeScript. Compiled static assets are embedded
 
 ### 23.1 Internal modules
 
-The initial codebase should maintain clear package boundaries:
+The daemon is a layered modular monolith. `src/` has exactly five top-level directories:
 
 ```text
 src/
-  cli/
-  api/
-  auth/
-  audit/
-  config/
-  scheduler/
-  runs/
-  agents/
-    adapter/
-    cursor/
-    claude/
-    shell/
-  workspace/
-  git/
-  validation/
-  integration/
-  notifications/
-  secrets/
-  telemetry/
-  storage/
-  artifacts/
-  updates/
-  service/
-  shared/          # Zod schemas shared with web UI
-web/               # Vue 3 + TypeScript SPA
+  kernel/           # Clock, Result, DomainEvent, Outbox
+  contexts/         # access, catalog, scheduling, execution,
+                    # delivery, work, notifications, operations
+  platform/         # registry, composition, config, events, telemetry
+  transports/       # http/ (+ws), cli/
+  infrastructure/   # persistence, git, process, filesystem, agent-adapters
+packages/contracts/ # Zod schemas + types shared with web UI
+web/                # Vue 3 + TypeScript SPA
 ```
 
-Prefer Web-standard and `node:` APIs where practical; confine Bun-specific APIs (`bun:sqlite`, `Bun.spawn`, compile embedding) behind interfaces so storage and process supervision remain testable. The scheduler must not call Cursor or Claude directly. It creates runs. The run coordinator selects an adapter through an interface.
+See [`src/README.md`](src/README.md) for the dependency direction and “where does a new file go?” table. Prefer Web-standard and `node:` APIs where practical; confine Bun-specific APIs (`bun:sqlite`, `Bun.spawn`, compile embedding) behind interfaces so persistence and process supervision remain testable. The scheduler must not call Cursor or Claude directly. It creates runs. The run coordinator selects an adapter through an interface.
 
 ---
 

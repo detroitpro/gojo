@@ -2,64 +2,83 @@
 
 Product-level architecture, principles, and lifecycle live in [`PRD.md`](../../PRD.md) — especially **§3** (principles), **§9–14** (adapters, runs, Git, scheduling, success, handoff), and **§23** (reference architecture).
 
-This page tracks the **live `src/` layout** as implemented.
+This page tracks the **live `src/` layout** as implemented. Start with [`src/README.md`](../../src/README.md) for the on-disk layer map.
 
 ## Runtime shape
 
 ```text
 CLI / HTTP API / scheduler tick (one process)
         │
-        ├─ storage (SQLite: profiles, agents, schedules, runs, work, …)
-        ├─ runs: enqueue → dispatcher admits → coordinator executes
-        ├─ workspace + git (isolated worktrees)
-        ├─ agents (shell / cursor / claude-code adapters — UI/CLI: Adapters)
-        ├─ validation
-        ├─ integration (commit / PR / merge queue)
-        ├─ sources (GitHub / GitLab / Forgejo / generic work sync)
-        ├─ work (durable cross-source ledger, links, events, freshness)
-        ├─ events (durable platform invalidation feed)
-        ├─ api/ws (WebSocket hub: platform + run channels + RPC)
-        └─ notifications, secrets, backup, telemetry
+        ├─ platform (composition, registry, config, events, telemetry)
+        ├─ contexts/* (use cases + domain)
+        │     access · catalog · scheduling · execution
+        │     delivery · work · notifications · operations
+        ├─ infrastructure (persistence, git, process, filesystem, agent-adapters)
+        └─ transports (http + ws, cli)
 ```
 
-Admin UI: Vue app in `web/`, served as static assets (see `src/api/web-dist.ts`).
+Admin UI: Vue app in `web/`, served as static assets (see `src/transports/http/web-dist.ts`).
 Browser clients use one authenticated WebSocket at `/api/v1/ws` for live events
 and RPC; REST remains for agents, webhooks, and CLI health.
+
+### `web/src/` layers
+
+```text
+web/src/
+  kernel/         pure TS helpers (format, pagination, status-icons)
+  contexts/       8 bounded contexts — api, types, store, views, components
+  platform/       app host: router, LiveStoreBridge, bind-store-refresh
+  infrastructure/ HTTP transport, WebSocket client, platform-events
+  ui/             shared Vue chrome (AppButton, AppShell, badges)
+```
+
+Live updates: `LiveStoreBridge` maps each `PlatformEventTopic` (non-overlapping) to Pinia
+`invalidate()` on the owning context store; views bind their `load` handlers
+via `bindStoreRefresh(store, refresh)` on mount. Cross-context imports go
+through `contexts/<name>/contract.ts` (enforced by `.dependency-cruiser.cjs`).
+
 User docs site: Astro in `site/` (not served by the daemon).
 
 Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared CSS variables in `theme/tokens.css` (Six Eyes cyan / midnight navy, DM Sans + JetBrains Mono). Brand wordmarks use mono; titles use sans with normal tracking. The admin “ops console” look is CSS composition on those tokens, not a separate component library.
 
-## `src/` modules (current)
+## `src/` layers (current)
 
 | Directory | Role |
 |-----------|------|
-| `cli/` | Command entry and output formatting |
-| `api/` | HTTP router, WebSocket hub/RPC, server lifecycle, web static |
-| `app/` | Composition / context wiring, `project-sync` |
-| `agents/` | Agent adapter registry and implementations (top-level UI/CLI: **Adapters**) |
-| `scheduler/` | Cron, overlap/missed-run, auto-disable; enqueue only (dispatcher admits) |
-| `runs/` | Coordinator, dispatcher/admission, heal, impact, prompt assembly, inspect |
-| `workspace/` | Worktree paths and attempt prep/cleanup (prefers `origin/<base>` when syncing) |
-| `git/` | Git subprocess helpers (best-effort local ff; dirty trees OK) |
-| `validation/` | Validation profile execution (inherits daemon PATH) |
-| `integration/` | Integration modes, merge queue, external PR status reconciler |
-| `events/` | Durable platform change feed, retention, and filter helpers |
-| `sources/` | Source adapter registry, repository discovery, polling/webhook ingestion |
-| `storage/` | Schema, DB, repositories |
-| `auth/` | Users, passwords, tokens |
-| `secrets/` | Encrypted secret store |
-| `notifications/` | Channels, dispatch, hooks (Slack/webhooks + Telegram Bot API) |
-| `backup/` | Backup create/verify/restore |
-| `service/` | systemd / launchd unit install (embeds PATH so tools like bun resolve) |
-| `diagnostics/` | Doctor checks (instance tools + project baseCheckout / validationTools) |
-| `process/` | Subprocess supervision |
-| `filesystem/` | Host browse helpers for UI |
-| `shared/` | Manifest, handoff, IDs, run states, Work and platform-event contracts |
-| `config/` | Paths, instance config |
-| `telemetry/` | Optional OTEL hooks |
-| `artifacts/`, `audit/`, `updates/` | Supporting domains |
+| `kernel/` | Zero-dep primitives: `Clock`, `Result`, `DomainEvent`, `UnitOfWork`, `Outbox` |
+| `contexts/` | Eight bounded contexts — product capabilities (see table below) |
+| `platform/` | Host: registry, HTTP/CLI dispatch, composition root, `app-context`, config, events, telemetry |
+| `transports/` | `http/` (router, WS hub/RPC, server, web static) and `cli/` |
+| `infrastructure/` | Shared adapters: `persistence/` (SQLite), `git/`, `process/`, `filesystem/`, `agent-adapters/`, `merge-queue` |
+| `packages/contracts/` | Shared wire contracts (Zod + types); import via `@shared/*` or `@gojo/contracts` |
+
+### Bounded contexts
+
+| Context | Owns |
+|---------|------|
+| `access` | Users, sessions, API tokens, secrets |
+| `catalog` | Projects, agents, schedules, adapters, filesystem browse, project sync |
+| `scheduling` | Policies, cron tick/leases, upcoming, scheduling-policy store |
+| `execution` | Coordinator, dispatcher/admission, workspace, validation, PR integrate |
+| `delivery` | Approvals, control intents, merge service, PR status reconciler |
+| `work` | Source adapters, work ledger, sync/webhooks, triggers |
+| `notifications` | Channel store, dispatcher, run-lifecycle hooks |
+| `operations` | Instance config, doctor, backups, dashboard, service install |
+
+Cross-context imports go through `contexts/<name>/contract.ts` only. Layout is enforced by `scripts/check-src-layout.sh` and `.dependency-cruiser.cjs`.
+
+## Behavior locks
+
+Outside-in characterization suites under [`tests/contract/`](../../tests/contract/)
+pin the HTTP API, CLI, and shell commit-only pipeline so structural refactors cannot
+drift the product surface unnoticed. Admin view mount smoke lives in
+`web/tests/views-smoke.vitest.ts`. See `tests/contract/README.md`.
 
 ## Related
 
+- [`src/README.md`](../../src/README.md) — where new files go
+- [Decision: layered modular monolith](./decision-layered-modular-monolith.md) — why this shape
+- [Context template](./context-template.md)
 - [Boundaries](./boundaries.md)
+- [Removal backlog](./removal-backlog.md)
 - [PRD §23 Reference Architecture](../../PRD.md#23-reference-architecture)

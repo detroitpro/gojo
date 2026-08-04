@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { createAppContext } from "@/app/context";
-import { createRouter } from "@/api/router";
-import { createWebSocketHandler } from "@/api/ws/handler";
-import { WsHub } from "@/api/ws/hub";
+import { createAppContext } from "@/platform/app-context";
+import { createRouter } from "@/transports/http/router";
+import { createWebSocketHandler } from "@/transports/http/ws/handler";
+import { WsHub } from "@/transports/http/ws/hub";
 import { WS_PATH, type ServerFrame } from "@shared/ws";
-import { UserService } from "@/auth/users";
+import { UserService } from "@/contexts/access/infrastructure/auth/users";
 
 function waitForFrame(
   ws: WebSocket,

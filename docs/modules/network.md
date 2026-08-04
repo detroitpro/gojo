@@ -1,6 +1,6 @@
 # Module: network
 
-**Paths:** `src/config/instance.ts`, `src/api/network.ts`, `src/api/server.ts`, CLI `instance`
+**Paths:** `src/platform/config/instance.ts`, `src/transports/http/network.ts`, `src/transports/http/server.ts`, CLI `instance`
 
 ## Responsibility
 
@@ -35,7 +35,7 @@ loopback first, then set `publicBaseUrl` and reopen the bind.
 `resolveApiBaseUrl` prefers `${publicBaseUrl}/api/v1`. Loopback binds fall back to
 `http://127.0.0.1:${bindPort}/api/v1`. Never advertise `http://0.0.0.0:…`.
 
-## Edge hardening (`src/api/network.ts`)
+## Edge hardening (`src/transports/http/network.ts`)
 
 1. Peer IP from Bun `requestIP`; if peer ∈ expanded `trustedProxies`, honor forwarded headers.
 2. IP allowlist → 403 (except `GET /api/v1/health`).

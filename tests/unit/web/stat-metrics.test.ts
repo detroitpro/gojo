@@ -11,7 +11,7 @@ import {
   metricAriaLabel,
   metricDelta,
   metricTone,
-} from "../../../web/src/lib/stat-metrics";
+} from "../../../web/src/kernel/stat-metrics";
 
 describe("web/stat-metrics", () => {
   test("defines every catalog metric key", () => {

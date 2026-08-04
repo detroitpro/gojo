@@ -36,7 +36,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["packages/contracts/src/*"],
+      "@gojo/contracts": ["packages/contracts/src/index.ts"],
+      "@gojo/contracts/types": ["packages/contracts/types.ts"],
+      "@gojo/contracts/schemas": ["packages/contracts/schemas.ts"],
+      "@gojo/contracts/*": ["packages/contracts/src/*"]
     }
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*"],

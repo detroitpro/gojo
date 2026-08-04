@@ -69,7 +69,7 @@ echo "  API  http://127.0.0.1:7430  (bun --watch; serves built web/dist too)"
 echo "  UI   http://${WEB_HOST}:${WEB_PORT}  (Vite HMR — use this while editing the admin UI)"
 echo
 
-bun --watch src/cli/index.ts server start &
+bun --watch src/transports/cli/index.ts server start &
 PIDS+=($!)
 
 (

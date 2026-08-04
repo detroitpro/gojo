@@ -1,6 +1,6 @@
 # Module: sources
 
-**Path:** `src/sources/`
+**Path:** `src/contexts/work/`
 
 ## Responsibility
 

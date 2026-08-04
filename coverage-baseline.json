@@ -1,4 +1,4 @@
 {
   "minLineCoverage": 83.6,
-  "notes": "Ratchet upward as coverage improves. Measured ~83.68% lines on 2026-07-24 after failure-policy, validation abort, ids, instance config, and heal tests."
+  "notes": "Enforced by scripts/ci-check.sh via check-coverage-baseline.sh. Ratchet upward as coverage improves. Originally measured ~83.68% lines on 2026-07-24."
 }

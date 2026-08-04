@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { chromium, type Page } from "playwright";
 
 import { mintSessionToken } from "./mint-session";
-import { SESSION_COOKIE } from "../../src/api/http";
+import { SESSION_COOKIE } from "../../src/transports/http/http";
 
 const ROOT = join(import.meta.dir, "../..");
 const DEFAULT_BASE = "http://127.0.0.1:7430";

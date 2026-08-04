@@ -13,7 +13,7 @@ import {
   verificationStatus,
   workKindStatus,
   workResultStatus,
-} from "../../../web/src/lib/status-icons";
+} from "../../../web/src/kernel/status-icons";
 
 describe("web/status-icons", () => {
   test("maps every approval state", () => {
