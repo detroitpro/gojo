@@ -4,6 +4,35 @@
 import type { RunState } from "./run-states";
 import type { RunTrigger } from "./run-trigger";
 import type { SchedulingPolicy } from "./scheduling";
+import type { WorkStatusCompareWindow } from "./work";
+
+export interface DashboardPreviousStats {
+  runningRuns: number;
+  waitingRuns: number;
+  runs: number;
+  asOf: string;
+  compareWindow: WorkStatusCompareWindow;
+}
+
+/** `GET /api/v1/dashboard` inventory + live run pulse. */
+export interface DashboardStats {
+  projects: number;
+  /** Projects with `enabled: true`. UI shows `enabledProjects/projects`. */
+  enabledProjects: number;
+  agents: number;
+  /** Agents with `enabled: true`. UI shows `enabledAgents/agents`. */
+  enabledAgents: number;
+  schedules: number;
+  /** Schedules with `enabled: true`. UI shows `enabledSchedules/schedules`. */
+  enabledSchedules: number;
+  runs: number;
+  activeRuns: number;
+  runningRuns: number;
+  waitingRuns: number;
+  schedulingPolicy: SchedulingPolicy;
+  paused: boolean;
+  previous: DashboardPreviousStats | null;
+}
 
 export interface DashboardOverviewRun {
   id: string;

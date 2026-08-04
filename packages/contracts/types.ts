@@ -131,6 +131,8 @@ export type {
   DashboardOverviewAgent,
   DashboardOverviewProject,
   DashboardOverviewRun,
+  DashboardPreviousStats,
+  DashboardStats,
   QueueRunningItem,
   QueueSnapshot,
   QueueWaitingItem,

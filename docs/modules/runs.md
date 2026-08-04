@@ -122,6 +122,9 @@ The agent handoff is runtime-validated (`normalizeAgentHandoff` / `recoverAgentH
 
 Dashboard tiles drill into list endpoints (gateway, not dead ends):
 
+- `GET /api/v1/dashboard` — inventory pulse; Projects/Agents/Schedules tiles are
+  `enabled*/total` (`enabledProjects/projects`, `enabledAgents/agents`,
+  `enabledSchedules/schedules`).
 - `GET /api/v1/integrations?status=open|merged|committed` — optional `projectId`, `from`/`to` on run `created_at`. `committed` means `commit_sha IS NOT NULL` (no PR required).
 - `GET /api/v1/impact/items` — paged `run_impact_items` (excludes `rejected`) with optional `category`, `projectId`, `from`/`to`.
 - `GET /api/v1/runs` — optional `from`/`to` on `created_at` (plus existing `state` / `projectId` filters) for Succeeded-runs drill-down.

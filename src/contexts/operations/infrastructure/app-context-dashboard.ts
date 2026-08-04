@@ -33,9 +33,13 @@ export class AppContextDashboardReadModel implements DashboardReadModel {
   summary(compare: string): DashboardSummary {
     const ctx = this.ctx;
     const compareWindow = parseCompareWindow(compare);
-    const projects = ctx.repos.projects.list().length;
+    const projectRows = ctx.repos.projects.list();
+    const projects = projectRows.length;
+    const enabledProjects = projectRows.filter((project) => project.enabled).length;
     const agents = ctx.repos.agents.count();
+    const enabledAgents = ctx.repos.agents.countEnabled();
     const schedules = ctx.repos.schedules.count();
+    const enabledSchedules = ctx.repos.schedules.countEnabled();
     const runs = ctx.repos.runs.count();
     const activeRuns = ctx.repos.runs.listNonTerminal().length;
     const waitingRuns = ctx.repos.runs.listQueued().length;
@@ -69,8 +73,11 @@ export class AppContextDashboardReadModel implements DashboardReadModel {
 
     return {
       projects,
+      enabledProjects,
       agents,
+      enabledAgents,
       schedules,
+      enabledSchedules,
       runs,
       activeRuns,
       runningRuns,

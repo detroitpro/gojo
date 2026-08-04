@@ -11,6 +11,8 @@ export type {
   DashboardOverviewAgent,
   DashboardOverviewProject,
   DashboardOverviewRun,
+  DashboardPreviousStats,
+  DashboardStats,
   DirectoryEntry,
   DirectoryListing,
   DoctorToolCheck,
@@ -24,26 +26,3 @@ export type {
   SchedulingPolicy,
   WorkStatusCompareWindow,
 } from "@gojo/contracts/types";
-
-import type { SchedulingPolicy, WorkStatusCompareWindow } from "@gojo/contracts/types";
-
-export interface DashboardPreviousStats {
-  runningRuns: number;
-  waitingRuns: number;
-  runs: number;
-  asOf: string;
-  compareWindow: WorkStatusCompareWindow;
-}
-
-export interface DashboardStats {
-  projects: number;
-  agents: number;
-  schedules: number;
-  runs: number;
-  activeRuns: number;
-  runningRuns?: number;
-  waitingRuns?: number;
-  schedulingPolicy?: SchedulingPolicy;
-  paused: boolean;
-  previous?: DashboardPreviousStats | null;
-}

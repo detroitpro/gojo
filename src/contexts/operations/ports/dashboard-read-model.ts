@@ -3,9 +3,14 @@
  * `src/storage/*` for now; this port exists so the use case is transport-free.
  */
 export interface DashboardSummary {
+  /** Total registered projects. */
   projects: number;
+  /** Projects with `enabled: true` (schedules/work/API may enqueue). */
+  enabledProjects: number;
   agents: number;
+  enabledAgents: number;
   schedules: number;
+  enabledSchedules: number;
   runs: number;
   activeRuns: number;
   runningRuns: number;

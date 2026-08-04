@@ -105,6 +105,9 @@ export class Database {
         )
         .run();
 
+      // Only seed legacy `run:<id>` rows when the coordinator has not already
+      // created a ULID-owned work item for the same run. Re-running this on
+      // every migrate used to leave stuck twins that inflated Working/Queued.
       this.sqlite
         .query(
           `INSERT OR IGNORE INTO work_items (
@@ -144,7 +147,17 @@ export class Database {
             r.error_message, r.created_at,
             COALESCE(r.finished_at, r.started_at, r.created_at), r.started_at, r.finished_at
           FROM runs r
-          JOIN agents a ON a.id = r.agent_id`,
+          JOIN agents a ON a.id = r.agent_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM work_items w
+            WHERE w.kind = 'run'
+              AND w.native_key = r.id
+              AND w.id <> ('run:' || r.id)
+          )
+          AND (
+            r.work_item_id IS NULL
+            OR r.work_item_id = ('run:' || r.id)
+          )`,
         )
         .run();
 
@@ -152,7 +165,210 @@ export class Database {
         .query(
           `UPDATE runs
            SET work_item_id = 'run:' || id
-           WHERE work_item_id IS NULL`,
+           WHERE work_item_id IS NULL
+             AND EXISTS (
+               SELECT 1 FROM work_items w WHERE w.id = 'run:' || runs.id
+             )`,
+        )
+        .run();
+
+      // Remap delivers/heals links off superseded `run:` ids onto the canonical
+      // work item, then delete the orphan rows.
+      this.sqlite
+        .query(
+          `UPDATE work_links
+           SET source_work_item_id = (
+             SELECT r.work_item_id FROM runs r
+             WHERE work_links.source_work_item_id = 'run:' || r.id
+               AND r.work_item_id IS NOT NULL
+               AND r.work_item_id <> ('run:' || r.id)
+           )
+           WHERE EXISTS (
+             SELECT 1 FROM runs r
+             WHERE work_links.source_work_item_id = 'run:' || r.id
+               AND r.work_item_id IS NOT NULL
+               AND r.work_item_id <> ('run:' || r.id)
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM work_links existing
+             JOIN runs r ON work_links.source_work_item_id = 'run:' || r.id
+             WHERE existing.source_work_item_id = r.work_item_id
+               AND existing.target_work_item_id = work_links.target_work_item_id
+               AND existing.type = work_links.type
+           )`,
+        )
+        .run();
+      this.sqlite
+        .query(
+          `UPDATE work_links
+           SET target_work_item_id = (
+             SELECT r.work_item_id FROM runs r
+             WHERE work_links.target_work_item_id = 'run:' || r.id
+               AND r.work_item_id IS NOT NULL
+               AND r.work_item_id <> ('run:' || r.id)
+           )
+           WHERE EXISTS (
+             SELECT 1 FROM runs r
+             WHERE work_links.target_work_item_id = 'run:' || r.id
+               AND r.work_item_id IS NOT NULL
+               AND r.work_item_id <> ('run:' || r.id)
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM work_links existing
+             JOIN runs r ON work_links.target_work_item_id = 'run:' || r.id
+             WHERE existing.source_work_item_id = work_links.source_work_item_id
+               AND existing.target_work_item_id = r.work_item_id
+               AND existing.type = work_links.type
+           )`,
+        )
+        .run();
+      this.sqlite
+        .query(
+          `DELETE FROM work_links
+           WHERE source_work_item_id LIKE 'run:%'
+             AND EXISTS (
+               SELECT 1 FROM runs r
+               WHERE work_links.source_work_item_id = 'run:' || r.id
+                 AND r.work_item_id IS NOT NULL
+                 AND r.work_item_id <> ('run:' || r.id)
+             )`,
+        )
+        .run();
+      this.sqlite
+        .query(
+          `DELETE FROM work_links
+           WHERE target_work_item_id LIKE 'run:%'
+             AND EXISTS (
+               SELECT 1 FROM runs r
+               WHERE work_links.target_work_item_id = 'run:' || r.id
+                 AND r.work_item_id IS NOT NULL
+                 AND r.work_item_id <> ('run:' || r.id)
+             )`,
+        )
+        .run();
+      this.sqlite
+        .query(
+          `UPDATE run_context
+           SET work_item_id = (
+             SELECT r.work_item_id FROM runs r
+             WHERE r.id = run_context.run_id
+               AND r.work_item_id IS NOT NULL
+               AND r.work_item_id <> run_context.work_item_id
+           )
+           WHERE work_item_id LIKE 'run:%'
+             AND EXISTS (
+               SELECT 1 FROM runs r
+               WHERE r.id = run_context.run_id
+                 AND r.work_item_id IS NOT NULL
+                 AND r.work_item_id <> run_context.work_item_id
+             )`,
+        )
+        .run();
+      this.sqlite
+        .query(
+          `DELETE FROM work_items
+           WHERE id LIKE 'run:%'
+             AND kind = 'run'
+             AND EXISTS (
+               SELECT 1 FROM runs r
+               WHERE r.id = work_items.native_key
+                 AND r.work_item_id IS NOT NULL
+                 AND r.work_item_id <> work_items.id
+             )`,
+        )
+        .run();
+
+      // Canonical `run:` rows (no ULID twin) can still freeze mid-phase if a
+      // reopen stamped them while the run was active — resync from runs.
+      this.sqlite
+        .query(
+          `UPDATE work_items
+           SET
+             execution = CASE (
+               SELECT r.state FROM runs r WHERE r.id = work_items.native_key
+             )
+               WHEN 'Scheduled' THEN 'queued'
+               WHEN 'Queued' THEN 'queued'
+               WHEN 'Preparing' THEN 'preparing'
+               WHEN 'Running' THEN 'running'
+               WHEN 'Validating' THEN 'validating'
+               WHEN 'AwaitingApproval' THEN 'awaiting-approval'
+               WHEN 'Integrating' THEN 'integrating'
+               WHEN 'Reporting' THEN 'reporting'
+               ELSE 'terminal'
+             END,
+             outcome = CASE (
+               SELECT r.state FROM runs r WHERE r.id = work_items.native_key
+             )
+               WHEN 'Succeeded' THEN 'succeeded'
+               WHEN 'Failed' THEN 'failed'
+               WHEN 'TimedOut' THEN 'failed'
+               WHEN 'InfrastructureFailure' THEN 'failed'
+               WHEN 'Conflict' THEN 'failed'
+               WHEN 'Blocked' THEN 'failed'
+               WHEN 'Canceled' THEN 'canceled'
+               WHEN 'Skipped' THEN 'canceled'
+               WHEN 'Superseded' THEN 'canceled'
+               WHEN 'Abandoned' THEN 'canceled'
+               ELSE outcome
+             END,
+             attention = CASE (
+               SELECT r.state FROM runs r WHERE r.id = work_items.native_key
+             )
+               WHEN 'AwaitingApproval' THEN 'approval'
+               WHEN 'Blocked' THEN 'blocked'
+               WHEN 'Conflict' THEN 'blocked'
+               ELSE 'none'
+             END,
+             native_state = (
+               SELECT r.state FROM runs r WHERE r.id = work_items.native_key
+             ),
+             last_error = (
+               SELECT r.error_message FROM runs r WHERE r.id = work_items.native_key
+             ),
+             started_at = (
+               SELECT r.started_at FROM runs r WHERE r.id = work_items.native_key
+             ),
+             completed_at = (
+               SELECT r.finished_at FROM runs r WHERE r.id = work_items.native_key
+             ),
+             updated_at = COALESCE(
+               (SELECT r.finished_at FROM runs r WHERE r.id = work_items.native_key),
+               (SELECT r.started_at FROM runs r WHERE r.id = work_items.native_key),
+               updated_at
+             ),
+             observed_at = COALESCE(
+               (SELECT r.finished_at FROM runs r WHERE r.id = work_items.native_key),
+               (SELECT r.started_at FROM runs r WHERE r.id = work_items.native_key),
+               observed_at
+             )
+           WHERE id LIKE 'run:%'
+             AND kind = 'run'
+             AND EXISTS (
+               SELECT 1 FROM runs r
+               WHERE r.id = work_items.native_key
+                 AND (
+                   r.work_item_id IS NULL
+                   OR r.work_item_id = work_items.id
+                 )
+                 AND r.state IN (
+                   'Succeeded', 'Failed', 'TimedOut', 'InfrastructureFailure',
+                   'Conflict', 'Blocked', 'Canceled', 'Skipped', 'Superseded',
+                   'Abandoned'
+                 )
+                 AND (
+                   work_items.execution <> 'terminal'
+                   OR COALESCE(work_items.outcome, '') <> CASE r.state
+                     WHEN 'Succeeded' THEN 'succeeded'
+                     WHEN 'Canceled' THEN 'canceled'
+                     WHEN 'Skipped' THEN 'canceled'
+                     WHEN 'Superseded' THEN 'canceled'
+                     WHEN 'Abandoned' THEN 'canceled'
+                     ELSE 'failed'
+                   END
+                   OR COALESCE(work_items.completed_at, '') <> COALESCE(r.finished_at, '')
+                 )
+             )`,
         )
         .run();
 
@@ -266,11 +482,17 @@ export class Database {
             id, source_work_item_id, target_work_item_id, type, created_at
           )
           SELECT
-            'integration-link:' || i.id, 'run:' || i.run_id,
+            'integration-link:' || i.id,
+            COALESCE(r.work_item_id, 'run:' || i.run_id),
             'integration:' || i.id, 'delivers', i.created_at
           FROM run_integrations i
+          JOIN runs r ON r.id = i.run_id
           WHERE EXISTS (
             SELECT 1 FROM work_items w WHERE w.id = 'integration:' || i.id
+          )
+          AND EXISTS (
+            SELECT 1 FROM work_items w
+            WHERE w.id = COALESCE(r.work_item_id, 'run:' || i.run_id)
           )`,
         )
         .run();

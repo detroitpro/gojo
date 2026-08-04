@@ -62,8 +62,11 @@ const api = vi.hoisted(() => {
     probeSetupNeeded: vi.fn(async () => false),
     getDashboard: vi.fn(async () => ({
       projects: 0,
+      enabledProjects: 0,
       agents: 0,
+      enabledAgents: 0,
       schedules: 0,
+      enabledSchedules: 0,
       runs: 0,
       activeRuns: 0,
       runningRuns: 0,

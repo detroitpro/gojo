@@ -164,6 +164,7 @@ export interface AgentRepository {
   listByProject(projectId: string): Agent[];
   listAll(): Agent[];
   count(): number;
+  countEnabled(): number;
   update(id: string, input: UpdateAgentInput): Agent | null;
   delete(id: string): boolean;
 }
@@ -174,6 +175,7 @@ export interface ScheduleRepository {
   listByAgent(agentId: string): Schedule[];
   listDue(nowIso: string): Schedule[];
   count(): number;
+  countEnabled(): number;
   update(id: string, input: UpdateScheduleInput): Schedule | null;
   updateNextRun(
     id: string,
@@ -377,6 +379,13 @@ export function createCatalogRepositories(db: Database): {
       return row?.count ?? 0;
     },
 
+    countEnabled() {
+      const row = sqlite
+        .query<{ count: number }, []>("SELECT COUNT(*) as count FROM agents WHERE enabled = 1")
+        .get();
+      return row?.count ?? 0;
+    },
+
     update(id, input) {
       const existing = this.findById(id);
       if (!existing) {
@@ -506,6 +515,15 @@ export function createCatalogRepositories(db: Database): {
     count() {
       const row = sqlite
         .query<{ count: number }, []>("SELECT COUNT(*) as count FROM schedules")
+        .get();
+      return row?.count ?? 0;
+    },
+
+    countEnabled() {
+      const row = sqlite
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) as count FROM schedules WHERE enabled = 1",
+        )
         .get();
       return row?.count ?? 0;
     },

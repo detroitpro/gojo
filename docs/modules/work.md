@@ -70,6 +70,17 @@ ledger rows (the rollup pins answers already materialized); a bucket with no
 prior activity materializes on first read; `archived_at` is filtered but not yet
 written by any code path.
 
+### Legacy `run:<id>` backfill
+
+`Database.migrate()` still projects pre-ledger runs into Work for upgrades, but
+it must not create a second `run:<runId>` row when the coordinator already owns
+the run via a ULID `work_items` id (`runs.work_item_id`). On each migrate it
+also remaps `work_links` / `run_context` off superseded `run:` ids, deletes those
+orphans, and resyncs any remaining canonical `run:` row whose axes lag a
+terminal run state. Without that cleanup, Working/Queued status counts inflate
+while every real run is already Succeeded/Failed. After cleanup, rebuild rollups
+with `gojo work-status rebuild`.
+
 ## APIs and CLI
 
 - `GET /api/v1/projects/:id/work` (paged and filtered; `history=1` for completed / verified-terminal / operator-resolved, ordered by completion)

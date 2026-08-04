@@ -56,9 +56,12 @@ describe("DashboardView live refresh", () => {
   test("refreshes mounted metrics when store refresh bindings run", async () => {
     refreshBindings.length = 0;
     mocks.dashboard.mockResolvedValue({
-      projects: 1,
-      agents: 2,
-      schedules: 3,
+      projects: 2,
+      enabledProjects: 1,
+      agents: 4,
+      enabledAgents: 2,
+      schedules: 6,
+      enabledSchedules: 3,
       runs: 4,
       activeRuns: 1,
       runningRuns: 1,
@@ -88,11 +91,17 @@ describe("DashboardView live refresh", () => {
     });
     await flushPromises();
     expect(wrapper.find(".status-band-primary .value").text()).toBe("1");
+    expect(wrapper.text()).toContain("1/2");
+    expect(wrapper.text()).toContain("2/4");
+    expect(wrapper.text()).toContain("3/6");
 
     mocks.dashboard.mockResolvedValue({
-      projects: 1,
-      agents: 2,
-      schedules: 3,
+      projects: 2,
+      enabledProjects: 1,
+      agents: 4,
+      enabledAgents: 2,
+      schedules: 6,
+      enabledSchedules: 3,
       runs: 5,
       activeRuns: 5,
       runningRuns: 5,
@@ -105,6 +114,9 @@ describe("DashboardView live refresh", () => {
 
     expect(wrapper.find(".status-band-primary .value").text()).toBe("5");
     expect(wrapper.text()).toContain("2 waiting in queue");
+    expect(wrapper.text()).toContain("1/2");
+    expect(wrapper.text()).toContain("2/4");
+    expect(wrapper.text()).toContain("3/6");
     wrapper.unmount();
   });
 });

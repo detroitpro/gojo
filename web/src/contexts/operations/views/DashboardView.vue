@@ -42,8 +42,11 @@ const paused = ref(false);
 const runningRuns = ref(0);
 const waitingRuns = ref(0);
 const projectCount = ref(0);
+const enabledProjectCount = ref(0);
 const agentCount = ref(0);
+const enabledAgentCount = ref(0);
 const scheduleCount = ref(0);
+const enabledScheduleCount = ref(0);
 const runsTotal = ref(0);
 const dashboardPrevious = ref<DashboardPreviousStats | null>(null);
 const projects = ref<DashboardOverviewProject[]>([]);
@@ -91,6 +94,15 @@ function impactWindowQuery(base: Record<string, string> = {}): Record<string, st
 }
 
 const projectsRoute = computed(() => ({ name: "projects" as const }));
+const projectsDisplay = computed(
+  () => `${enabledProjectCount.value}/${projectCount.value}`,
+);
+const agentsDisplay = computed(
+  () => `${enabledAgentCount.value}/${agentCount.value}`,
+);
+const schedulesDisplay = computed(
+  () => `${enabledScheduleCount.value}/${scheduleCount.value}`,
+);
 const agentsRoute = computed(() => ({
   name: "agents" as const,
   query: withProjectQuery(),
@@ -170,8 +182,11 @@ async function load() {
     runningRuns.value = dashboard.runningRuns ?? 0;
     waitingRuns.value = dashboard.waitingRuns ?? 0;
     projectCount.value = dashboard.projects;
+    enabledProjectCount.value = dashboard.enabledProjects;
     agentCount.value = dashboard.agents;
+    enabledAgentCount.value = dashboard.enabledAgents;
     scheduleCount.value = dashboard.schedules;
+    enabledScheduleCount.value = dashboard.enabledSchedules;
     runsTotal.value = dashboard.runs;
     dashboardPrevious.value = dashboard.previous ?? null;
     projects.value = overview.projects;
@@ -282,13 +297,17 @@ bindStoreRefresh(operationsStore, loadImpact);
         <StatGrid class="status-band-secondary">
           <StatTile
             metric-key="dashboard.projects"
-            :value="projectCount"
+            :value="projectsDisplay"
             :to="projectsRoute"
           />
-          <StatTile metric-key="dashboard.agents" :value="agentCount" :to="agentsRoute" />
+          <StatTile
+            metric-key="dashboard.agents"
+            :value="agentsDisplay"
+            :to="agentsRoute"
+          />
           <StatTile
             metric-key="dashboard.schedules"
-            :value="scheduleCount"
+            :value="schedulesDisplay"
             :to="schedulesRoute"
           />
           <StatTile

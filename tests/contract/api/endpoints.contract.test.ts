@@ -115,8 +115,11 @@ describe("contract/api/endpoints", () => {
     const { status, body } = await getJson<
       ApiSuccessBody<{
         projects: number;
+        enabledProjects: number;
         agents: number;
+        enabledAgents: number;
         schedules: number;
+        enabledSchedules: number;
         runs: number;
         activeRuns: number;
         runningRuns: number;
@@ -128,8 +131,11 @@ describe("contract/api/endpoints", () => {
     >(h, "/api/v1/dashboard", { headers: h.authHeaders });
     expect(status).toBe(200);
     expect(body.data.projects).toBe(0);
+    expect(body.data.enabledProjects).toBe(0);
     expect(body.data.agents).toBe(0);
+    expect(body.data.enabledAgents).toBe(0);
     expect(body.data.schedules).toBe(0);
+    expect(body.data.enabledSchedules).toBe(0);
     expect(body.data.runs).toBe(0);
     expect(body.data.activeRuns).toBe(0);
     expect(body.data.runningRuns).toBe(0);

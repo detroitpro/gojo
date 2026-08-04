@@ -43,6 +43,197 @@ describe("storage/work-ledger", () => {
     db.close();
   });
 
+  test("backfill does not create run: orphans when a ULID work item already owns the run", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { repos, project } = seedProject(db);
+    const work = createWorkRepositories(db);
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: "self-heal",
+      prompt: "Heal",
+    });
+    const startedAt = "2026-08-03T10:30:00.000Z";
+    const run = repos.runs.create({
+      projectId: project.id,
+      agentId: agent.id,
+      idempotencyKey: "owned-run",
+      trigger: "schedule",
+      state: "Running",
+    });
+    repos.runs.update(run.id, { startedAt, state: "Running" });
+    const canonical = work.items.create({
+      projectId: project.id,
+      kind: "run",
+      nativeKey: run.id,
+      title: "self-heal",
+      execution: "running",
+      outcome: "pending",
+      provenance: "gojo-agent",
+      startedAt,
+    });
+    repos.runs.update(run.id, { workItemId: canonical.id });
+
+    // Simulate a mid-flight CLI/daemon reopen that used to insert a stuck twin.
+    db.migrate();
+
+    const twins = db
+      .connection()
+      .query<{ id: string; execution: string }, [string]>(
+        "SELECT id, execution FROM work_items WHERE kind = 'run' AND native_key = ?",
+      )
+      .all(run.id);
+    expect(twins).toEqual([{ id: canonical.id, execution: "running" }]);
+    expect(repos.runs.findById(run.id)?.workItemId).toBe(canonical.id);
+    db.close();
+  });
+
+  test("backfill removes superseded run: orphans and remaps delivers links", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { repos, project } = seedProject(db);
+    const work = createWorkRepositories(db);
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: "deps-rust",
+      prompt: "Bump",
+    });
+    const startedAt = "2026-07-31T07:02:00.000Z";
+    const finishedAt = "2026-07-31T07:03:00.000Z";
+    const run = repos.runs.create({
+      projectId: project.id,
+      agentId: agent.id,
+      idempotencyKey: "orphan-run",
+      trigger: "schedule",
+      state: "Succeeded",
+    });
+    repos.runs.update(run.id, {
+      state: "Succeeded",
+      startedAt,
+      finishedAt,
+    });
+    const canonical = work.items.create({
+      projectId: project.id,
+      kind: "run",
+      nativeKey: run.id,
+      title: "deps-rust",
+      execution: "terminal",
+      outcome: "succeeded",
+      provenance: "gojo-agent",
+      startedAt,
+      completedAt: finishedAt,
+    });
+    repos.runs.update(run.id, { workItemId: canonical.id });
+
+    const orphanId = `run:${run.id}`;
+    db.connection()
+      .query(
+        `INSERT INTO work_items (
+          id, project_id, source_id, kind, native_key, title, summary,
+          execution, delivery, outcome, attention, provenance, actor_name,
+          profile_id, labels_json, native_state, native_json, web_url,
+          observed_at, next_sync_at, sync_state, last_error, created_at,
+          updated_at, started_at, completed_at
+        ) VALUES (?, ?, NULL, 'run', ?, 'deps-rust', '', 'queued', 'none',
+          'pending', 'none', 'gojo-agent', NULL, NULL, '[]', 'Queued', '{}', NULL,
+          ?, NULL, 'current', NULL, ?, ?, NULL, NULL)`,
+      )
+      .run(orphanId, project.id, run.id, startedAt, run.createdAt, startedAt);
+    const pr = work.items.create({
+      projectId: project.id,
+      kind: "pull-request",
+      nativeKey: "9",
+      title: "Bump deps",
+      delivery: "merged",
+      outcome: "succeeded",
+      provenance: "gojo-agent",
+    });
+    work.links.create(orphanId, pr.id, "delivers");
+
+    expect(work.items.status(project.id).queued).toBe(1);
+
+    db.migrate();
+
+    expect(
+      db
+        .connection()
+        .query<{ n: number }, [string]>(
+          "SELECT COUNT(*) AS n FROM work_items WHERE id = ?",
+        )
+        .get(orphanId)?.n,
+    ).toBe(0);
+    expect(work.links.listByWorkItem(canonical.id)).toContainEqual(
+      expect.objectContaining({ targetWorkItemId: pr.id, type: "delivers" }),
+    );
+    expect(work.items.status(project.id)).toMatchObject({
+      working: 0,
+      queued: 0,
+    });
+    db.close();
+  });
+
+  test("backfill syncs canonical run: work items when the run is already terminal", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const { repos, project } = seedProject(db);
+    const agent = repos.agents.create({
+      projectId: project.id,
+      name: "activity-digest",
+      prompt: "Digest",
+    });
+    const startedAt = "2026-08-01T12:00:00.000Z";
+    const finishedAt = "2026-08-01T12:01:00.000Z";
+    const run = repos.runs.create({
+      projectId: project.id,
+      agentId: agent.id,
+      idempotencyKey: "stuck-canonical",
+      trigger: "schedule",
+      state: "Succeeded",
+    });
+    repos.runs.update(run.id, {
+      state: "Succeeded",
+      startedAt,
+      finishedAt,
+    });
+    const orphanId = `run:${run.id}`;
+    db.connection()
+      .query(
+        `INSERT INTO work_items (
+          id, project_id, source_id, kind, native_key, title, summary,
+          execution, delivery, outcome, attention, provenance, actor_name,
+          profile_id, labels_json, native_state, native_json, web_url,
+          observed_at, next_sync_at, sync_state, last_error, created_at,
+          updated_at, started_at, completed_at
+        ) VALUES (?, ?, NULL, 'run', ?, 'activity-digest', '', 'running', 'none',
+          'pending', 'none', 'gojo-agent', NULL, NULL, '[]', 'Running', '{}', NULL,
+          ?, NULL, 'current', NULL, ?, ?, ?, NULL)`,
+      )
+      .run(
+        orphanId,
+        project.id,
+        run.id,
+        startedAt,
+        run.createdAt,
+        startedAt,
+        startedAt,
+      );
+    repos.runs.update(run.id, { workItemId: orphanId });
+
+    const work = createWorkRepositories(db);
+    expect(work.items.status(project.id).working).toBe(1);
+
+    db.migrate();
+
+    const synced = work.items.findById(orphanId);
+    expect(synced).toMatchObject({
+      execution: "terminal",
+      outcome: "succeeded",
+      completedAt: finishedAt,
+    });
+    expect(work.items.status(project.id).working).toBe(0);
+    db.close();
+  });
+
   test("migration backfills existing runs and integrations into linked work", () => {
     const db = Database.open(":memory:");
     db.migrate();

@@ -47,6 +47,7 @@ export interface AgentRepository {
   listByProject(projectId: string): Agent[];
   listAll(): Agent[];
   count(): number;
+  countEnabled(): number;
   update(id: string, input: UpdateAgentInput): Agent | null;
   delete(id: string): boolean;
 }
@@ -57,6 +58,7 @@ export interface ScheduleRepository {
   listByAgent(agentId: string): Schedule[];
   listDue(nowIso: string): Schedule[];
   count(): number;
+  countEnabled(): number;
   update(id: string, input: UpdateScheduleInput): Schedule | null;
   updateNextRun(
     id: string,
