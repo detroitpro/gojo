@@ -49,7 +49,7 @@ import {
   GenericWebhookIngestor,
   SourceAdapterRegistry,
   SourceSyncService,
-} from "@/contexts/work/sources";
+} from "@/contexts/work/contract";
 import { WorkspaceManager } from "@/contexts/execution/infrastructure/workspace/manager";
 import { WorkTriggerService } from "@/contexts/work/application/triggers/service";
 import { ApprovalService } from "@/contexts/delivery/application/approval-service";

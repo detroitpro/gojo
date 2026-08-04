@@ -14,7 +14,6 @@ finds the same inventory.
 | R8 | [`src/platform/app-context.ts`](../../src/platform/app-context.ts) still wires subsystems; `composeModules` exists | Thin wrapper over `composeModules` / delete god bag | Process boot uses composition root only |
 | R20 | Legacy handlers still living in `src/transports/http/router.ts` (if any survived R2 migration) | Context use cases | Contract tests cover them via the registry |
 | S1 | [`src/platform/create-repositories.ts`](../../src/platform/create-repositories.ts) transitional `Repositories` bag + callers of `ctx.repos` | Typed ports on AppContext / module runtimes | No `createRepositories` / `Repositories` bag; each context wired via its ports |
-| S2 | [`src/contexts/work/sources.ts`](../../src/contexts/work/sources.ts) compatibility barrel | `@/contexts/work/contract` | No importers of `@/contexts/work/sources` |
 
 ## Retired (deleted or absorbed in layout reorg)
 
@@ -40,6 +39,7 @@ finds the same inventory.
 | R12 | Per-view `useLiveRefresh` in `web/src/contexts/**` | `bindStoreRefresh` + Pinia `invalidate` via `LiveStoreBridge` |
 | W5 | Pinia refresh stubs / incomplete stores | Full `bindRefresh` / `invalidate` per context store |
 | W6 | Monolithic Settings / ProjectDetail / RunDetail views | Context `components/` section panels + thin route shells |
+| S2 | `src/contexts/work/sources.ts` compatibility barrel | `@/contexts/work/contract` |
 
 ## Follow-ups from this migration
 

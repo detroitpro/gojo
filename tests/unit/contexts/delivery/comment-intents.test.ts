@@ -11,7 +11,7 @@ import {
   Database
 } from "@/infrastructure/persistence";
 import { createWorkRepositories } from "@/contexts/work/contract";
-import type { SourceAdapter } from "@/contexts/work/sources";
+import type { SourceAdapter } from "@/contexts/work/contract";
 
 describe("forge comment control intents", () => {
   let db: Database | null = null;
