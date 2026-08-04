@@ -793,6 +793,42 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         }
         break;
       }
+      case "enable": {
+        const id = parsed.positional[0];
+        if (!id) {
+          die("usage: gojo project enable <id>", format);
+        }
+        const handled = await tryDispatchCliUseCase(
+          getUseCaseRegistry(),
+          ctx,
+          "project",
+          "enable",
+          { id },
+          format,
+        );
+        if (!handled) {
+          die("unknown project command: enable", format, ExitCode.Usage);
+        }
+        break;
+      }
+      case "disable": {
+        const id = parsed.positional[0];
+        if (!id) {
+          die("usage: gojo project disable <id>", format);
+        }
+        const handled = await tryDispatchCliUseCase(
+          getUseCaseRegistry(),
+          ctx,
+          "project",
+          "disable",
+          { id },
+          format,
+        );
+        if (!handled) {
+          die("unknown project command: disable", format, ExitCode.Usage);
+        }
+        break;
+      }
       case "doctor": {
         const id = parsed.positional[0];
         if (!id) {
