@@ -21,7 +21,7 @@ Digest agents ([`.gojo/agents/activity-digest.md`](../.gojo/agents/activity-dige
 
 ## Runtime assembly
 
-Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/runs/prompt-assembly.ts`](../src/runs/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
+Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/contexts/execution/prompt-assembly.ts`](../src/contexts/execution/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
 
 ## Canonical verify (validation ↔ CI)
 
@@ -35,7 +35,7 @@ Each project surface should expose **one locally-runnable check command** (`yarn
 
 ## Handoff → PR body
 
-`pull-request` integration opens a PR via [`src/integration/integrator.ts`](../src/integration/integrator.ts) using [`buildPrDescription`](../src/integration/pr-description.ts) and the agent’s `integration.prTool` (`gh` or `tea`; default `gh`). Adapters must not run the PR CLI themselves; they write `.gojo/handoff.json`.
+`pull-request` integration opens a PR via [`src/contexts/execution/infrastructure/integration/integrator.ts`](../src/contexts/execution/infrastructure/integration/integrator.ts) using [`buildPrDescription`](../src/contexts/execution/infrastructure/integration/pr-description.ts) and the agent’s `integration.prTool` (`gh` or `tea`; default `gh`). Adapters must not run the PR CLI themselves; they write `.gojo/handoff.json`.
 
 - Short `summary` (title material) and `decisions` for the structured fallback body.
 - For verbose PR descriptions, add `assets` with `role: "pr-body"` and a workspace-relative `path` (e.g. `.gojo/assets/pr-body.md`), and optionally `role: "pr-title"`. gojo prefers those assets when creating the PR and copies them under `$GOJO_HOME/artifacts/<runId>/assets/`.
@@ -46,7 +46,7 @@ The handoff and its assets are run output, not repository content — the integr
 
 ## Handoff schema v3 (`subjectActions`)
 
-`normalizeAgentHandoff` / `recoverAgentHandoffReport` accept schema v1–v3 ([`src/shared/handoff.ts`](../src/shared/handoff.ts)). v3 adds optional `subjectActions` (`addLabels`, `removeLabels`, `comment`, `verdict`) for issue-driven triage/review agents: the platform validates and applies forge mutations with managed credentials instead of injecting write tokens into adapter processes.
+`normalizeAgentHandoff` / `recoverAgentHandoffReport` accept schema v1–v3 ([`packages/contracts/src/handoff.ts`](../packages/contracts/src/handoff.ts)). v3 adds optional `subjectActions` (`addLabels`, `removeLabels`, `comment`, `verdict`) for issue-driven triage/review agents: the platform validates and applies forge mutations with managed credentials instead of injecting write tokens into adapter processes.
 
 Review/merge policy uses `recoverAgentHandoffReport`: invalid optional `impact` / `assets` / `prUrl` are dropped so a valid `subjectActions.verdict` still applies (invented impact categories must not escalate a passed review). Golden example: [`.gojo/examples/handoff.review.v3.json`](../.gojo/examples/handoff.review.v3.json). Cursor skill: [`.cursor/skills/gojo-handoff/SKILL.md`](../.cursor/skills/gojo-handoff/SKILL.md).
 

@@ -1,12 +1,18 @@
 # Module: scheduler
 
-**Path:** `src/scheduler/`
+**Paths:** `src/contexts/scheduling/`, pilot context `src/contexts/scheduling/`
 
 ## Responsibility
 
 Evaluate cron/schedules, overlap policies, missed-run catch-up, retries, and auto-disable. **Enqueue runs only**—do not execute adapters or admit work.
 
-Cron fire times are **suggested starts** (`notBeforeAt`). The run **dispatcher** (`src/runs/dispatcher.ts`) admits queued runs under the instance scheduling policy. Scheduled runs also get `expiresAt` = the next cron occurrence after the fire time; if they never get a slot, the dispatcher marks them `Skipped`.
+Overlap / missed-run pure policies and instance scheduling-policy use cases live in
+`src/contexts/scheduling/` (see [`docs/architecture/context-template.md`](../architecture/context-template.md)).
+HTTP/CLI for instance scheduling policy go through the platform registry
+(`scheduling.policy.get` / `scheduling.policy.set`). Removable leftovers:
+[`removal-backlog.md`](../architecture/removal-backlog.md).
+
+Cron fire times are **suggested starts** (`notBeforeAt`). The run **dispatcher** (`src/contexts/execution/dispatcher.ts`) admits queued runs under the instance scheduling policy. Scheduled runs also get `expiresAt` = the next cron occurrence after the fire time; if they never get a slot, the dispatcher marks them `Skipped`.
 
 Includes cron helpers, disable/outcome recording, and policy checks.
 

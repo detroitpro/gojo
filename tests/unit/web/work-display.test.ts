@@ -8,8 +8,8 @@ import {
   workResultLabel,
   workSecondaryLabel,
   workAgentProfileLabel,
-} from "../../../web/src/lib/work-display";
-import type { WorkItem } from "../../../web/src/types";
+} from "../../../web/src/kernel/work-display";
+import type { WorkItem } from "@gojo/contracts/types";
 
 function item(overrides: Partial<WorkItem> = {}): WorkItem {
   return {

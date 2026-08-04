@@ -3,9 +3,9 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAppContext } from "@/app/context";
-import { createRouter } from "@/api/router";
-import { commitAll, configLocal, initRepo } from "@/git/git";
+import { createAppContext } from "@/platform/app-context";
+import { createRouter } from "@/transports/http/router";
+import { commitAll, configLocal, initRepo } from "@/infrastructure/git/git";
 import { RunState } from "@shared/run-states";
 
 describe("integration/api-flow", () => {

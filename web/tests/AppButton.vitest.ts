@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, test } from "vitest";
 import { Play } from "lucide-vue-next";
 
-import AppButton from "@/components/AppButton.vue";
+import AppButton from "@/ui/AppButton.vue";
 
 describe("AppButton", () => {
   test("renders icon, label, and primary variant", () => {

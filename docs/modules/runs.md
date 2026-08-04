@@ -1,6 +1,6 @@
 # Module: runs
 
-**Path:** `src/runs/`
+**Path:** `src/contexts/execution/`
 
 ## Responsibility
 
@@ -22,7 +22,7 @@ Primary type: run **coordinator** (`coordinator.ts`). Related:
 
 ## Admission / dispatcher
 
-All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`src/shared/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
+All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`packages/contracts/src/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
 
 - Defaults: `maxConcurrentRuns: 2`, `maxConcurrentRunsPerProject: 1`, `minStartIntervalMs: 30000`, `maxLoadPerCpu: 1.0`
 - Priority: manual/api/web `10`, source work `15`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
@@ -30,7 +30,7 @@ All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enq
 
 ## List APIs (paging + sort)
 
-Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/storage/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `src/shared/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
+Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/infrastructure/persistence/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `packages/contracts/src/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
 
 Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged|committed` (and `gojo integration list --open|--merged|--committed`) as a compatibility/specialist view. Project summaries and the command center derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
 
@@ -94,7 +94,7 @@ pull-request work item (schedule-driven maintain agents). After a fix round
 reassigns `approval.runId`, the reconciler still finds the approval by PR URL /
 subject so subsequent green checks enqueue review and further red checks can
 consume remaining `fixRounds`. Cap / missing branch / missing subject escalate
-with distinct reasons (`src/control/fix-rounds.ts`). Check failure feedback is
+with distinct reasons (`src/contexts/delivery/fix-rounds.ts`). Check failure feedback is
 formatted as name + details + URL for the agent (`formatChecksSummary`).
 
 The platform alone revalidates live checks and invokes the source adapter merge

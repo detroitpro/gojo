@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatRelativeNextRun } from "../../../web/src/lib/schedule-format";
+import { formatRelativeNextRun } from "../../../web/src/kernel/schedule-format";
 
 describe("formatRelativeNextRun", () => {
   const now = Date.parse("2026-01-01T12:00:00.000Z");

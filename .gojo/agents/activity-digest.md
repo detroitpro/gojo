@@ -50,7 +50,7 @@ group of them to a count, do not label anything "maintenance" and move on.
 
 - **Lead with what changed and what it now does**, as a short headline.
 - **Name the technical surface.** Which module, endpoint, table, column, CLI command, or component
-  moved — `src/notifications/dispatcher.ts`, `POST /api/runs`, the `tasks.notifications_json`
+  moved — `src/contexts/notifications/dispatcher.ts`, `POST /api/runs`, the `tasks.notifications_json`
   column. Be specific enough that the reader could go look at it.
 - **Give the mechanism when it explains the impact:** a schema migration, a new column, a changed
   default, an added index, a boundary that moved between layers, a guard added before an effect.

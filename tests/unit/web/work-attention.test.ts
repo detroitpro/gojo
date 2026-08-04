@@ -5,8 +5,8 @@ import {
   attentionPrimaryAction,
   attentionReasonLabel,
   workExternalHref,
-} from "../../../web/src/lib/work-attention";
-import type { WorkItem } from "../../../web/src/types";
+} from "../../../web/src/kernel/work-attention";
+import type { WorkItem } from "@gojo/contracts/types";
 
 function item(overrides: Partial<WorkItem> = {}): WorkItem {
   return {

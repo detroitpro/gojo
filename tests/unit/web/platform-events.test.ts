@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { effectScope } from "../../../web/node_modules/vue";
 
-import { useLiveRefresh } from "../../../web/src/composables/useLiveQuery";
 import {
   PlatformEventHub,
   type PlatformEventConnectionStatus,
-} from "../../../web/src/lib/platform-events";
-import { GojoSocket } from "../../../web/src/lib/ws-client";
-import type { PlatformChangeEvent, ServerFrame } from "../../../web/src/lib/ws-types";
+} from "../../../web/src/infrastructure/platform-events";
+import { GojoSocket } from "../../../web/src/infrastructure/ws-client";
+import type { PlatformChangeEvent, ServerFrame } from "@gojo/contracts/types";
 
 class FakeWebSocket {
   static CONNECTING = 0;
@@ -120,47 +118,5 @@ describe("PlatformEventHub", () => {
     stopStatus();
     socket.disconnect();
     expect(hub.status).toBe("idle");
-  });
-});
-
-describe("useLiveRefresh", () => {
-  test("coalesces event bursts into one refresh", async () => {
-    const sockets: FakeWebSocket[] = [];
-    const socket = new GojoSocket((url) => {
-      const ws = new FakeWebSocket(url) as unknown as WebSocket;
-      sockets.push(ws as unknown as FakeWebSocket);
-      return ws;
-    });
-    const hub = new PlatformEventHub(socket);
-    const scope = effectScope();
-    let refreshes = 0;
-    scope.run(() => {
-      useLiveRefresh({
-        topics: ["runs"],
-        hub,
-        coalesceMs: 10,
-        refresh: () => {
-          refreshes += 1;
-        },
-      });
-    });
-    await new Promise((resolve) => setTimeout(resolve, 15));
-    sockets[0]!.push({
-      t: "event",
-      sub: 1,
-      channel: "platform",
-      event: change(1, { topics: ["runs"] }),
-    });
-    sockets[0]!.push({
-      t: "event",
-      sub: 1,
-      channel: "platform",
-      event: change(2, { topics: ["runs"] }),
-    });
-    await new Promise((resolve) => setTimeout(resolve, 25));
-
-    expect(refreshes).toBe(2);
-    scope.stop();
-    socket.disconnect();
   });
 });

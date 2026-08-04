@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, test } from "vitest";
 
-import PageHeader from "@/components/PageHeader.vue";
+import PageHeader from "@/ui/PageHeader.vue";
 
 function router() {
   return createRouter({

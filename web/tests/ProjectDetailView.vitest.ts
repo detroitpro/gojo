@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, test, vi } from "vitest";
 
+const refreshBindings = vi.hoisted(
+  () => [] as Array<() => void | Promise<void>>,
+);
+
 const mocks = vi.hoisted(() => ({
-  live: [] as Array<{ topics: string[]; refresh: () => Promise<void> | void }>,
   getProject: vi.fn(),
   getProjectDoctor: vi.fn(),
   listAgents: vi.fn(),
@@ -17,31 +21,39 @@ const mocks = vi.hoisted(() => ({
   resolveWorkItem: vi.fn(),
 }));
 
-vi.mock("@/composables/useLiveQuery", () => ({
-  useLiveRefresh(options: { topics: string[]; refresh: () => Promise<void> | void }) {
-    mocks.live.push(options);
-    void options.refresh();
-    return { status: { value: "connected" }, refresh: options.refresh };
+vi.mock("@/platform/bind-store-refresh", () => ({
+  bindStoreRefresh(_store: unknown, refresh: () => Promise<void> | void) {
+    refreshBindings.push(refresh);
+    void refresh();
   },
 }));
 
-vi.mock("@/api", () => ({
+vi.mock("@/contexts/catalog/contract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/contexts/catalog/contract")>()),
   getProject: mocks.getProject,
-  getProjectDoctor: mocks.getProjectDoctor,
   listAgents: mocks.listAgents,
-  listProjectWork: mocks.listProjectWork,
-  getProjectWorkStatus: mocks.getProjectWorkStatus,
-  listProjectSources: mocks.listProjectSources,
-  getDashboardImpact: mocks.getDashboardImpact,
-  recheckWorkItem: mocks.recheckWorkItem,
-  refreshProjectSource: mocks.refreshProjectSource,
-  resolveWorkItem: mocks.resolveWorkItem,
   syncProject: vi.fn(),
   deleteProject: vi.fn(),
   runAgent: vi.fn(),
 }));
 
-import ProjectDetailView from "@/views/ProjectDetailView.vue";
+vi.mock("@/contexts/operations/contract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/contexts/operations/contract")>()),
+  getProjectDoctor: mocks.getProjectDoctor,
+  getDashboardImpact: mocks.getDashboardImpact,
+}));
+
+vi.mock("@/contexts/work/contract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/contexts/work/contract")>()),
+  listProjectWork: mocks.listProjectWork,
+  getProjectWorkStatus: mocks.getProjectWorkStatus,
+  listProjectSources: mocks.listProjectSources,
+  recheckWorkItem: mocks.recheckWorkItem,
+  refreshProjectSource: mocks.refreshProjectSource,
+  resolveWorkItem: mocks.resolveWorkItem,
+}));
+
+import ProjectDetailView from "@/contexts/catalog/views/ProjectDetailView.vue";
 
 function workItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,7 +90,7 @@ function workItem(overrides: Record<string, unknown> = {}) {
 }
 
 async function mountView() {
-  mocks.live.length = 0;
+  refreshBindings.length = 0;
   mocks.getProject.mockResolvedValue({
     id: "project-1",
     name: "quotient-server",
@@ -186,7 +198,12 @@ async function mountView() {
   });
   await router.push("/projects/project-1");
   await router.isReady();
-  const wrapper = mount(ProjectDetailView, { global: { plugins: [router] } });
+  const wrapper = mount(ProjectDetailView, {
+    global: {
+      plugins: [createPinia(), router],
+      stubs: { ProjectImpactSection: true },
+    },
+  });
   await flushPromises();
   return wrapper;
 }

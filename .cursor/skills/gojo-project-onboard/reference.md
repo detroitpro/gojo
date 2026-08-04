@@ -1,6 +1,6 @@
 # gojo-project-onboard reference
 
-Condensed contract for scaffolding. Source of truth: `src/shared/manifest.ts`, dogfood `gojo.yaml`, and `docs/agent-prompts.md` / site agent-prompts page.
+Condensed contract for scaffolding. Source of truth: `packages/contracts/src/manifest.ts`, dogfood `gojo.yaml`, and `docs/agent-prompts.md` / site agent-prompts page.
 
 ## Vocabulary
 

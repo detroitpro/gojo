@@ -1,7 +1,7 @@
 # Module: platform events
 
-**Paths:** `src/shared/events.ts`, `src/shared/ws.ts`, `src/events/`, `src/api/ws/`,
-`src/storage/platform-events.ts`, `web/src/lib/ws-client.ts`,
+**Paths:** `packages/contracts/src/events.ts`, `packages/contracts/src/ws.ts`, `src/platform/events/`, `src/transports/http/ws/`,
+`src/infrastructure/persistence/platform-events.ts`, `web/src/lib/ws-client.ts`,
 `web/src/lib/platform-events.ts`, `web/src/composables/useLiveQuery.ts`
 
 ## Responsibility
@@ -31,8 +31,8 @@ replayed in order after daemon restarts.
 Topics are read-model boundaries: `dashboard`, `overview`, `impact`, `queue`,
 `runs`, `agents`, `schedules`, `projects`, `work`, and `sources`.
 
-Wire types live in `src/shared/ws.ts`. Inbound frames are validated with Zod in
-`src/api/ws/schema.ts`.
+Wire types live in `packages/contracts/src/ws.ts`. Inbound frames are validated with Zod in
+`src/transports/http/ws/schema.ts`.
 
 ## Producers
 

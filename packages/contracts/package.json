@@ -1,0 +1,17 @@
+{
+  "name": "@gojo/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./types.ts",
+    "./schemas": "./schemas.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "cronstrue": "3.24.0",
+    "ulid": "^3.0.2",
+    "zod": "^3.25.76"
+  }
+}

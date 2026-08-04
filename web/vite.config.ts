@@ -16,7 +16,11 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "@theme": fileURLToPath(new URL("../theme", import.meta.url)),
-      "@shared": fileURLToPath(new URL("../src/shared", import.meta.url)),
+      "@shared": fileURLToPath(new URL("../packages/contracts/src", import.meta.url)),
+      "@gojo/contracts/types": fileURLToPath(
+        new URL("../packages/contracts/types.ts", import.meta.url),
+      ),
+      "@gojo/contracts": fileURLToPath(new URL("../packages/contracts/src", import.meta.url)),
     },
   },
   server: {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isVerifiedActiveDelivery } from "../../../web/src/lib/work-visibility";
+import { isVerifiedActiveDelivery } from "../../../web/src/kernel/work-visibility";
 
 describe("isVerifiedActiveDelivery", () => {
   test("includes only source-current active delivery work", () => {

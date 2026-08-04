@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { GojoSocket } from "../../../web/src/lib/ws-client";
-import type { ServerFrame } from "../../../web/src/lib/ws-types";
+import { GojoSocket } from "../../../web/src/infrastructure/ws-client";
+import type { ServerFrame } from "@gojo/contracts/types";
 
 class FakeWebSocket {
   static OPEN = 1;

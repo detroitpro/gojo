@@ -1,6 +1,16 @@
 # Module: adapters (agent adapters)
 
-**Path:** `src/agents/`
+**Paths:** `src/infrastructure/agent-adapters/`, `src/contexts/catalog/` (registry/list/test surfacing)
+
+> The **catalog** bounded context (`src/contexts/catalog/`) wraps
+> `src/infrastructure/agent-adapters/`, `src/infrastructure/filesystem/`, project sync, and the enable/disable
+> mutations. HTTP + CLI callers hit registered use cases
+> (`catalog.adapters.{list,test}`, `catalog.filesystem.browse`,
+> `catalog.projects.{list,get,delete,sync}`,
+> `catalog.agents.{list,get,enable,disable}`,
+> `catalog.schedules.{list,enable,disable,pause}`,
+> `catalog.impact.items.list`). `syncProject` emits `project.synced` **exactly
+> once** so CLI and API no longer duplicate platform events.
 
 ## Vocabulary
 
@@ -8,7 +18,7 @@
 - **Profile** — an entry in a project manifest's `profiles:` map that binds an adapter to a model, timeout, and permissions. Referenced from an agent (work unit) as `profile: <name>`.
 - **Agent** — the work-unit definition (was "task" pre-rebrand). Lives under `agents:` in `gojo.yaml`; prompts live under `.gojo/agents/`.
 
-The folder stays `src/agents/` for now because it holds the adapter *implementations*.
+The folder stays `src/infrastructure/agent-adapters/` for now because it holds the adapter *implementations*.
 
 ## Responsibility
 

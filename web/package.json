@@ -12,7 +12,9 @@
     "test:build": "bun run build && test -f dist/index.html"
   },
   "dependencies": {
+    "@gojo/contracts": "file:../packages/contracts",
     "lucide-vue-next": "^1.0.0",
+    "pinia": "^4.0.2",
     "uplot": "^1.6.32",
     "vue": "^3.5.40",
     "vue-router": "^4.6.4"

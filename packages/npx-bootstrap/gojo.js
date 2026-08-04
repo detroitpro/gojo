@@ -48,8 +48,8 @@ function resolveCliSource() {
 
   const repoRoot = join(dirname(selfPath), "../..");
   const candidates = [
-    join(repoRoot, "src/cli/index.ts"),
-    join(dirname(selfPath), "../../src/cli/index.ts"),
+    join(repoRoot, "src/transports/cli/index.ts"),
+    join(dirname(selfPath), "../../src/transports/cli/index.ts"),
   ];
 
   for (const candidate of candidates) {
@@ -70,7 +70,7 @@ Options:
   2. Build the native binary: bun run build
      Ensure bin/gojo is on your PATH
   3. Point directly at a binary: export GOJO_BIN=/path/to/gojo
-  4. Point at source entry: export GOJO_CLI_SOURCE=/path/to/gojo/src/cli/index.ts
+  4. Point at source entry: export GOJO_CLI_SOURCE=/path/to/gojo/src/transports/cli/index.ts
 
 For development from this repo:
   bun run gojo --help

@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, test } from "vitest";
 
-import StatTile from "@/components/StatTile.vue";
+import StatTile from "@/ui/StatTile.vue";
 
 describe("StatTile", () => {
   test("renders catalog label, value, and delta", () => {

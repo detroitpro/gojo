@@ -1,6 +1,6 @@
 # Module: control
 
-**Path:** `src/control/`
+**Path:** `src/contexts/delivery/`
 
 ## Responsibility
 

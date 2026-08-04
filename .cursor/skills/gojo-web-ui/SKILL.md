@@ -10,19 +10,27 @@ description: >-
 # gojo web UI
 
 Ops UI under `web/` is Vue 3 + Vue Router + Vite + custom CSS in
-`web/src/styles.css`. Icons are **lucide-vue-next** via `UiIcon`. Do not add
+`web/src/ui/styles.css`. Icons are **lucide-vue-next** via `UiIcon`. Do not add
 shadcn, Tailwind, Phosphor, or Heroicons for this app.
+
+Layout follows `web/src/README.md` (kernel / contexts / platform / infrastructure / ui).
+Context views bind live refresh through Pinia stores — see `bind-store-refresh.ts`
+and `LiveStoreBridge.vue`; do not add per-view `useLiveRefresh` in contexts.
 
 ## Stack
 
 | Piece | Location |
 |-------|----------|
-| Views | `web/src/views/` |
-| Shared components | `web/src/components/` |
-| Status badges | `web/src/components/status/` |
-| Status maps | `web/src/lib/status-icons.ts` |
-| Display helpers | `web/src/lib/work-display.ts`, `work-attention.ts` |
-| Tokens / chrome | `web/src/styles.css` (`.btn*`, `.badge*`) |
+| Views | `web/src/contexts/<bc>/views/` |
+| Context components | `web/src/contexts/<bc>/components/` |
+| Shared components | `web/src/ui/` |
+| Status badges | `web/src/ui/status/` |
+| Status maps | `web/src/kernel/status-icons.ts` |
+| Display helpers | `web/src/kernel/work-display.ts`, `work-attention.ts` |
+| Tokens / chrome | `web/src/ui/styles.css` (`.btn*`, `.badge*`) |
+| Composables | `web/src/platform/useLiveQuery.ts`, `bind-store-refresh.ts`, etc. |
+| Pinia stores | `web/src/contexts/<bc>/store.ts` (export via `contract.ts`) |
+| API / types | `web/src/contexts/<bc>/contract.ts` |
 | Alias | `@/*` → `web/src/*` (see `web/tsconfig.app.json`) |
 
 Finish UI changes with `cd web && bun run typecheck && bun run test`, and
@@ -30,7 +38,7 @@ Finish UI changes with `cd web && bun run typecheck && bun run test`, and
 
 ## Buttons — always `AppButton`
 
-Use [`web/src/components/AppButton.vue`](web/src/components/AppButton.vue). Do
+Use [`web/src/ui/AppButton.vue`](web/src/ui/AppButton.vue). Do
 **not** hand-roll `<button class="btn …">` for product actions.
 
 ```vue
@@ -64,10 +72,10 @@ Sizes: `sm` in headers/tables/toolbars; `md` (default) in dialogs/forms.
   (`Syncing…`, `Enqueueing…`, `Saving…`, `Working…`). Loading swaps in a spinner,
   sets `aria-busy`, and disables the control.
 - Links: pass `to` (RouterLink) or `href` (+ `target` as needed). Same variants.
-- Confirm dialogs: [`ConfirmDialog.vue`](web/src/components/ConfirmDialog.vue)
+- Confirm dialogs: [`ConfirmDialog.vue`](web/src/ui/ConfirmDialog.vue)
   supports `:busy` / `busy-label` — wire parent busy refs so confirms cannot
   double-submit.
-- Row overflow menus: [`ActionMenu.vue`](web/src/components/ActionMenu.vue)
+- Row overflow menus: [`ActionMenu.vue`](web/src/ui/ActionMenu.vue)
   (⋯ via Lucide). Prefer menus for secondary row actions; keep one primary CTA
   in the cell when needed.
 
@@ -97,7 +105,7 @@ status components, not bare uppercase text.
 | Provenance | `ProvenanceBadge` |
 | Health / paused chip | `HealthBadge`, or `StatusBadge` + `pausedStatus()` |
 
-Maps live in [`web/src/lib/status-icons.ts`](web/src/lib/status-icons.ts)
+Maps live in [`web/src/kernel/status-icons.ts`](web/src/kernel/status-icons.ts)
 (`{ icon, tone, label }`). Extend the map when adding an enum value; add a unit
 case in `tests/unit/web/status-icons.test.ts`.
 
@@ -110,8 +118,8 @@ case in `tests/unit/web/status-icons.test.ts`.
 - Tones reuse `.badge-*` (`success`, `failed`, `warn`, `running`, `queued`,
   `neutral`) — do not invent parallel color classes.
 
-Primitive: [`StatusBadge.vue`](web/src/components/StatusBadge.vue) +
-[`UiIcon.vue`](web/src/components/UiIcon.vue).
+Primitive: [`StatusBadge.vue`](web/src/ui/StatusBadge.vue) +
+[`UiIcon.vue`](web/src/ui/UiIcon.vue).
 
 ## Layout / chrome patterns
 
@@ -126,8 +134,8 @@ Primitive: [`StatusBadge.vue`](web/src/components/StatusBadge.vue) +
 
 ## Metric tiles
 
-Use [`StatGrid.vue`](web/src/components/StatGrid.vue) + [`StatTile.vue`](web/src/components/StatTile.vue)
-with keys from [`web/src/lib/stat-metrics.ts`](web/src/lib/stat-metrics.ts). Do **not** hand-roll
+Use [`StatGrid.vue`](web/src/ui/StatGrid.vue) + [`StatTile.vue`](web/src/ui/StatTile.vue)
+with keys from [`web/src/kernel/stat-metrics.ts`](web/src/kernel/stat-metrics.ts). Do **not** hand-roll
 `.stat` / `.stats-row` markup for product metrics.
 
 - Layout: header row is icon (left) + title (right), count underneath, trend at the bottom.

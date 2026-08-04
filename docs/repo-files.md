@@ -2,7 +2,7 @@
 
 A gojo-managed repository contains two kinds of gojo files, and they have
 opposite version-control rules. The contract lives in one place —
-[`src/shared/workspace-files.ts`](../src/shared/workspace-files.ts) — and is
+[`packages/contracts/src/workspace-files.ts`](../packages/contracts/src/workspace-files.ts) — and is
 consumed by the integrator, the coordinator, and `project doctor`.
 
 ## Registration files — commit these

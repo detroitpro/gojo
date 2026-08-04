@@ -22,7 +22,7 @@ accounting, and review/merge policy.
 
 Prefer **v3** whenever the agent may set labels/comments/verdicts. v2/v3 fields
 can coexist. Golden review example: [`.gojo/examples/handoff.review.v3.json`](../../../.gojo/examples/handoff.review.v3.json).
-Schema source: [`src/shared/handoff.ts`](../../../src/shared/handoff.ts).
+Schema source: [`packages/contracts/src/handoff.ts`](../../../packages/contracts/src/handoff.ts).
 
 ## Required fields
 

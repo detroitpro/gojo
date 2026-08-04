@@ -1,0 +1,23 @@
+# Default — platform maintainers review cross-cutting changes.
+* @detroitpro
+
+# Bounded-context ownership (update as teams form).
+/src/contexts/access/ @detroitpro
+/src/contexts/catalog/ @detroitpro
+/src/contexts/scheduling/ @detroitpro
+/src/contexts/execution/ @detroitpro
+/src/contexts/delivery/ @detroitpro
+/src/contexts/work/ @detroitpro
+/src/contexts/notifications/ @detroitpro
+/src/contexts/operations/ @detroitpro
+
+# Shared contracts and kernel — high blast radius.
+/packages/contracts/ @detroitpro
+/src/kernel/ @detroitpro
+/src/platform/ @detroitpro
+/src/infrastructure/ @detroitpro
+/src/transports/ @detroitpro
+
+# Behavior locks — do not weaken without explicit review.
+/tests/contract/ @detroitpro
+/web/tests/views-smoke.vitest.ts @detroitpro

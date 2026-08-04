@@ -24,7 +24,7 @@ Read-only ops triage of the **running** gojo instance. Report findings to the us
 - Prefer the **systemd user unit** over a local `make dev` process.
 - Unit: `gojo.service` (`systemctl --user`).
 - Home: `GOJO_HOME` from the unit (usually `~/.gojo`). DB: `$GOJO_HOME/data/gojo.db`.
-- CLI: `gojo` on PATH, or `bun run src/cli/index.ts` from the repo with `--home` matching the unit.
+- CLI: `gojo` on PATH, or `bun run src/transports/cli/index.ts` from the repo with `--home` matching the unit.
 - If both systemd and `make dev` are up, say so — they may hit different ports/homes; triage the one the user means (default: systemd).
 
 ## Workflow

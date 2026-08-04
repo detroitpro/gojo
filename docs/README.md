@@ -13,7 +13,10 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 ## Index
 
 - [Architecture overview](./architecture/overview.md)
+- [Decision: layered modular monolith](./architecture/decision-layered-modular-monolith.md) — why this shape
 - [Module boundaries](./architecture/boundaries.md)
+- [Context template](./architecture/context-template.md)
+- [Removal backlog](./architecture/removal-backlog.md) — superseded code (`rg '@removal'`)
 - [Agent prompts](./agent-prompts.md) — constrained limits for `.gojo/agents/`
 - [Repository files](./repo-files.md) — which `.gojo/` files are committed vs generated
 - Modules:
