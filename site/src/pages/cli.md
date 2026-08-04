@@ -59,7 +59,7 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | Command | Purpose |
 | --- | --- |
 | `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
-| `gojo project list\|inspect\|sync\|doctor\|remove` | Manage projects |
+| `gojo project list\|inspect\|sync\|enable\|disable\|doctor\|remove` | Manage projects (`enable`/`disable` are runtime gates; Sync reapplies YAML) |
 | `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …] [--history]` | Paged work ledger (first page; filters match API enums; `--history` includes completed/verified-terminal items) |
 | `gojo project status <id>` | Canonical work counts (verified open, stale, attention, …) |
 | `gojo project sources <id>` | Connected sources and sync health |

@@ -705,6 +705,8 @@ async function runWorkCommand(
       .listByProject(workItem.projectId)
       .find((candidate) => candidate.id === agentRef || candidate.name === agentRef);
     if (!agent?.enabled) die("enabled agent not found", format, ExitCode.NotFound);
+    const claimProject = ctx.repos.projects.findById(agent.projectId);
+    if (!claimProject?.enabled) die("project is disabled", format, ExitCode.Conflict);
     const run = await ctx.coordinator.enqueueRun({
       projectId: workItem.projectId,
       agentId: agent.id,

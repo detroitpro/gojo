@@ -54,6 +54,10 @@ export class SqliteCatalogStore implements CatalogStore {
     return toProjectDetailRow(this.db, project);
   }
 
+  updateProjectEnabled(id: string, enabled: boolean): Project | null {
+    return this.repos.projects.update(id, { enabled });
+  }
+
   deleteProject(id: string): boolean {
     return this.repos.projects.delete(id);
   }

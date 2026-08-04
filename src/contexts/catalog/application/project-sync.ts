@@ -59,6 +59,7 @@ export function syncProjectFromManifest(
     manifestJson: JSON.stringify(manifest),
     defaultBranch: manifest.project.defaultBranch,
     name: manifest.project.name,
+    enabled: manifest.project.enabled,
   });
 
   const profileIds = new Map<string, string>();
@@ -107,6 +108,7 @@ export function syncProjectFromManifest(
         notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
         environmentJson,
         triggerJson,
+        enabled: agentConfig.enabled,
       });
       agentIds.set(name, existing.id);
     } else {
@@ -123,6 +125,7 @@ export function syncProjectFromManifest(
         notificationsJson: JSON.stringify(agentConfig.notifications ?? {}),
         environmentJson,
         triggerJson,
+        enabled: agentConfig.enabled,
       });
       agentIds.set(name, created.id);
     }
@@ -158,7 +161,7 @@ export function syncProjectFromManifest(
         repos.schedules.update(existing.id, {
           cronExpr: scheduleConfig.cron,
           timezone: scheduleConfig.timezone,
-          enabled: true,
+          enabled: scheduleConfig.enabled,
           nextRunAt,
           disableAfter,
         });
@@ -168,7 +171,7 @@ export function syncProjectFromManifest(
           name,
           cronExpr: scheduleConfig.cron,
           timezone: scheduleConfig.timezone,
-          enabled: true,
+          enabled: scheduleConfig.enabled,
           nextRunAt,
           disableAfter,
         });

@@ -110,6 +110,9 @@ describe('ProjectManifest', () => {
     expect(manifest.version).toBe(1);
     expect(manifest.project.name).toBe('billing-service');
     expect(manifest.project.defaultBranch).toBe('main');
+    expect(manifest.project.enabled).toBe(true);
+    expect(manifest.agents['dependency-maintenance']?.enabled).toBe(true);
+    expect(manifest.schedules?.['dependency-maintenance']?.enabled).toBe(true);
     expect(manifest.repository.syncBeforeRun).toBe(true);
     expect(manifest.instructions?.files).toEqual(['AGENTS.md', 'docs/architecture.md']);
     expect(manifest.profiles['maintenance']?.adapter).toBe('claude-code');
@@ -439,6 +442,36 @@ describe('ProjectManifest', () => {
     delete (legacy as Record<string, unknown>)['profiles'];
     const result = ProjectManifestSchema.safeParse(legacy);
     expect(result.success).toBe(false);
+  });
+
+  test('accepts enabled: false on project, agent, and schedule', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const schedules = parsed['schedules'] as Record<string, Record<string, unknown>>;
+    const manifest = parseProjectManifest({
+      ...parsed,
+      project: {
+        ...(parsed['project'] as Record<string, unknown>),
+        enabled: false,
+      },
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          enabled: false,
+        },
+      },
+      schedules: {
+        ...schedules,
+        'dependency-maintenance': {
+          ...schedules['dependency-maintenance'],
+          enabled: false,
+        },
+      },
+    });
+    expect(manifest.project.enabled).toBe(false);
+    expect(manifest.agents['dependency-maintenance']?.enabled).toBe(false);
+    expect(manifest.schedules?.['dependency-maintenance']?.enabled).toBe(false);
   });
 
   test('accepts optional agent environment with file, include, and required', () => {

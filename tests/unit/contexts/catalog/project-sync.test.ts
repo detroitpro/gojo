@@ -9,13 +9,32 @@ import {
   Database
 } from '@/infrastructure/persistence';
 
-function writeGojoYaml(repoPath: string, schedulesYaml: string): void {
+function writeGojoYaml(
+  repoPath: string,
+  schedulesYaml: string,
+  options: {
+    projectEnabled?: boolean;
+    agentEnabled?: boolean;
+    scheduleEnabled?: boolean;
+  } = {},
+): void {
+  const projectEnabledLine =
+    options.projectEnabled === undefined ? '' : `\n  enabled: ${options.projectEnabled}`;
+  const agentEnabledLine =
+    options.agentEnabled === undefined ? '' : `\n    enabled: ${options.agentEnabled}`;
+  let schedulesBlock = schedulesYaml;
+  if (options.scheduleEnabled !== undefined && schedulesYaml.includes('timezone:')) {
+    schedulesBlock = schedulesYaml.replace(
+      /timezone: ([^\n]+)/,
+      `timezone: $1\n    enabled: ${options.scheduleEnabled}`,
+    );
+  }
   writeFileSync(
     join(repoPath, 'gojo.yaml'),
     `version: 1
 project:
   name: sync-demo
-  defaultBranch: main
+  defaultBranch: main${projectEnabledLine}
 repository:
   remote: origin
   syncBeforeRun: true
@@ -37,11 +56,11 @@ agents:
     description: Demo agent
     profile: cursor
     promptFile: .gojo/agents/demo.md
-    validationProfile: handoff
+    validationProfile: handoff${agentEnabledLine}
     integration:
       mode: commit-only
       targetBranch: main
-${schedulesYaml}
+${schedulesBlock}
 `,
     'utf8',
   );
@@ -272,6 +291,55 @@ agents:
       trustedActors: ['detroitpro'],
       maxOpenClaims: 1,
     });
+  });
+
+  test('applies project/agent/schedule enabled from YAML (manifest wins over ops)', () => {
+    const path = createRepoWithManifest(`schedules:
+  demo:
+    agent: demo
+    cron: "0 6 * * *"
+    timezone: UTC
+`);
+    const repos = createRepositories(openDb());
+    const project = repos.projects.create({ name: 'sync-demo', repoPath: path });
+    syncProjectFromManifest(repos, project);
+
+    expect(repos.projects.findById(project.id)?.enabled).toBe(true);
+    const agent = repos.agents.listByProject(project.id).find((a) => a.name === 'demo')!;
+    expect(agent.enabled).toBe(true);
+    expect(repos.schedules.listByAgent(agent.id)[0]?.enabled).toBe(true);
+
+    repos.projects.update(project.id, { enabled: false });
+    repos.agents.update(agent.id, { enabled: false });
+    repos.schedules.update(repos.schedules.listByAgent(agent.id)[0]!.id, { enabled: false });
+
+    writeGojoYaml(path, `schedules:
+  demo:
+    agent: demo
+    cron: "0 6 * * *"
+    timezone: UTC
+`);
+    syncProjectFromManifest(repos, project);
+
+    expect(repos.projects.findById(project.id)?.enabled).toBe(true);
+    expect(repos.agents.findById(agent.id)?.enabled).toBe(true);
+    expect(repos.schedules.listByAgent(agent.id)[0]?.enabled).toBe(true);
+
+    writeGojoYaml(
+      path,
+      `schedules:
+  demo:
+    agent: demo
+    cron: "0 6 * * *"
+    timezone: UTC
+`,
+      { projectEnabled: false, agentEnabled: false, scheduleEnabled: false },
+    );
+    syncProjectFromManifest(repos, project);
+
+    expect(repos.projects.findById(project.id)?.enabled).toBe(false);
+    expect(repos.agents.findById(agent.id)?.enabled).toBe(false);
+    expect(repos.schedules.listByAgent(agent.id)[0]?.enabled).toBe(false);
   });
 
   test('does not resurrect disabled schedule names absent from manifest', () => {

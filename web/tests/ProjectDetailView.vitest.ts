@@ -98,6 +98,7 @@ async function mountView() {
     remoteUrl: "https://github.com/quotient-research/quotient-server.git",
     defaultBranch: "main",
     manifestJson: null,
+    enabled: true,
     agentCount: 0,
     enabledAgentCount: 0,
     scheduleCount: 0,

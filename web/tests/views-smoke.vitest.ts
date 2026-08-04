@@ -29,6 +29,7 @@ const api = vi.hoisted(() => {
     remoteUrl: null,
     defaultBranch: "main",
     manifestJson: "{}",
+    enabled: true,
     agentCount: 0,
     enabledAgentCount: 0,
     scheduleCount: 0,
