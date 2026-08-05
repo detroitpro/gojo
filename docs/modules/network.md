@@ -50,6 +50,7 @@ loopback first, then set `publicBaseUrl` and reopen the bind.
 |---------|----------|
 | `GET/PATCH /api/v1/instance` | Network fields; PATCH may return `restartRequired: true` |
 | `gojo instance show` / `set` | Read/write `instance.yaml`; restart guidance |
+| `gojo instance sweep-worktrees` | Reclaim orphan `$GOJO_HOME/worktrees` dirs (also on daemon start) |
 | Settings → Network | Same fields + Cloudflare preset |
 | `gojo server doctor` | `network` block + warnings (https without trusted proxies, LAN cleartext, unresolved apiBaseUrl) |
 

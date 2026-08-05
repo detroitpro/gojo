@@ -6,6 +6,8 @@ description: See what agents, people, bots, and external systems are working on 
 
 ## One command center, every source
 
+Project detail uses sub-pages (**Overview**, **History**, **Impact**, **Health**, **Configuration**). The questions below map primarily to **Overview** and **History**.
+
 A project page is organized around four questions:
 
 - **Now:** What is running or queued, who owns it, and what is the current focus?
