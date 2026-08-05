@@ -267,9 +267,21 @@ export const IngestSourceWebhook = defineCommand<
   name: "work.sources.ingestWebhook",
   input: IngestSourceWebhookInputSchema,
   output: z.any(),
+  http: {
+    method: "POST",
+    path: "/api/v1/sources/{sourceId}/events",
+    successStatus: 202,
+    rawBody: true,
+  },
   async handle(input, runtime) {
-    const result = await runtime.work.ingestSourceWebhook(input);
-    return { ok: true, value: result } as const;
+    try {
+      const result = await runtime.work.ingestSourceWebhook(input);
+      return { ok: true, value: result } as const;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const { useCaseFailure } = await import("@/platform/errors");
+      return useCaseFailure("validation_error", message, 400);
+    }
   },
 });
 

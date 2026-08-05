@@ -31,14 +31,21 @@ export function openApiPathsFromRegistry(
       },
     };
     if (useCase.kind === "command" && method !== "GET") {
-      op["requestBody"] = {
-        required: true,
-        content: {
-          "application/json": {
-            schema: { type: "object" },
-          },
-        },
-      };
+      op["requestBody"] = useCase.http?.rawBody
+        ? {
+            required: true,
+            content: {
+              "text/plain": { schema: { type: "string" } },
+            },
+          }
+        : {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { type: "object" },
+              },
+            },
+          };
     }
     item[method.toLowerCase()] = op;
     paths[path] = item;

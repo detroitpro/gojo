@@ -34,6 +34,9 @@ export async function tryDispatchRegisteredRoute(
     for (const [key, value] of url.searchParams.entries()) {
       bodyInput[key] = value;
     }
+  } else if (useCase.http?.rawBody) {
+    bodyInput["body"] = await request.text();
+    bodyInput["signature"] = request.headers.get("X-Gojo-Signature") ?? "";
   } else {
     const parsed = await readJsonBody<unknown>(request);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {

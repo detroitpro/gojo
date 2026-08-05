@@ -438,21 +438,7 @@ export async function handleApiRequest(
   }
 
   // JSON API business routes are served by the use-case registry (see src/contexts/*/use-cases.ts).
-  // Transport leftovers below: Set-Cookie auth (above), HTML approve-link (above), raw webhooks, static.
-
-  // Raw webhook body + signature header — stays in transport (not JSON use-case input).
-  const sourceEventsMatch = pathname.match(/^\/api\/v1\/sources\/([^/]+)\/events$/);
-  if (method === "POST" && sourceEventsMatch) {
-    try {
-      const sourceId = sourceEventsMatch[1] ?? "";
-      const body = await request.text();
-      const signature = request.headers.get("X-Gojo-Signature") ?? "";
-      return success(await ctx.sourceWebhooks.ingest(sourceId, body, signature), 202);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return failure("validation_error", message, 400);
-    }
-  }
+  // Transport leftovers below: Set-Cookie auth (above), HTML approve-link (above), static.
 
   if (pathname.startsWith("/api/")) {
     return failure("not_found", "Route not found", 404);
