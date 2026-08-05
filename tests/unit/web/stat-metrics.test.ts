@@ -23,6 +23,8 @@ describe("web/stat-metrics", () => {
       "work.verifiedOpen",
       "work.issuesOpen",
       "work.issuesClosed",
+      "work.prsMerged",
+      "work.prsClosed",
       "runs.running",
       "runs.waiting",
       "impact.mergedRuns",

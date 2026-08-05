@@ -34,6 +34,8 @@ type ImpactRange = "30d" | "90d" | "all";
 const impact = ref<DashboardImpact | null>(null);
 const impactRange = ref<ImpactRange>("30d");
 const closedIssuesInPeriod = ref<number | null>(null);
+const mergedPrsInPeriod = ref<number | null>(null);
+const closedPrsInPeriod = ref<number | null>(null);
 const openIssuesTotal = ref<number | null>(null);
 const openPullRequestsTotal = ref<number | null>(null);
 const openIntegrationPrs = ref<number | null>(null);
@@ -108,6 +110,12 @@ const closedIssuesHref = computed(() =>
 const openPullsHref = computed(() =>
   forgeWorkListUrl(props.repositoryWebUrl, "pull-request", "open"),
 );
+const mergedPullsHref = computed(() =>
+  forgeWorkListUrl(props.repositoryWebUrl, "pull-request", "merged"),
+);
+const closedPullsHref = computed(() =>
+  forgeWorkListUrl(props.repositoryWebUrl, "pull-request", "closed"),
+);
 
 /** Prefer in-app Integrations when gojo has open run PRs; otherwise forge. */
 const openPrsLink = computed(() => {
@@ -120,11 +128,24 @@ const openPrsLink = computed(() => {
   return { to: undefined, href: undefined };
 });
 
+/** Prefer in-app Integrations for merged run PRs in window; otherwise forge. */
+const mergedPrsLink = computed(() => {
+  if ((mergedPrsInPeriod.value ?? 0) > 0) {
+    return { to: mergedRoute.value, href: undefined as string | undefined };
+  }
+  if (mergedPullsHref.value) {
+    return { to: undefined, href: mergedPullsHref.value };
+  }
+  return { to: undefined, href: undefined };
+});
+
 const showBacklog = computed(
   () =>
     Boolean(props.repositoryWebUrl) ||
     displayOpenIssues.value > 0 ||
     (closedIssuesInPeriod.value ?? 0) > 0 ||
+    (mergedPrsInPeriod.value ?? 0) > 0 ||
+    (closedPrsInPeriod.value ?? 0) > 0 ||
     openIssuesTotal.value != null,
 );
 
@@ -144,7 +165,14 @@ const hasAnySignal = computed(() => {
 async function loadBacklogCounts() {
   const from = impact.value?.window.from ?? undefined;
   const to = impact.value?.window.to ?? undefined;
-  const [closed, openIssues, openPrs, integrations] = await Promise.all([
+  const [
+    closedIssues,
+    openIssues,
+    openPrs,
+    mergedPrs,
+    closedPrs,
+    openIntegrations,
+  ] = await Promise.all([
     listProjectWork(props.projectId, {
       limit: 1,
       offset: 0,
@@ -166,6 +194,24 @@ async function loadBacklogCounts() {
       kind: "pull-request",
       delivery: "open",
     }).catch(() => null),
+    listProjectWork(props.projectId, {
+      limit: 1,
+      offset: 0,
+      history: true,
+      kind: "pull-request",
+      delivery: "merged",
+      from,
+      to,
+    }).catch(() => null),
+    listProjectWork(props.projectId, {
+      limit: 1,
+      offset: 0,
+      history: true,
+      kind: "pull-request",
+      delivery: "closed",
+      from,
+      to,
+    }).catch(() => null),
     listIntegrations({
       limit: 1,
       offset: 0,
@@ -173,10 +219,12 @@ async function loadBacklogCounts() {
       projectId: props.projectId,
     }).catch(() => null),
   ]);
-  closedIssuesInPeriod.value = closed?.total ?? null;
+  closedIssuesInPeriod.value = closedIssues?.total ?? null;
   openIssuesTotal.value = openIssues?.total ?? null;
   openPullRequestsTotal.value = openPrs?.total ?? null;
-  openIntegrationPrs.value = integrations?.total ?? null;
+  mergedPrsInPeriod.value = mergedPrs?.total ?? null;
+  closedPrsInPeriod.value = closedPrs?.total ?? null;
+  openIntegrationPrs.value = openIntegrations?.total ?? null;
 }
 
 async function loadImpact() {
@@ -191,6 +239,8 @@ async function loadImpact() {
   } catch (err) {
     impact.value = null;
     closedIssuesInPeriod.value = null;
+    mergedPrsInPeriod.value = null;
+    closedPrsInPeriod.value = null;
     openIssuesTotal.value = null;
     openPullRequestsTotal.value = null;
     openIntegrationPrs.value = null;
@@ -205,6 +255,8 @@ watch(
   () => {
     impact.value = null;
     closedIssuesInPeriod.value = null;
+    mergedPrsInPeriod.value = null;
+    closedPrsInPeriod.value = null;
     openIssuesTotal.value = null;
     openPullRequestsTotal.value = null;
     openIntegrationPrs.value = null;
@@ -259,7 +311,7 @@ bindStoreRefresh(operationsStore, loadImpact);
           >
             <h3 id="impact-backlog">Backlog</h3>
             <p class="muted text-sm impact-category__note">
-              Open counts are current inventory. Closed issues are counted in
+              Open counts are current inventory. Closed issues and closed/merged PRs are counted in
               {{ rangeLabel.toLowerCase() }}. Links open the forge list when gojo has no in-app
               browser for that kind.
             </p>
@@ -279,6 +331,17 @@ bindStoreRefresh(operationsStore, loadImpact);
                 :value="displayOpenPrs"
                 :to="openPrsLink.to"
                 :href="openPrsLink.href"
+              />
+              <StatTile
+                metric-key="work.prsMerged"
+                :value="mergedPrsInPeriod ?? 0"
+                :to="mergedPrsLink.to"
+                :href="mergedPrsLink.href"
+              />
+              <StatTile
+                metric-key="work.prsClosed"
+                :value="closedPrsInPeriod ?? 0"
+                :href="closedPullsHref ?? undefined"
               />
             </div>
           </section>

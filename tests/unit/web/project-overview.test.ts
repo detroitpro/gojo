@@ -204,6 +204,8 @@ describe("project-overview helpers", () => {
     expect(forgeWorkListUrl(repo, "issue", "open")).toBe(`${repo}/issues`);
     expect(forgeWorkListUrl(repo, "issue", "closed")).toContain("is%3Aissue");
     expect(forgeWorkListUrl(repo, "pull-request", "open")).toBe(`${repo}/pulls`);
+    expect(forgeWorkListUrl(repo, "pull-request", "merged")).toContain("is%3Amerged");
+    expect(forgeWorkListUrl(repo, "pull-request", "closed")).toContain("is%3Aunmerged");
     expect(forgeWorkListUrl("https://gitlab.com/acme/app", "issue", "open")).toContain(
       "/-/issues?state=opened",
     );

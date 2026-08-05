@@ -198,6 +198,8 @@ type MountOptions = {
   closedIssuesTotal?: number;
   openPullRequestsTotal?: number;
   openIntegrationPrs?: number;
+  mergedPrsTotal?: number;
+  closedPrsTotal?: number;
 };
 
 async function mountOverview(options: MountOptions = {}) {
@@ -268,6 +270,22 @@ async function mountOverview(options: MountOptions = {}) {
         return Promise.resolve({
           items: [],
           total: options.openPullRequestsTotal ?? 0,
+          limit: 1,
+          offset: 0,
+        });
+      }
+      if (query?.kind === "pull-request" && query.delivery === "merged") {
+        return Promise.resolve({
+          items: [],
+          total: options.mergedPrsTotal ?? 0,
+          limit: 1,
+          offset: 0,
+        });
+      }
+      if (query?.kind === "pull-request" && query.delivery === "closed") {
+        return Promise.resolve({
+          items: [],
+          total: options.closedPrsTotal ?? 0,
           limit: 1,
           offset: 0,
         });
@@ -432,6 +450,8 @@ describe("ProjectOverviewView briefing", () => {
     expect(wrapper.text()).toContain("Open issues");
     expect(wrapper.text()).toContain("Closed issues");
     expect(wrapper.text()).toContain("PRs open");
+    expect(wrapper.text()).toContain("PRs merged");
+    expect(wrapper.text()).toContain("PRs closed");
     // Delivery holds merged / merge rate / succeeded runs / commits together.
     expect(wrapper.text()).toContain("Delivery");
     expect(wrapper.text()).not.toContain("Reliability");
@@ -490,6 +510,8 @@ describe("ProjectOverviewView briefing", () => {
     const { wrapper } = await mountOverview();
     expect(wrapper.text()).toContain("Backlog");
     expect(wrapper.text()).toContain("PRs open");
+    expect(wrapper.text()).toContain("PRs merged");
+    expect(wrapper.text()).toContain("PRs closed");
     expect(wrapper.text()).toContain("Delivery");
     expect(wrapper.text()).not.toContain("Needs Attention: 0");
     wrapper.unmount();

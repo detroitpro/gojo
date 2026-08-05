@@ -462,7 +462,7 @@ export function repositoryBrowseUrl(raw: string | null | undefined): string | nu
 export function forgeWorkListUrl(
   repoWebUrl: string | null | undefined,
   kind: "issue" | "pull-request",
-  state: "open" | "closed",
+  state: "open" | "closed" | "merged",
 ): string | null {
   const base = repositoryBrowseUrl(repoWebUrl);
   if (!base) return null;
@@ -476,13 +476,14 @@ export function forgeWorkListUrl(
 
   if (host === "github.com" || host.endsWith(".github.com")) {
     if (kind === "issue") {
-      return state === "open"
-        ? `${base}/issues`
-        : `${base}/issues?q=${encodeURIComponent("is:issue is:closed")}`;
+      if (state === "open") return `${base}/issues`;
+      return `${base}/issues?q=${encodeURIComponent("is:issue is:closed")}`;
     }
-    return state === "open"
-      ? `${base}/pulls`
-      : `${base}/pulls?q=${encodeURIComponent("is:pr is:closed")}`;
+    if (state === "open") return `${base}/pulls`;
+    if (state === "merged") {
+      return `${base}/pulls?q=${encodeURIComponent("is:pr is:merged")}`;
+    }
+    return `${base}/pulls?q=${encodeURIComponent("is:pr is:closed is:unmerged")}`;
   }
 
   if (host.includes("gitlab")) {
@@ -491,9 +492,9 @@ export function forgeWorkListUrl(
         ? `${base}/-/issues?state=opened`
         : `${base}/-/issues?state=closed`;
     }
-    return state === "open"
-      ? `${base}/-/merge_requests?state=opened`
-      : `${base}/-/merge_requests?state=closed`;
+    if (state === "open") return `${base}/-/merge_requests?state=opened`;
+    if (state === "merged") return `${base}/-/merge_requests?state=merged`;
+    return `${base}/-/merge_requests?state=closed`;
   }
 
   return null;
