@@ -92,7 +92,11 @@ const rootProps = computed(() => {
     return { to: props.to };
   }
   if (props.href) {
-    return { href: props.href };
+    return {
+      href: props.href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+    };
   }
   return {};
 });

@@ -21,6 +21,8 @@ describe("web/stat-metrics", () => {
       "work.needsAttention",
       "work.staleOpen",
       "work.verifiedOpen",
+      "work.issuesOpen",
+      "work.issuesClosed",
       "runs.running",
       "runs.waiting",
       "impact.mergedRuns",

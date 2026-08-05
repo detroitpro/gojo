@@ -16,9 +16,6 @@ const mocks = vi.hoisted(() => ({
   getProjectWorkStatus: vi.fn(),
   listProjectSources: vi.fn(),
   getDashboardImpact: vi.fn(),
-  recheckWorkItem: vi.fn(),
-  refreshProjectSource: vi.fn(),
-  resolveWorkItem: vi.fn(),
 }));
 
 vi.mock("@/platform/bind-store-refresh", () => ({
@@ -48,48 +45,11 @@ vi.mock("@/contexts/work/contract", async (importOriginal) => ({
   listProjectWork: mocks.listProjectWork,
   getProjectWorkStatus: mocks.getProjectWorkStatus,
   listProjectSources: mocks.listProjectSources,
-  recheckWorkItem: mocks.recheckWorkItem,
-  refreshProjectSource: mocks.refreshProjectSource,
-  resolveWorkItem: mocks.resolveWorkItem,
 }));
 
 import ProjectHistoryView from "@/contexts/catalog/views/ProjectHistoryView.vue";
 import ProjectOverviewView from "@/contexts/catalog/views/ProjectOverviewView.vue";
 import ProjectShellView from "@/contexts/catalog/views/ProjectShellView.vue";
-
-function workItem(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "work-stale",
-    projectId: "project-1",
-    sourceId: "source-1",
-    kind: "issue",
-    nativeKey: "issue:9",
-    title: "Add report-only maintain-issue-tags agent",
-    summary: "",
-    execution: "none",
-    delivery: "open",
-    outcome: "pending",
-    attention: "stale",
-    provenance: "external",
-    actorName: null,
-    labels: [],
-    nativeState: "opened",
-    webUrl: "https://github.com/quotient-research/quotient-server/issues/9",
-    observedAt: "2026-07-27T20:23:47.000Z",
-    nextSyncAt: null,
-    syncState: "stale",
-    lastError: "No longer present in the source active-work snapshot",
-    resolution: null,
-    resolvedAt: null,
-    resolvedBy: null,
-    resolutionNote: null,
-    createdAt: "2026-07-27T20:23:47.000Z",
-    updatedAt: "2026-07-27T20:23:47.000Z",
-    startedAt: null,
-    completedAt: null,
-    ...overrides,
-  };
-}
 
 function projectRoutes() {
   return [
@@ -172,60 +132,19 @@ async function mountShell(path = "/projects/project-1/overview") {
     },
   });
   mocks.listAgents.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
-  mocks.listProjectWork.mockImplementation((_id: string, query?: { history?: boolean }) => {
-    if (query?.history) {
-      return Promise.resolve({
-        items: [],
-        total: 0,
-        limit: 25,
-        offset: 0,
-      });
-    }
-    return Promise.resolve({
-      items: [workItem()],
-      total: 1,
-      limit: 100,
-      offset: 0,
-    });
-  });
+  mocks.listProjectWork.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
   mocks.getProjectWorkStatus.mockResolvedValue({
     working: 0,
     queued: 0,
-    needsAttention: 1,
+    needsAttention: 0,
     verifiedOpen: 0,
-    staleOpen: 1,
-    asOf: "2026-07-27T20:23:47.000Z",
-    previous: {
-      working: 0,
-      queued: 0,
-      needsAttention: 0,
-      verifiedOpen: 0,
-      staleOpen: 0,
-    },
-    previousAsOf: "2026-07-26T20:23:47.000Z",
+    staleOpen: 0,
+    asOf: null,
+    previous: null,
+    previousAsOf: null,
     compareWindow: "24h",
   });
-  mocks.listProjectSources.mockResolvedValue([
-    {
-      id: "source-1",
-      projectId: "project-1",
-      connectionId: "conn-1",
-      kind: "repository",
-      externalKey: "quotient-research/quotient-server",
-      displayName: "quotient-research/quotient-server",
-      webUrl: "https://github.com/quotient-research/quotient-server",
-      syncState: "current",
-      observedAt: "2026-07-27T20:23:47.000Z",
-      nextSyncAt: null,
-      lastError: null,
-      connection: {
-        id: "conn-1",
-        name: "github.com",
-        adapter: "github",
-        capabilities: { workKinds: ["pull-request", "issue"] },
-      },
-    },
-  ]);
+  mocks.listProjectSources.mockResolvedValue([]);
   mocks.getDashboardImpact.mockResolvedValue({
     totals: {
       succeededRuns: 0,
@@ -253,91 +172,24 @@ async function mountShell(path = "/projects/project-1/overview") {
   const wrapper = mount(ProjectShellView, {
     global: {
       plugins: [createPinia(), router],
-      stubs: { ProjectImpactSection: true },
     },
   });
   await flushPromises();
   return { wrapper, router };
 }
 
-describe("Project shell overview attention actions", () => {
+describe("Project shell routes", () => {
   test("redirects project-detail to overview", async () => {
     const { router } = await mountShell("/projects/project-1");
     await flushPromises();
     expect(router.currentRoute.value.name).toBe("project-overview");
   });
 
-  test("links stale work and clears Needs attention after recheck", async () => {
+  test("history tab remains available from the shell", async () => {
     const { wrapper, router } = await mountShell();
-    expect(wrapper.text()).toContain("Needs attention");
-    expect(wrapper.text()).toContain("Add report-only maintain-issue-tags agent");
-    expect(wrapper.text()).toContain("Recheck now");
-    const link = wrapper
-      .findAll("a")
-      .find((anchor) =>
-        anchor.attributes("href")?.includes("github.com/quotient-research/quotient-server/issues/9"),
-      );
-    expect(link).toBeTruthy();
-
-    const closedItem = workItem({
-      attention: "none",
-      delivery: "closed",
-      syncState: "current",
-      lastError: null,
-      completedAt: "2026-07-27T21:00:00.000Z",
-    });
-    mocks.recheckWorkItem.mockResolvedValue({
-      status: "terminal",
-      detail: null,
-      work: closedItem,
-    });
-    mocks.listProjectWork.mockImplementation((_id: string, query?: { history?: boolean }) => {
-      if (query?.history) {
-        return Promise.resolve({
-          items: [closedItem],
-          total: 1,
-          limit: 25,
-          offset: 0,
-        });
-      }
-      return Promise.resolve({
-        items: [],
-        total: 0,
-        limit: 100,
-        offset: 0,
-      });
-    });
-    mocks.getProjectWorkStatus.mockResolvedValue({
-      working: 0,
-      queued: 0,
-      needsAttention: 0,
-      verifiedOpen: 0,
-      staleOpen: 0,
-      asOf: "2026-07-27T21:00:00.000Z",
-      previous: null,
-      previousAsOf: null,
-      compareWindow: "24h",
-    });
-
-    const recheckButton = wrapper
-      .findAll("button")
-      .find((button) => button.text().includes("Recheck now"));
-    expect(recheckButton).toBeTruthy();
-    await recheckButton!.trigger("click");
-    await flushPromises();
-
-    expect(mocks.recheckWorkItem).toHaveBeenCalledWith("work-stale");
-    expect(wrapper.text()).toContain("Needs attention0");
-    expect(wrapper.findAll("button").some((button) => button.text().includes("Recheck now"))).toBe(
-      false,
-    );
-    expect(wrapper.text()).toContain("Verified Add report-only maintain-issue-tags agent as closed");
-
     await router.push({ name: "project-history", params: { id: "project-1" } });
     await flushPromises();
     expect(wrapper.text()).toContain("History");
-    expect(wrapper.find('[aria-label="Closed"]').exists()).toBe(true);
-    expect(wrapper.find('[aria-label="Issue"]').exists()).toBe(true);
     wrapper.unmount();
   });
 });

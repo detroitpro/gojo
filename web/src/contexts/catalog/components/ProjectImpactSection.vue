@@ -65,7 +65,7 @@ const succeededRunsRoute = computed(() => ({
 const deliveryRoute = computed(() => ({
   name: "project-overview" as const,
   params: { id: props.projectId },
-  hash: "#delivery",
+  hash: "#attention",
 }));
 const projectImpactRoute = computed(() => ({
   name: "project-impact" as const,

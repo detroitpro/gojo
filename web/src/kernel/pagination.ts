@@ -36,6 +36,10 @@ export type ListQuery = {
   order?: SortOrder;
   /** Project work history view (completed / verified-terminal / operator-resolved). */
   history?: boolean;
+  /** Work kind filter (e.g. issue, pull-request, run). */
+  kind?: string;
+  /** Work delivery filter (e.g. open, closed, merged). */
+  delivery?: string;
 };
 
 export function rangeLabel(total: number, limit: number, offset: number): string {
@@ -105,6 +109,12 @@ export function buildListQuery(params: ListQuery): string {
   }
   if (params.history === true) {
     sp.set("history", "1");
+  }
+  if (params.kind) {
+    sp.set("kind", params.kind);
+  }
+  if (params.delivery) {
+    sp.set("delivery", params.delivery);
   }
   if (params.sort) {
     sp.set("sort", params.sort);

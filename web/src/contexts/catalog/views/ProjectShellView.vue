@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, provide, ref, watch } from "vue";
-import { RouterView, useRoute, useRouter } from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import {
   Activity,
   HeartPulse,
@@ -9,7 +9,6 @@ import {
   Power,
   RefreshCw,
   Settings2,
-  Trash2,
 } from "lucide-vue-next";
 
 import {
@@ -26,12 +25,16 @@ import type { Agent, Project, ProjectSyncResult } from "@/contexts/catalog/types
 import { getProjectDoctor } from "@/contexts/operations/contract";
 import type { ProjectDoctorResult } from "@/contexts/operations/types";
 import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
+import { computeProjectHealth } from "@/kernel/project-manifest";
+import { formatRelativeTime } from "@/kernel/project-overview";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useSoftLoading } from "@/platform/useSoftLoading";
+import ActionMenu, { type ActionMenuItem } from "@/ui/ActionMenu.vue";
 import AppButton from "@/ui/AppButton.vue";
 import ConfirmDialog from "@/ui/ConfirmDialog.vue";
 import PageHeader from "@/ui/PageHeader.vue";
 import ProjectSubnav, { type ProjectSubnavItem } from "@/ui/ProjectSubnav.vue";
+import HealthBadge from "@/ui/status/HealthBadge.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,6 +42,7 @@ const router = useRouter();
 const project = ref<Project | null>(null);
 const doctor = ref<ProjectDoctorResult | null>(null);
 const lastSync = ref<ProjectSyncResult | null>(null);
+const lastSyncAt = ref<string | null>(null);
 const projectAgents = ref<Agent[]>([]);
 const openPrTotal = ref(0);
 const dataVersion = ref(0);
@@ -49,6 +53,37 @@ const notice = ref("");
 const removeOpen = ref(false);
 
 const projectId = computed(() => route.params.id as string);
+
+const health = computed(() =>
+  project.value
+    ? computeProjectHealth(project.value, doctor.value)
+    : { score: null, level: "missing" as const, label: "…" },
+);
+
+const repoIdentity = computed(() => {
+  const remote = project.value?.remoteUrl;
+  if (!remote) return null;
+  try {
+    const path = new URL(remote.replace(/\.git$/, "")).pathname.replace(/^\/+/, "");
+    return path || null;
+  } catch {
+    return remote.replace(/\.git$/, "");
+  }
+});
+
+const lastObservedLabel = computed(() => {
+  if (lastSyncAt.value) {
+    return `Synced ${formatRelativeTime(lastSyncAt.value)}`;
+  }
+  if (project.value?.updatedAt) {
+    return `Updated ${formatRelativeTime(project.value.updatedAt)}`;
+  }
+  return null;
+});
+
+const overflowItems = computed<ActionMenuItem[]>(() => [
+  { id: "remove", label: "Remove project", danger: true },
+]);
 
 const subnavItems = computed<ProjectSubnavItem[]>(() => {
   const id = projectId.value;
@@ -147,6 +182,7 @@ async function runSync() {
     const result = await syncProject(project.value.id);
     project.value = result.project;
     lastSync.value = result.sync;
+    lastSyncAt.value = new Date().toISOString();
     const path = result.sync.manifestPath
       ? result.sync.manifestPath.split(/[/\\]/).slice(-2).join("/")
       : "no manifest file";
@@ -209,6 +245,7 @@ watch(projectId, () => {
   doctor.value = null;
   projectAgents.value = [];
   lastSync.value = null;
+  lastSyncAt.value = null;
   openPrTotal.value = 0;
   notice.value = "";
   void load();
@@ -226,7 +263,19 @@ bindStoreRefresh(catalogStore, load);
       back-label="Projects"
     >
       <template #subtitle>
-        <div v-if="project" class="subtitle mono">{{ project.id }}</div>
+        <div v-if="project" class="project-shell-subtitle">
+          <span v-if="repoIdentity" class="subtitle">{{ repoIdentity }}</span>
+          <span class="subtitle mono muted">{{ project.id }}</span>
+          <RouterLink
+            :to="{ name: 'project-health', params: { id: project.id } }"
+            class="health-badge-link"
+          >
+            <HealthBadge :level="health.level" :label="health.label" />
+          </RouterLink>
+          <span v-if="lastObservedLabel" class="muted text-sm" :title="project.updatedAt">
+            {{ lastObservedLabel }}
+          </span>
+        </div>
       </template>
       <template #actions>
         <AppButton
@@ -255,15 +304,12 @@ bindStoreRefresh(catalogStore, load);
         >
           {{ project?.enabled === false ? "Enable" : "Disable" }}
         </AppButton>
-        <AppButton
-          variant="danger"
-          size="sm"
-          :icon="Trash2"
-          :disabled="busy || !project"
-          @click="removeOpen = true"
-        >
-          Remove
-        </AppButton>
+        <ActionMenu
+          :items="overflowItems"
+          :disabled="!project"
+          label="Project actions"
+          @select="(id) => { if (id === 'remove') removeOpen = true; }"
+        />
       </template>
     </PageHeader>
 
@@ -296,3 +342,26 @@ bindStoreRefresh(catalogStore, load);
     </ConfirmDialog>
   </div>
 </template>
+
+<style scoped>
+.project-shell-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.project-shell-subtitle .subtitle {
+  margin: 0;
+}
+
+.health-badge-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.health-badge-link:hover {
+  opacity: 0.9;
+}
+</style>

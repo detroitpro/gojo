@@ -101,12 +101,14 @@ Kind vocabulary is unchanged: `run` still denotes a gojo agent execution row; th
 - `gojo project recheck-work <id> <workItemId>`
 - `gojo project resolve-work <id> <workItemId> [--by <actor>] [--note <text>]`
 
-The project command center consumes these contracts for Now, Needs attention,
-Delivery, and History. Needs attention rows expose reason-specific actions
-(review run, retry source, recheck item, mark resolved). The Vue UI renders
-work kind, result, execution, delivery, attention, and sync enums as shared
-icon badges (`web/src/components/status/*`) with accessible labels. Specialist
-run/integration views remain compatibility surfaces.
+The project Overview briefing consumes these contracts for recent completed
+work (history + time range) and conditional Needs attention / In progress lists.
+Repository and manifest details live on the Configuration tab. Needs attention
+rows expose reason-specific actions (review run, retry source, recheck item,
+mark resolved). The Vue UI renders work kind, result, execution, delivery,
+attention, and sync enums as shared icon badges (`web/src/ui/status/*`) with
+accessible labels. Specialist run/integration views remain compatibility
+surfaces.
 
 ## Boundaries
 
