@@ -35,7 +35,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts, open a project for health, source-backed work and freshness, remote links, open and recently merged PRs, Impact detail, structured config, and manifest sync.
+**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts. Open a project for sub-pages: **Overview** (activity briefing and needs-attention queue), **History**, **Impact**, **Health**, and **Configuration** (synced manifest). Sync, enable/disable, and remove from the project shell header.
 
 ![gojo agents](/images/ui-agents.png)
 

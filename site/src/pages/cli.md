@@ -43,6 +43,7 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | `gojo server doctor` | Git, disk, DB, adapter detection, daemon PATH tools, network warnings |
 | `gojo instance show` | Bind, publicBaseUrl, trusted proxies, resolved apiBaseUrl |
 | `gojo instance set …` | Update network fields in `instance.yaml` (restart after) |
+| `gojo instance sweep-worktrees` | Remove orphan worktrees not attached to a live run (also runs on daemon start) |
 | `gojo instance scheduling-show` | Read admission caps (`maxConcurrentRuns`, per-project limits, stagger, load guard) |
 | `gojo instance scheduling-set …` | Update scheduling policy caps (same fields as `PATCH /api/v1/instance/scheduling`) |
 
