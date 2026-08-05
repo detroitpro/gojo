@@ -40,6 +40,7 @@ finds the same inventory.
 | W5 | Pinia refresh stubs / incomplete stores | Full `bindRefresh` / `invalidate` per context store |
 | W6 | Monolithic Settings / ProjectDetail / RunDetail views | Context `components/` section panels + thin route shells — **ProjectDetail done**: `ProjectShellView` + Overview / History / Impact / Health / Configuration nested routes |
 | S2 | `src/contexts/work/sources.ts` compatibility barrel | `@/contexts/work/contract` |
+| D1 | Inline `POST /api/v1/sources/{sourceId}/events` in `router.ts` | `work.sources.ingestWebhook` HTTP binding + `http-dispatch` raw body |
 
 ## Follow-ups from this migration
 
@@ -47,7 +48,6 @@ finds the same inventory.
 |----|---------------|------|
 | E2 | Execution / notifications / operations use cases publish via `runtime.outbox` but the coordinator still appends legacy `run.*` platform events through `AppContext.platformEvents` | Route coordinator emissions through the outbox once topics are unified |
 | R13 | CLI/API duplicate platform-event appends for project sync + agent/schedule enable/disable | Emit once inside catalog use cases |
-| D1 | `POST /api/v1/sources/{sourceId}/events` still inline in `src/transports/http/router.ts` (raw body). `work.sources.ingestWebhook` exists but is unbound to HTTP | Extend http-dispatch for raw body, then delete the router branch |
 | D3 | `IntegrationStatusReconciler` wiring + fix-round policy still composed in `app-context` | Move into `contexts/delivery/subscribers/*` and subscribe on domain events |
 
 ## How to retire a row

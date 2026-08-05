@@ -119,9 +119,6 @@ const legacyOpenApiPaths = {
   "/api/v1/work/{id}/diff": {
     get: { summary: "Work item diff" },
   },
-  "/api/v1/sources/{sourceId}/events": {
-    post: { summary: "Ingest source webhook events" },
-  },
   "/api/v1/adapters": {
     get: { summary: "List adapters" },
   },

@@ -93,4 +93,26 @@ describe("platform/http-dispatch via router", () => {
       "scheduling.policy.set",
     );
   });
+
+  test("POST sources/{sourceId}/events dispatches via registry with raw body", async () => {
+    const { baseUrl } = await boot();
+
+    const res = await fetch(`${baseUrl}/api/v1/sources/missing-source/events`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", "X-Gojo-Signature": "bad" },
+      body: "not-json",
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("validation_error");
+    expect(body.error.message).toContain("Project source not found");
+
+    const openapi = await fetch(`${baseUrl}/api/v1/openapi.json`);
+    const doc = (await openapi.json()) as {
+      data: { paths: Record<string, { post?: { operationId?: string } }> };
+    };
+    expect(doc.data.paths["/api/v1/sources/{sourceId}/events"]?.post?.operationId).toBe(
+      "work.sources.ingestWebhook",
+    );
+  });
 });

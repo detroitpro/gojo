@@ -13,6 +13,8 @@ export type HttpBinding = {
   path: string;
   /** Default 200; commands that create often use 201/202. */
   successStatus?: number;
+  /** Read the request body as raw text (webhooks) instead of JSON. */
+  rawBody?: boolean;
 };
 
 export type CliBinding = {
