@@ -81,7 +81,9 @@ gojo project doctor <project-id>
 
 `workspaceFiles` reports `trackedGeneratedFiles`, `unignoredGeneratedFiles`,
 `untrackedRegistrationFiles`, and a `suggestedGitignore` block when anything
-needs fixing. The same data drives the Health panel on the project detail page.
+needs fixing. The same data drives the project **Health** sub-page
+(`/projects/:id/health`) in the admin UI (score factors plus unscored workspace
+checks).
 
 To repair a repository that already committed a generated file:
 

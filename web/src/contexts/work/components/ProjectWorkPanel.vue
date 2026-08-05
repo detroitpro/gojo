@@ -23,20 +23,16 @@ import DeliveryBadge from "@/ui/status/DeliveryBadge.vue";
 import ExecutionBadge from "@/ui/status/ExecutionBadge.vue";
 import ProvenanceBadge from "@/ui/status/ProvenanceBadge.vue";
 import SyncStateBadge from "@/ui/status/SyncStateBadge.vue";
-import WorkKindBadge from "@/ui/status/WorkKindBadge.vue";
-import WorkResultBadge from "@/ui/status/WorkResultBadge.vue";
 import StatGrid from "@/ui/StatGrid.vue";
 import StatTile from "@/ui/StatTile.vue";
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "@/kernel/pagination";
+import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
 import {
   attentionMenuItems,
   attentionPrimaryAction,
   workExternalHref,
 } from "@/kernel/work-attention";
 import {
-  collapseHistoryTimeline,
   workAgentProfileLabel,
-  workHistoryHref,
   workPrimaryLabel,
   workSecondaryLabel,
 } from "@/kernel/work-display";
@@ -60,8 +56,6 @@ const emit = defineEmits<{
 const router = useRouter();
 
 const workItems = ref<WorkItem[]>([]);
-const historyItems = ref<WorkItem[]>([]);
-const historyTotal = ref(0);
 const workStatus = ref<WorkStatus | null>(null);
 const projectSources = ref<ProjectSource[]>([]);
 const openPrTotal = ref(0);
@@ -82,10 +76,6 @@ const attentionWork = computed(() =>
 );
 const deliveryWork = computed(() =>
   workItems.value.filter(isVerifiedActiveDelivery),
-);
-const historyRows = computed(() => collapseHistoryTimeline(historyItems.value));
-const historyTopLevelCount = computed(
-  () => historyRows.value.filter((row) => !row.nested).length,
 );
 
 const sourceNames = computed(
@@ -112,16 +102,6 @@ function observedLabel(item: WorkItem): string {
 
 function attentionHref(item: WorkItem): string | null {
   return workExternalHref(item, sourceWebUrl(item));
-}
-
-function historyRunId(item: WorkItem): string | null {
-  const href = workHistoryHref(item);
-  return href?.type === "run" ? href.id : null;
-}
-
-function historyExternalUrl(item: WorkItem): string | null {
-  const href = workHistoryHref(item);
-  return href?.type === "external" ? href.url : null;
 }
 
 function primaryAttentionAction(item: WorkItem) {
@@ -235,27 +215,18 @@ async function runPrimaryAttentionAction(item: WorkItem) {
 
 async function loadWork() {
   try {
-    const [page, history, status, sources] = await Promise.all([
+    const [page, status, sources] = await Promise.all([
       listProjectWork(props.projectId, { limit: MAX_PAGE_LIMIT, offset: 0 }),
-      listProjectWork(props.projectId, {
-        limit: DEFAULT_PAGE_LIMIT,
-        offset: 0,
-        history: true,
-      }),
       getProjectWorkStatus(props.projectId),
       listProjectSources(props.projectId),
     ]);
     workItems.value = page.items;
-    historyItems.value = history.items;
-    historyTotal.value = history.total;
     workStatus.value = status;
     projectSources.value = sources;
     openPrTotal.value = status.verifiedOpen;
     emit("openPrTotal", status.verifiedOpen);
   } catch {
     workItems.value = [];
-    historyItems.value = [];
-    historyTotal.value = 0;
     workStatus.value = null;
     projectSources.value = [];
     openPrTotal.value = 0;
@@ -283,8 +254,6 @@ watch(
   () => props.projectId,
   () => {
     workItems.value = [];
-    historyItems.value = [];
-    historyTotal.value = 0;
     workStatus.value = null;
     projectSources.value = [];
     openPrTotal.value = 0;
@@ -525,76 +494,6 @@ defineExpose({ loadWork });
     </div>
   </section>
 
-  <section class="list-section">
-    <div class="list-section__header">
-      <div>
-        <h2 class="list-section__title">History</h2>
-        <p class="muted text-sm mt-1">
-          Completed runs and verified merged/closed delivery
-        </p>
-      </div>
-      <span class="list-section__meta">
-        {{
-          historyTopLevelCount === 0
-            ? "0"
-            : `latest ${historyTopLevelCount}${historyTotal > historyItems.length ? ` of ${historyTotal}` : ""}`
-        }}
-      </span>
-    </div>
-    <div v-if="historyRows.length === 0" class="muted text-sm">No completed work yet</div>
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Work</th>
-            <th>Agent / profile</th>
-            <th>Result</th>
-            <th>Platform / repo</th>
-            <th>When</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in historyRows"
-            :key="row.nested ? `${row.parentId}:${row.item.id}` : row.item.id"
-            :class="{ 'history-row--nested': row.nested }"
-          >
-            <td><WorkKindBadge :kind="row.item.kind" /></td>
-            <td :class="{ 'history-work--nested': row.nested }">
-              <RouterLink
-                v-if="historyRunId(row.item)"
-                :to="{ name: 'run-detail', params: { id: historyRunId(row.item)! } }"
-                class="entity-name"
-              >{{ workPrimaryLabel(row.item) }}</RouterLink>
-              <a
-                v-else-if="historyExternalUrl(row.item)"
-                :href="historyExternalUrl(row.item)!"
-                class="entity-name"
-                target="_blank"
-                rel="noopener noreferrer"
-              >{{ workPrimaryLabel(row.item) }}</a>
-              <span v-else>{{ workPrimaryLabel(row.item) }}</span>
-              <div v-if="workSecondaryLabel(row.item)" class="muted text-sm">
-                {{ workSecondaryLabel(row.item) }}
-              </div>
-            </td>
-            <td>{{ workAgentProfileLabel(row.item) }}</td>
-            <td><WorkResultBadge :item="row.item" /></td>
-            <td>{{ sourceLabel(row.item) }}</td>
-            <td class="mono muted">
-              {{
-                new Date(
-                  row.item.resolvedAt ?? row.item.completedAt ?? row.item.updatedAt,
-                ).toLocaleString()
-              }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
   <ConfirmDialog
     :open="resolveOpen"
     title="Mark work resolved?"
@@ -621,26 +520,5 @@ defineExpose({ loadWork });
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-.history-row--nested td {
-  background: color-mix(in srgb, var(--bg) 65%, transparent);
-  color: var(--text-muted);
-}
-
-.history-work--nested {
-  padding-left: calc(var(--space-4) + 1rem);
-  position: relative;
-}
-
-.history-work--nested::before {
-  content: "";
-  position: absolute;
-  left: 0.35rem;
-  top: 0.55rem;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-left: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
 </style>

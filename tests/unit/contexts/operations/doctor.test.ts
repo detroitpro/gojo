@@ -153,12 +153,60 @@ describeUnlessCloud("diagnostics/projectDoctor", () => {
       );
       expect(result.validationTools).toHaveLength(1);
       expect(result.validationTools[0]?.found).toBe(true);
+      expect(result.refConflicts).toEqual([]);
+      expect(result.orphanWorktrees).toEqual({ total: 0, orphan: 0 });
 
       // Clean tree after removing the dirty file.
       rmSync(join(repoPath, "dirty.txt"));
       const clean = await projectDoctor(project as never, repos as never);
       expect(clean.baseCheckout.clean).toBe(true);
       expect((await execGit(repoPath, ["status", "--porcelain"])).stdout).toBe("");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports leaf refs that block the reserved gojo/run namespace", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "gojo-doctor-ref-"));
+    try {
+      const repoPath = join(tempDir, "repo");
+      mkdirSync(repoPath, { recursive: true });
+      await initRepo(repoPath);
+      await configLocal(repoPath, "user.email", "test@example.com");
+      await configLocal(repoPath, "user.name", "Gojo Test");
+      writeFileSync(join(repoPath, "README.md"), "# doc\n");
+      writeFileSync(join(repoPath, "gojo.yaml"), "project:\n  name: demo\n");
+      await commitAll(repoPath, "initial");
+      await execGit(repoPath, ["branch", "gojo/run", "main"]);
+
+      const project = {
+        id: "01PROJECTDOCTORTEST000003",
+        name: "demo",
+        repoPath,
+        defaultBranch: "main",
+        remoteUrl: null,
+        manifestJson: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const repos = {
+        agents: {
+          listByProject: () =>
+            [
+              {
+                id: "t1",
+                projectId: project.id,
+                name: "activity-digest",
+                enabled: true,
+                validationProfileJson: "{}",
+              },
+            ] as Agent[],
+        },
+      };
+
+      const result = await projectDoctor(project as never, repos as never);
+      expect(result.refConflicts.length).toBeGreaterThan(0);
+      expect(result.refConflicts.some((c) => c.blockingRef === "gojo/run")).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

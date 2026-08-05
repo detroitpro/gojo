@@ -9,7 +9,12 @@ import DashboardView from "@/contexts/operations/views/DashboardView.vue";
 import ImpactView from "@/contexts/catalog/views/ImpactView.vue";
 import IntegrationsView from "@/contexts/delivery/views/IntegrationsView.vue";
 import LoginView from "@/contexts/access/views/LoginView.vue";
-import ProjectDetailView from "@/contexts/catalog/views/ProjectDetailView.vue";
+import ProjectConfigurationView from "@/contexts/catalog/views/ProjectConfigurationView.vue";
+import ProjectHealthView from "@/contexts/catalog/views/ProjectHealthView.vue";
+import ProjectHistoryView from "@/contexts/catalog/views/ProjectHistoryView.vue";
+import ProjectImpactPageView from "@/contexts/catalog/views/ProjectImpactPageView.vue";
+import ProjectOverviewView from "@/contexts/catalog/views/ProjectOverviewView.vue";
+import ProjectShellView from "@/contexts/catalog/views/ProjectShellView.vue";
 import ProjectsView from "@/contexts/catalog/views/ProjectsView.vue";
 import QueueView from "@/contexts/scheduling/views/QueueView.vue";
 import RunDetailView from "@/contexts/execution/views/RunDetailView.vue";
@@ -34,7 +39,47 @@ const router = createRouter({
       children: [
         { path: "", name: "dashboard", component: DashboardView },
         { path: "projects", name: "projects", component: ProjectsView },
-        { path: "projects/:id", name: "project-detail", component: ProjectDetailView },
+        {
+          path: "projects/:id",
+          component: ProjectShellView,
+          children: [
+            {
+              path: "",
+              name: "project-detail",
+              redirect: (to) => ({
+                name: "project-overview",
+                params: to.params,
+                query: to.query,
+                hash: to.hash === "#open-prs" ? "#delivery" : to.hash,
+              }),
+            },
+            {
+              path: "overview",
+              name: "project-overview",
+              component: ProjectOverviewView,
+            },
+            {
+              path: "history",
+              name: "project-history",
+              component: ProjectHistoryView,
+            },
+            {
+              path: "impact",
+              name: "project-impact",
+              component: ProjectImpactPageView,
+            },
+            {
+              path: "health",
+              name: "project-health",
+              component: ProjectHealthView,
+            },
+            {
+              path: "configuration",
+              name: "project-configuration",
+              component: ProjectConfigurationView,
+            },
+          ],
+        },
         { path: "agents", name: "agents", component: AgentsView },
         { path: "agents/:id", name: "agent-detail", component: AgentDetailView },
         { path: "runs", name: "runs", component: RunsView },

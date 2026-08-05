@@ -286,6 +286,28 @@ export const QueueSnapshot = defineQuery<
   },
 });
 
+const WorktreeSweepOutput = z.object({
+  scanned: z.number(),
+  removed: z.array(z.string()),
+  keptLive: z.array(z.string()),
+  errors: z.array(z.object({ path: z.string(), error: z.string() })),
+});
+
+export const SweepWorktrees = defineCommand<
+  Record<string, never>,
+  z.infer<typeof WorktreeSweepOutput>,
+  AppRuntime
+>({
+  name: "operations.worktrees.sweep",
+  input: EmptyInput,
+  output: WorktreeSweepOutput,
+  http: { method: "POST", path: "/api/v1/worktrees/sweep" },
+  cli: { group: "instance", command: "sweep-worktrees" },
+  async handle(_input, runtime) {
+    return runtime.operations.sweepWorktrees();
+  },
+});
+
 export const operationsUseCases = [
   Health,
   GetInstance,
@@ -293,6 +315,7 @@ export const operationsUseCases = [
   PauseInstance,
   ResumeInstance,
   InstanceDoctor,
+  SweepWorktrees,
   ListBackups,
   CreateBackup,
   VerifyBackup,

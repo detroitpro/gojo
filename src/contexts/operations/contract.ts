@@ -17,6 +17,7 @@ export type {
   QueueSnapshot,
 } from "./ports/dashboard-read-model";
 export type { ProcessRunner, ProcessRunResult } from "./ports/process-runner";
+export type { WorktreeSweepPort, WorktreeSweepResult } from "./ports/worktree-sweep";
 
 export type { InstanceConfigDeps } from "./application/instance-config";
 export {
@@ -43,5 +44,7 @@ export type { FilesystemDeps } from "./application/filesystem";
 export { browseFilesystemQuery } from "./application/filesystem";
 export type { HealthDeps } from "./application/health";
 export { healthQuery } from "./application/health";
+export { sweepWorktreesCommand } from "./application/worktree-sweep";
 
 export { createAuditRepository } from "./infrastructure/audit-repositories";
+export { sweepOrphanWorktrees, countOrphanWorktrees } from "./infrastructure/worktree-sweep";

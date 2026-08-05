@@ -18,6 +18,8 @@ export type AssembleAgentPromptInput = {
   validationSteps: ValidationPromptStep[];
   progressReporting?: boolean;
   subject?: RunSubject;
+  /** Pre-formatted platform merge-scope block (from mergePolicy). */
+  mergeScopePrompt?: string;
 };
 
 /** Resolve a repo-relative instruction path; reject escapes outside the worktree. */
@@ -162,7 +164,11 @@ export function assembleAgentPrompt(input: AssembleAgentPromptInput): string {
     input.workspacePath,
     input.instructions,
   );
-  const withValidation = appendValidationPrompt(withInstructions, input.validationSteps);
+  const mergeScope = input.mergeScopePrompt?.trim();
+  const withMergeScope = mergeScope
+    ? `${withInstructions.trimEnd()}\n\n${mergeScope}`
+    : withInstructions;
+  const withValidation = appendValidationPrompt(withMergeScope, input.validationSteps);
   if (!input.progressReporting) {
     return withValidation;
   }

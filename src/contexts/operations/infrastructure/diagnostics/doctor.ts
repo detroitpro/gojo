@@ -13,7 +13,16 @@ import {
   inspectRunningBinary,
   type RunningBinaryStatus,
 } from "@/contexts/operations/infrastructure/diagnostics/binary-stale";
-import { execGit } from "@/infrastructure/git/git";
+import { countOrphanWorktrees } from "@/contexts/operations/infrastructure/worktree-sweep";
+import {
+  buildRunBranchName,
+  RUN_BRANCH_NAMESPACE,
+} from "@/contexts/execution/contract";
+import {
+  branchExists,
+  execGit,
+  findConflictingParentRef,
+} from "@/infrastructure/git/git";
 import type { Repositories } from "@/infrastructure/persistence";
 import type { Agent, Project } from "@/infrastructure/persistence/types";
 import {
@@ -59,6 +68,13 @@ export interface ProjectWorkspaceFilesCheck {
   suggestedGitignore: string | null;
 }
 
+export interface ProjectRefConflict {
+  agent: string;
+  /** Sample run branch that would be blocked. */
+  branchName: string;
+  blockingRef: string;
+}
+
 export interface ProjectDoctorResult {
   projectId: string;
   repoExists: boolean;
@@ -66,6 +82,10 @@ export interface ProjectDoctorResult {
   baseCheckout: ProjectBaseCheckout;
   validationTools: ProjectValidationToolCheck[];
   workspaceFiles: ProjectWorkspaceFilesCheck;
+  /** Leaf refs that would block minting `gojo/run/<agent>/…` branches. */
+  refConflicts: ProjectRefConflict[];
+  /** Worktrees under GOJO_HOME for this project with no live run. */
+  orphanWorktrees: { total: number; orphan: number };
 }
 
 export interface InstanceNetworkDoctor {
@@ -109,6 +129,45 @@ export interface InstanceDoctorResult {
     secretName: string | null;
     available: boolean;
   }>;
+  /** Worktrees under GOJO_HOME with no non-terminal run. */
+  orphanWorktrees: { total: number; orphan: number };
+}
+
+export interface ProjectDoctorOptions {
+  worktreesRoot?: string;
+}
+
+async function inspectRefConflicts(
+  repoPath: string,
+  projectName: string,
+  agents: Agent[],
+): Promise<ProjectRefConflict[]> {
+  const conflicts: ProjectRefConflict[] = [];
+  for (const agent of agents) {
+    if (!agent.enabled) continue;
+    const branchName = buildRunBranchName(
+      agent.name,
+      "01DOCTORPROBE00000000000000",
+      projectName,
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    const blockingRef = await findConflictingParentRef(repoPath, branchName);
+    if (blockingRef) {
+      conflicts.push({ agent: agent.name, branchName, blockingRef });
+    }
+  }
+  // Reserved namespace itself must never be a leaf ref.
+  if (await branchExists(repoPath, RUN_BRANCH_NAMESPACE)) {
+    const already = conflicts.some((c) => c.blockingRef === RUN_BRANCH_NAMESPACE);
+    if (!already) {
+      conflicts.push({
+        agent: "*",
+        branchName: `${RUN_BRANCH_NAMESPACE}/…`,
+        blockingRef: RUN_BRANCH_NAMESPACE,
+      });
+    }
+  }
+  return conflicts;
 }
 
 /** Core tools; `gh` and `tea` are optional PR CLIs (`integration.prTool`). */
@@ -346,6 +405,7 @@ async function inspectWorkspaceFiles(
 export async function projectDoctor(
   project: Project,
   repos?: Repositories,
+  options: ProjectDoctorOptions = {},
 ): Promise<ProjectDoctorResult> {
   const repoExists = existsSync(project.repoPath);
   const manifest =
@@ -365,6 +425,16 @@ export async function projectDoctor(
     ? await inspectWorkspaceFiles(project.repoPath)
     : EMPTY_WORKSPACE_FILES;
 
+  const refConflicts =
+    repoExists && agents.length > 0
+      ? await inspectRefConflicts(project.repoPath, project.name, agents)
+      : [];
+
+  const orphanWorktrees =
+    options.worktreesRoot && repos
+      ? countOrphanWorktrees(options.worktreesRoot, repos, project.name)
+      : { total: 0, orphan: 0 };
+
   return {
     projectId: project.id,
     repoExists,
@@ -372,6 +442,8 @@ export async function projectDoctor(
     baseCheckout,
     validationTools,
     workspaceFiles,
+    refConflicts,
+    orphanWorktrees,
   };
 }
 
@@ -526,6 +598,13 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     }),
   );
 
+  const orphanWorktrees = countOrphanWorktrees(ctx.paths.worktrees, ctx.repos);
+  if (orphanWorktrees.orphan > 0) {
+    warnings.push(
+      `${orphanWorktrees.orphan} orphan worktree(s) under ${ctx.paths.worktrees} — run gojo instance sweep-worktrees`,
+    );
+  }
+
   return {
     git,
     disk: existsSync(ctx.paths.data),
@@ -539,5 +618,6 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
     warnings,
     network,
     sourceCredentials,
+    orphanWorktrees,
   };
 }

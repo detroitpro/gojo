@@ -38,7 +38,7 @@ finds the same inventory.
 | W1–W4 | Legacy flat `web/src/{api,types,views,components}` tree | `web/src/{kernel,contexts,infrastructure,platform,ui}/` + `scripts/check-web-layout.sh` |
 | R12 | Per-view `useLiveRefresh` in `web/src/contexts/**` | `bindStoreRefresh` + Pinia `invalidate` via `LiveStoreBridge` |
 | W5 | Pinia refresh stubs / incomplete stores | Full `bindRefresh` / `invalidate` per context store |
-| W6 | Monolithic Settings / ProjectDetail / RunDetail views | Context `components/` section panels + thin route shells |
+| W6 | Monolithic Settings / ProjectDetail / RunDetail views | Context `components/` section panels + thin route shells — **ProjectDetail done**: `ProjectShellView` + Overview / History / Impact / Health / Configuration nested routes |
 | S2 | `src/contexts/work/sources.ts` compatibility barrel | `@/contexts/work/contract` |
 
 ## Follow-ups from this migration

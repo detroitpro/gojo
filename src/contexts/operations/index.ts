@@ -11,6 +11,7 @@ import { AppContextInstanceStore } from "./infrastructure/app-context-instance-s
 import { AppContextBackupStore } from "./infrastructure/app-context-backup-store";
 import { AppContextDashboardReadModel } from "./infrastructure/app-context-dashboard";
 import { AppContextDiagnostics } from "./infrastructure/app-context-diagnostics";
+import { AppContextWorktreeSweep } from "./infrastructure/app-context-worktree-sweep";
 import { BunProcessRunner } from "./infrastructure/bun-process-runner";
 import { NativeFilesystemBrowser } from "./infrastructure/native-filesystem-browser";
 import {
@@ -33,12 +34,14 @@ import {
   resumeInstanceCommand,
   updateInstanceCommand,
 } from "./application/instance-config";
+import { sweepWorktreesCommand } from "./application/worktree-sweep";
 import type { InstanceConfigStore, InstancePatch } from "./ports/instance-config-store";
 import type { BackupStore } from "./ports/backup-store";
 import type { DashboardReadModel } from "./ports/dashboard-read-model";
 import type { DiagnosticsPort } from "./ports/diagnostics";
 import type { FilesystemBrowser } from "./ports/filesystem-browser";
 import type { ProcessRunner } from "./ports/process-runner";
+import type { WorktreeSweepPort } from "./ports/worktree-sweep";
 
 export * from "./contract";
 
@@ -49,11 +52,13 @@ export interface OperationsModule {
   filesystem: FilesystemBrowser;
   dashboard: DashboardReadModel;
   processes: ProcessRunner;
+  worktrees: WorktreeSweepPort;
   getInstance: () => ReturnType<typeof getInstanceQuery>;
   updateInstance: (input: InstancePatch) => ReturnType<typeof updateInstanceCommand>;
   pauseInstance: () => ReturnType<typeof pauseInstanceCommand>;
   resumeInstance: () => ReturnType<typeof resumeInstanceCommand>;
   instanceDoctor: () => ReturnType<typeof instanceDoctorQuery>;
+  sweepWorktrees: () => ReturnType<typeof sweepWorktreesCommand>;
   listBackups: () => ReturnType<typeof listBackupsQuery>;
   createBackup: () => ReturnType<typeof createBackupCommand>;
   verifyBackup: (path: string) => ReturnType<typeof verifyBackupCommand>;
@@ -80,6 +85,7 @@ export function buildOperationsModule(deps: {
   const uow = deps.uow ?? new InMemoryUnitOfWork();
   const instanceStore = new AppContextInstanceStore(deps.ctx);
   const diagnostics = new AppContextDiagnostics(deps.ctx);
+  const worktrees = new AppContextWorktreeSweep(deps.ctx);
   const backups = new AppContextBackupStore(deps.ctx);
   const filesystem = new NativeFilesystemBrowser();
   const dashboard = new AppContextDashboardReadModel(deps.ctx);
@@ -104,6 +110,7 @@ export function buildOperationsModule(deps: {
     filesystem,
     dashboard,
     processes,
+    worktrees,
     getInstance: () => getInstanceQuery({ store: instanceStore }),
     updateInstance: (input) =>
       flushWith(() => updateInstanceCommand({ store: instanceStore, clock, uow }, input)),
@@ -112,6 +119,7 @@ export function buildOperationsModule(deps: {
     resumeInstance: () =>
       flushWith(() => resumeInstanceCommand({ store: instanceStore, clock, uow })),
     instanceDoctor: () => instanceDoctorQuery({ diagnostics }),
+    sweepWorktrees: () => sweepWorktreesCommand({ sweep: worktrees }),
     listBackups: () => listBackupsQuery({ store: backups }),
     createBackup: () => createBackupCommand({ store: backups }),
     verifyBackup: (path) => verifyBackupCommand({ store: backups }, { path }),

@@ -115,4 +115,4 @@ Daemon changes under `src/`: follow `gojo-tdd-daemon`. Web UI: follow `gojo-web-
 - Core end-to-end flow (from `README.md`): register a target repo that contains a
   `gojo.yaml`, `gojo project sync <id>`, then `gojo agent run <agent-id>`. A shell agent
   run should reach state `Succeeded` and, in `commit-only` mode, land its changes on a
-  `gojo/<agent>/<project>/<date>/run-<id>` branch without merging to `main`.
+  `gojo/run/<agent>/<project>/<date>/run-<id>` branch without merging to `main`.

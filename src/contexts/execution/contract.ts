@@ -15,6 +15,18 @@ export {
   type TransitionResult,
 } from "./domain/run-transitions";
 
+export {
+  RUN_BRANCH_NAMESPACE,
+  buildRunBranchName,
+} from "./domain/run-branch";
+
+export {
+  formatMergeScopePrompt,
+  mergePolicyFromManifest,
+  resolveMergeScope,
+  type MergeScope,
+} from "./domain/merge-scope";
+
 export type { RunCoordinatorPort } from "./ports/run-coordinator";
 export type {
   RunArtifactsRead,

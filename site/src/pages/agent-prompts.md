@@ -52,6 +52,24 @@ At run time gojo prepends `scheduledRunNotice`, then each listed file (from the 
 
 Use the shared file for code qualities, "no features / no secrets / stay in worktree," and handoff judgment. Keep **agent-specific** goals, scope, numeric limits, and process in the `promptFile`.
 
+### Merge / babysit agents — no branch laundry lists
+
+If an agent merges other gojo PRs, declare scope in `gojo.yaml` with `mergePolicy` (not in the prompt):
+
+```yaml
+agents:
+  maintain-merge:
+    # …
+    mergePolicy:
+      includeAgents:
+        - maintain-api-quality
+        - maintain-docs
+      # or: includeAgents: "*"   # all enabled siblings; excludes self + self-heal by default
+      excludeAgents: [self-heal]
+```
+
+Gojo injects a **Gojo merge scope** section at run time with `gojo/run/<agent>/…` head prefixes. The prompt should say “honor the injected merge scope” and keep numeric caps / babysit steps — not enumerate branches.
+
 ## Start with constrained limits
 
 **Put numeric caps in Hard rules from day one.** Widen them later when a schedule has proven itself.
@@ -64,7 +82,7 @@ Without a limit, a weekly "improve tests" or "update deps" run will try to boil 
 | Refactors / quality | **One** theme; at most **8** source files |
 | Dependencies | At most **8** direct bumps; at most **2** majors |
 | Docs | At most **5** files; at most **1** new page |
-| PR babysit / merge | At most **3** allowlisted PRs |
+| PR babysit / merge | At most **3** PRs from the injected Gojo merge scope |
 | Self-heal | **One** root cause; at most **5** files |
 
 When the adapter hits the limit with a green tree, it should stop and put the remainder in `recommendedNextActions` — not stretch the run.

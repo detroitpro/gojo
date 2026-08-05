@@ -44,6 +44,36 @@ export async function startServer(options: StartServerOptions): Promise<ApiServe
   await ctx.scheduler.start();
   ctx.dispatcher.start();
 
+  // Best-effort: reclaim worktrees left by failed/timed-out runs before restart.
+  try {
+    const { sweepOrphanWorktrees } = await import(
+      "@/contexts/operations/infrastructure/worktree-sweep"
+    );
+    const sweep = await sweepOrphanWorktrees({
+      worktreesRoot: ctx.paths.worktrees,
+      repos: ctx.repos,
+    });
+    if (sweep.removed.length > 0) {
+      console.error(
+        JSON.stringify({
+          level: "info",
+          component: "worktree-sweep",
+          removed: sweep.removed.length,
+          keptLive: sweep.keptLive.length,
+          errors: sweep.errors.length,
+        }),
+      );
+    }
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: "warn",
+        component: "worktree-sweep",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+
   const server = Bun.serve({
     hostname,
     port,

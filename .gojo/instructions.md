@@ -22,7 +22,7 @@ Every decision should converge on these:
 
 ## Git and handoff
 
-Unless the task explicitly owns merge/push (e.g. maintain-merge):
+Unless the agent owns merge/push (only when gojo injects a **Gojo merge scope** section):
 
 - Do **not** push, open PRs, or merge. gojo `pull-request` / `commit-only` integration owns Git.
 - Write `.gojo/handoff.json` before you finish. Prefer **schemaVersion 3** (required when using `subjectActions`). **gojo opens the PR from this handoff** (`integration.prTool`, default `gh`). Do **not** run `gh pr create` / `tea pulls create` yourself.

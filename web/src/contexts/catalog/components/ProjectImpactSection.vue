@@ -1,20 +1,27 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
+import { ArrowRight } from "lucide-vue-next";
 
 import { getDashboardImpact } from "@/contexts/operations/contract";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useOperationsStore } from "@/contexts/operations/contract";
+import AppButton from "@/ui/AppButton.vue";
 import StatGrid from "@/ui/StatGrid.vue";
 import StatTile from "@/ui/StatTile.vue";
 import VerificationBadge from "@/ui/status/VerificationBadge.vue";
 import { compareLabel } from "@/kernel/stat-metrics";
 import type { DashboardImpact } from "@/contexts/operations/types";
 
-const props = defineProps<{
-  projectId: string;
-  openPrTotal: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    projectId: string;
+    openPrTotal: number;
+    /** compact = stats + See more; full = categories, agents, recent items */
+    mode?: "compact" | "full";
+  }>(),
+  { mode: "full" },
+);
 
 type ImpactRange = "30d" | "90d" | "all";
 
@@ -54,6 +61,19 @@ const commitsRoute = computed(() => ({
 const succeededRunsRoute = computed(() => ({
   name: "runs" as const,
   query: impactWindowQuery({ state: "Succeeded" }),
+}));
+const deliveryRoute = computed(() => ({
+  name: "project-overview" as const,
+  params: { id: props.projectId },
+  hash: "#delivery",
+}));
+const projectImpactRoute = computed(() => ({
+  name: "project-impact" as const,
+  params: { id: props.projectId },
+}));
+const browseAllRoute = computed(() => ({
+  name: "impact" as const,
+  query: impactWindowQuery(),
 }));
 
 function categoryRoute(category: string) {
@@ -131,16 +151,26 @@ bindStoreRefresh(operationsStore, loadImpact);
   <section v-if="impact" class="panel mb-7">
     <div class="panel-header impact-header">
       <span>Impact</span>
-      <select
-        id="project-impact-range"
-        v-model="impactRange"
-        class="select"
-        aria-label="Impact time range"
-      >
-        <option value="30d">Last 30 days</option>
-        <option value="90d">Last 90 days</option>
-        <option value="all">Lifetime</option>
-      </select>
+      <div class="impact-header-actions">
+        <select
+          :id="`project-impact-range-${mode}`"
+          v-model="impactRange"
+          class="select"
+          aria-label="Impact time range"
+        >
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">Lifetime</option>
+        </select>
+        <AppButton
+          v-if="mode === 'compact'"
+          size="sm"
+          :icon="ArrowRight"
+          :to="projectImpactRoute"
+        >
+          See more
+        </AppButton>
+      </div>
     </div>
     <div class="panel-body">
       <StatGrid>
@@ -156,7 +186,7 @@ bindStoreRefresh(operationsStore, loadImpact);
           :value="openPrTotal"
           :previous="impact.previousTotals?.prsOpen"
           :compare-label="impactCompareLabel()"
-          :href="openPrTotal > 0 ? '#delivery' : undefined"
+          :to="openPrTotal > 0 ? deliveryRoute : undefined"
         />
         <StatTile
           metric-key="impact.mergeRate"
@@ -179,70 +209,93 @@ bindStoreRefresh(operationsStore, loadImpact);
           :to="commitsRoute"
         />
       </StatGrid>
-      <div v-if="impact.categoryTotals.length" class="mt-5">
-        <div class="panel-subheader">By category</div>
-        <div class="category-chips">
-          <RouterLink
-            v-for="row in impact.categoryTotals"
-            :key="row.category"
-            :to="categoryRoute(row.category)"
-            class="category-chip"
-          >
-            {{ row.category }}
-            <span class="category-chip__count">{{ row.runs }}</span>
-          </RouterLink>
+
+      <template v-if="mode === 'full'">
+        <div v-if="impact.categoryTotals.length" class="mt-5">
+          <div class="panel-subheader">By category</div>
+          <div class="category-chips">
+            <RouterLink
+              v-for="row in impact.categoryTotals"
+              :key="row.category"
+              :to="categoryRoute(row.category)"
+              class="category-chip"
+            >
+              {{ row.category }}
+              <span class="category-chip__count">{{ row.runs }}</span>
+            </RouterLink>
+          </div>
         </div>
-      </div>
-      <div v-if="impactAgents.length" class="mt-5">
-        <div class="panel-subheader">Agents in range</div>
-        <div class="agent-visibility">
-          <button
-            v-for="agent in impactAgents"
-            :key="agent.id"
-            type="button"
-            class="agent-visibility__chip"
-            :class="{ 'agent-visibility__chip--hidden': !isAgentVisible(agent.id) }"
-            @click="toggleAgentVisibility(agent.id)"
-          >
-            {{ agent.name }}
-          </button>
+        <div v-if="impactAgents.length" class="mt-5">
+          <div class="panel-subheader">Agents in range</div>
+          <div class="agent-visibility">
+            <button
+              v-for="agent in impactAgents"
+              :key="agent.id"
+              type="button"
+              class="agent-visibility__chip"
+              :class="{ 'agent-visibility__chip--hidden': !isAgentVisible(agent.id) }"
+              @click="toggleAgentVisibility(agent.id)"
+            >
+              {{ agent.name }}
+            </button>
+          </div>
         </div>
-      </div>
-      <div v-if="visibleImpactItems.length" class="table-wrap mt-5">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>Agent</th>
-              <th>Subject</th>
-              <th>Summary</th>
-              <th>Trust</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in visibleImpactItems" :key="item.id">
-              <td>
-                <RouterLink
-                  :to="{ name: 'run-detail', params: { id: item.runId } }"
-                  class="entity-name"
-                >
-                  {{ item.agentName }}
-                </RouterLink>
-              </td>
-              <td class="mono">{{ item.subject }}</td>
-              <td>{{ item.summary }}</td>
-              <td>
-                <VerificationBadge :verification="item.verification" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div
-        v-else-if="impact.recentItems.length > 0"
-        class="muted text-sm impact-empty"
-      >
-        All agents are hidden — turn an agent back on to see its impact items
-      </div>
+        <div v-if="visibleImpactItems.length" class="table-wrap mt-5">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Subject</th>
+                <th>Summary</th>
+                <th>Trust</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in visibleImpactItems" :key="item.id">
+                <td>
+                  <RouterLink
+                    :to="{ name: 'run-detail', params: { id: item.runId } }"
+                    class="entity-name"
+                  >
+                    {{ item.agentName }}
+                  </RouterLink>
+                </td>
+                <td class="mono">{{ item.subject }}</td>
+                <td>{{ item.summary }}</td>
+                <td>
+                  <VerificationBadge :verification="item.verification" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          v-else-if="impact.recentItems.length > 0"
+          class="muted text-sm impact-empty"
+        >
+          All agents are hidden — turn an agent back on to see its impact items
+        </div>
+        <div class="toolbar mt-5">
+          <AppButton size="sm" :icon="ArrowRight" :to="browseAllRoute">
+            Browse all impact items
+          </AppButton>
+        </div>
+      </template>
     </div>
   </section>
 </template>
+
+<style scoped>
+.impact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.impact-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+</style>

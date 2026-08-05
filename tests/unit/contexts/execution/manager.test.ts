@@ -13,7 +13,11 @@ import {
   initRepo,
   statusPorcelain,
 } from '@/infrastructure/git/git';
-import { WorkspaceManager } from '@/contexts/execution/infrastructure/workspace/manager';
+import {
+  RUN_BRANCH_NAMESPACE,
+  WorkspaceManager,
+  WorkspaceRefConflictError,
+} from '@/contexts/execution/infrastructure/workspace/manager';
 
 describeUnlessCloud('workspace/manager', () => {
   let tempDir: string | null = null;
@@ -83,7 +87,7 @@ describeUnlessCloud('workspace/manager', () => {
     return { repoPath, worktreesRoot, remoteMainSha };
   }
 
-  test('buildBranchName uses full run id, project slug, and flat attempt suffix', () => {
+  test('buildBranchName uses reserved namespace, full run id, project slug, and flat attempt suffix', () => {
     const manager = new WorkspaceManager(join(tmpdir(), 'gojo-naming-unused'));
     const date = new Date('2026-07-27T12:00:00.000Z');
     const a = '01KYHG9471XYH8YAGNJFCBGP5A';
@@ -92,13 +96,17 @@ describeUnlessCloud('workspace/manager', () => {
 
     const branchA = manager.buildBranchName('maintain-merge', a, 'gojo', date);
     const branchB = manager.buildBranchName('maintain-merge', b, 'rhystic-gaming', date);
-    expect(branchA).toBe(`gojo/maintain-merge/gojo/2026-07-27/run-${a}`);
-    expect(branchB).toBe(`gojo/maintain-merge/rhystic-gaming/2026-07-27/run-${b}`);
-    expect(branchA.includes('gojo/maintain-merge')).toBe(true);
+    expect(branchA).toBe(`${RUN_BRANCH_NAMESPACE}/maintain-merge/gojo/2026-07-27/run-${a}`);
+    expect(branchB).toBe(
+      `${RUN_BRANCH_NAMESPACE}/maintain-merge/rhystic-gaming/2026-07-27/run-${b}`,
+    );
+    expect(branchA.startsWith(`${RUN_BRANCH_NAMESPACE}/`)).toBe(true);
+    // Human topic leaves under gojo/<topic> no longer collide with run refs.
+    expect(branchA.startsWith('gojo/maintain-merge/')).toBe(false);
     expect(manager.buildWorktreePath(branchA)).not.toBe(manager.buildWorktreePath(branchB));
 
     const retry = manager.buildBranchName('maintain-merge', a, 'gojo', date, 2);
-    expect(retry).toBe(`gojo/maintain-merge/gojo/2026-07-27/run-${a}-a2`);
+    expect(retry).toBe(`${RUN_BRANCH_NAMESPACE}/maintain-merge/gojo/2026-07-27/run-${a}-a2`);
   });
 
   test('prepareAttempt creates branch and worktree', async () => {
@@ -115,11 +123,33 @@ describeUnlessCloud('workspace/manager', () => {
     });
 
     const today = new Date().toISOString().slice(0, 10);
-    expect(attempt.branchName).toBe(`gojo/lint-fix/demo/${today}/run-${runId}`);
+    expect(attempt.branchName).toBe(
+      `${RUN_BRANCH_NAMESPACE}/lint-fix/demo/${today}/run-${runId}`,
+    );
     expect(attempt.worktreePath).toContain(
-      `gojo__lint-fix__demo__${today}__run-${runId}`,
+      `gojo__run__lint-fix__demo__${today}__run-${runId}`,
     );
     expect(attempt.startingCommit).toBe(await getHead(repoPath));
+  });
+
+  test('prepareAttempt fails fast on parent leaf ref without deleting it', async () => {
+    const { repoPath, worktreesRoot } = await createRepo();
+    const manager = new WorkspaceManager(worktreesRoot);
+    // Simulate a human/agent topic leaf that occupies a reserved parent segment.
+    await execGit(repoPath, ['branch', RUN_BRANCH_NAMESPACE, 'main']);
+
+    await expect(
+      manager.prepareAttempt({
+        repoPath,
+        baseBranch: 'main',
+        runId: '01JXYZABCDEFGHJKMNPQRSTVWX',
+        projectName: 'demo',
+        agentName: 'activity-digest',
+      }),
+    ).rejects.toBeInstanceOf(WorkspaceRefConflictError);
+
+    const { branchExists } = await import('@/infrastructure/git/git');
+    expect(await branchExists(repoPath, RUN_BRANCH_NAMESPACE)).toBe(true);
   });
 
   test('prepareAttempt reclaims orphan worktree path under rootDir', async () => {
@@ -129,7 +159,7 @@ describeUnlessCloud('workspace/manager', () => {
     const today = new Date().toISOString().slice(0, 10);
     const orphanPath = join(
       worktreesRoot,
-      `gojo__lint-fix__demo__${today}__run-${runId}`,
+      `gojo__run__lint-fix__demo__${today}__run-${runId}`,
     );
     mkdirSync(orphanPath, { recursive: true });
     writeFileSync(join(orphanPath, 'stale.txt'), 'orphan');

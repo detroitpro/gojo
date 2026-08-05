@@ -135,9 +135,9 @@ const prsOpenRoute = computed(() => {
   }
   if (projectFilter.value) {
     return {
-      name: "project-detail",
+      name: "project-overview",
       params: { id: projectFilter.value },
-      hash: "#open-prs",
+      hash: "#delivery",
     };
   }
   return { name: "projects", query: { hasOpenPrs: "1" } };

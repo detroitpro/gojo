@@ -361,6 +361,32 @@ export async function branchExists(
   return result.exitCode === 0;
 }
 
+/**
+ * Return the first parent prefix of `branchName` that already exists as a leaf
+ * ref under `refs/heads/`. Git cannot create nested refs under a leaf, so a hit
+ * here would make `git branch <branchName> …` fail.
+ *
+ * Example: branch `gojo/run/agent/demo/2026-08-04/run-1` conflicts with a leaf
+ * `gojo/run` or `gojo/run/agent`.
+ */
+export async function findConflictingParentRef(
+  cwd: string,
+  branchName: string,
+): Promise<string | null> {
+  const segments = branchName.split('/').filter((part) => part.length > 0);
+  if (segments.length < 2) {
+    return null;
+  }
+
+  for (let i = 1; i < segments.length; i += 1) {
+    const prefix = segments.slice(0, i).join('/');
+    if (await branchExists(cwd, prefix)) {
+      return prefix;
+    }
+  }
+  return null;
+}
+
 /** Create an orphan branch only when it does not already exist. */
 export async function createOrphanSafe(
   cwd: string,

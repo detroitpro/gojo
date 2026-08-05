@@ -474,6 +474,57 @@ describe('ProjectManifest', () => {
     expect(manifest.schedules?.['dependency-maintenance']?.enabled).toBe(false);
   });
 
+  test('accepts agent mergePolicy with star or explicit includeAgents', () => {
+    const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
+    const agents = parsed['agents'] as Record<string, Record<string, unknown>>;
+    const withStar = parseProjectManifest({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          mergePolicy: {
+            includeAgents: '*',
+            excludeAgents: ['self-heal'],
+          },
+        },
+      },
+    });
+    expect(withStar.agents['dependency-maintenance']?.mergePolicy).toEqual({
+      includeAgents: '*',
+      excludeAgents: ['self-heal'],
+    });
+
+    const withList = parseProjectManifest({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          mergePolicy: {
+            includeAgents: ['maintain-docs', 'maintain-quality'],
+          },
+        },
+      },
+    });
+    expect(withList.agents['dependency-maintenance']?.mergePolicy?.includeAgents).toEqual([
+      'maintain-docs',
+      'maintain-quality',
+    ]);
+
+    const bad = ProjectManifestSchema.safeParse({
+      ...parsed,
+      agents: {
+        ...agents,
+        'dependency-maintenance': {
+          ...agents['dependency-maintenance'],
+          mergePolicy: { includeAgents: [] },
+        },
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
   test('accepts optional agent environment with file, include, and required', () => {
     const parsed = parseYaml(prdManifestYaml) as Record<string, unknown>;
     const agents = parsed['agents'] as Record<string, Record<string, unknown>>;

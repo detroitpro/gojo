@@ -370,7 +370,8 @@ import DashboardView from "@/contexts/operations/views/DashboardView.vue";
 import ImpactView from "@/contexts/catalog/views/ImpactView.vue";
 import IntegrationsView from "@/contexts/delivery/views/IntegrationsView.vue";
 import LoginView from "@/contexts/access/views/LoginView.vue";
-import ProjectDetailView from "@/contexts/catalog/views/ProjectDetailView.vue";
+import ProjectOverviewView from "@/contexts/catalog/views/ProjectOverviewView.vue";
+import ProjectShellView from "@/contexts/catalog/views/ProjectShellView.vue";
 import ProjectsView from "@/contexts/catalog/views/ProjectsView.vue";
 import QueueView from "@/contexts/scheduling/views/QueueView.vue";
 import RunDetailView from "@/contexts/execution/views/RunDetailView.vue";
@@ -382,7 +383,22 @@ const routes: RouteRecordRaw[] = [
   { path: "/login", name: "login", component: LoginView },
   { path: "/", name: "dashboard", component: DashboardView },
   { path: "/projects", name: "projects", component: ProjectsView },
-  { path: "/projects/:id", name: "project-detail", component: ProjectDetailView },
+  {
+    path: "/projects/:id",
+    component: ProjectShellView,
+    children: [
+      { path: "", name: "project-detail", redirect: { name: "project-overview" } },
+      { path: "overview", name: "project-overview", component: ProjectOverviewView },
+      { path: "history", name: "project-history", component: { template: "<div>History</div>" } },
+      { path: "impact", name: "project-impact", component: { template: "<div>Impact</div>" } },
+      { path: "health", name: "project-health", component: { template: "<div>Health</div>" } },
+      {
+        path: "configuration",
+        name: "project-configuration",
+        component: { template: "<div>Configuration</div>" },
+      },
+    ],
+  },
   { path: "/agents", name: "agents", component: AgentsView },
   { path: "/agents/:id", name: "agent-detail", component: AgentDetailView },
   { path: "/runs", name: "runs", component: RunsView },
@@ -403,9 +419,12 @@ async function mountAt(path: string) {
   });
   await router.push(path);
   await router.isReady();
-  const matched = router.currentRoute.value.matched.at(-1)?.components?.default;
-  expect(matched).toBeTruthy();
-  const wrapper = mount(matched as object, {
+  const matched = router.currentRoute.value.matched;
+  const shell = matched.find((record) => record.components?.default === ProjectShellView);
+  const leaf = matched.at(-1)?.components?.default;
+  const target = shell?.components?.default ?? leaf;
+  expect(target).toBeTruthy();
+  const wrapper = mount(target as object, {
     global: {
       plugins: [createPinia(), router],
       stubs: {
@@ -442,7 +461,7 @@ describe("contract/web/views-smoke", () => {
     ["login", "/login", "gojo"],
     ["dashboard", "/", "Dashboard"],
     ["projects", "/projects", "Projects"],
-    ["project-detail", "/projects/p1"],
+    ["project-overview", "/projects/p1/overview"],
     ["agents", "/agents", "Agents"],
     ["agent-detail", "/agents/a1"],
     ["runs", "/runs", "Runs"],

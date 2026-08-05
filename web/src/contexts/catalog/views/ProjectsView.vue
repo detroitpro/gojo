@@ -428,9 +428,9 @@ bindStoreRefresh(catalogStore, load);
                 <RouterLink
                   v-if="project.openPrCount > 0"
                   :to="{
-                    name: 'project-detail',
+                    name: 'project-overview',
                     params: { id: project.id },
-                    hash: '#open-prs',
+                    hash: '#delivery',
                   }"
                   class="entity-name"
                 >
@@ -439,10 +439,15 @@ bindStoreRefresh(catalogStore, load);
                 <span v-else class="muted">—</span>
               </td>
               <td>
-                <HealthBadge
-                  :level="healthFor(project).level"
-                  :label="healthFor(project).label"
-                />
+                <RouterLink
+                  :to="{ name: 'project-health', params: { id: project.id } }"
+                  class="health-badge-link"
+                >
+                  <HealthBadge
+                    :level="healthFor(project).level"
+                    :label="healthFor(project).label"
+                  />
+                </RouterLink>
               </td>
               <td class="mono muted">{{ new Date(project.updatedAt).toLocaleString() }}</td>
               <td class="actions-cell">
@@ -548,3 +553,14 @@ bindStoreRefresh(catalogStore, load);
     </ConfirmDialog>
   </div>
 </template>
+
+<style scoped>
+.health-badge-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.health-badge-link:hover {
+  opacity: 0.9;
+}
+</style>

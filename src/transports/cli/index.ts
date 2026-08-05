@@ -219,7 +219,7 @@ async function runInstanceCommand(parsed: ParsedArgv, format: OutputFormat): Pro
 
   // Registry strangler for migrated instance subcommands.
   // @removal(when: all instance CLI subcommands on registry): drop this special-case — R5
-  if (sub === "scheduling-show" || sub === "scheduling-set") {
+  if (sub === "scheduling-show" || sub === "scheduling-set" || sub === "sweep-worktrees") {
     await withContext(getHome(parsed), async (ctx) => {
       const input =
         sub === "scheduling-set"
@@ -838,7 +838,12 @@ async function runProjectCommand(parsed: ParsedArgv, format: ReturnType<typeof g
         if (!project) {
           die("project not found", format);
         }
-        printOutput(format, await projectDoctor(project, ctx.repos));
+        printOutput(
+          format,
+          await projectDoctor(project, ctx.repos, {
+            worktreesRoot: ctx.paths.worktrees,
+          }),
+        );
         break;
       }
       case "work": {

@@ -278,6 +278,16 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         related: ["instance set", "server doctor"],
       },
       {
+        path: "instance sweep-worktrees",
+        summary: "Remove orphan worktrees not attached to a live run",
+        usage: "gojo instance sweep-worktrees",
+        notes: [
+          "Deletes leftover $GOJO_HOME/worktrees dirs and matching local gojo/run/… branches.",
+          "Also runs automatically on daemon start.",
+        ],
+        related: ["server doctor", "project doctor"],
+      },
+      {
         path: "instance set",
         summary: "Update network fields in instance.yaml",
         usage:

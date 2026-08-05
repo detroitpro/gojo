@@ -45,6 +45,21 @@ describe('assembleAgentPrompt', () => {
     expect(out).toBe('do work');
   });
 
+  test('AI: appends merge scope after instructions and before validation', () => {
+    const out = assembleAgentPrompt({
+      taskPrompt: '## Role\n\nMerge PRs.\n',
+      adapterName: 'cursor',
+      workspacePath: tempWorkspace(),
+      validationSteps: [{ name: 'handoff', command: 'test -f .gojo/handoff.json' }],
+      mergeScopePrompt: `## Gojo merge scope (platform)\n\n- \`gojo/run/maintain-docs/\`\n`,
+    });
+    expect(out.indexOf('## Role')).toBeLessThan(out.indexOf('## Gojo merge scope'));
+    expect(out.indexOf('## Gojo merge scope')).toBeLessThan(
+      out.indexOf('## Gojo validation'),
+    );
+    expect(out).toContain('gojo/run/maintain-docs/');
+  });
+
   test('AI: injects source work as explicitly untrusted structured data', () => {
     const out = assembleAgentPrompt({
       taskPrompt: 'Implement the assigned issue.',

@@ -447,7 +447,12 @@ export const GetProjectDoctor = defineQuery<{ id: string }, unknown, AppRuntime>
     const project = runtime.catalog.store.findProject(input.id);
     if (!project) return useCaseFailure("not_found", "Project not found", 404);
     const { projectDoctor } = await import("@/contexts/operations/infrastructure/diagnostics/doctor");
-    return { ok: true, value: await projectDoctor(project, runtime.ctx.repos) };
+    return {
+      ok: true,
+      value: await projectDoctor(project, runtime.ctx.repos, {
+        worktreesRoot: runtime.ctx.paths.worktrees,
+      }),
+    };
   },
 });
 

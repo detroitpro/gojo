@@ -59,6 +59,7 @@ import type {
   RunIntegrationStatus,
   RunTrigger,
 } from '@/infrastructure/persistence/types';
+import { resolveAgentTimeoutMs } from '@/contexts/execution/infrastructure/agent-timeout';
 import { runValidationProfile, type ValidationStepResult } from '@/contexts/execution/infrastructure/validation/engine';
 import { WorkspaceManager } from '@/contexts/execution/infrastructure/workspace/manager';
 
@@ -79,12 +80,15 @@ import {
 import { decideHealEnqueue } from '@/contexts/execution/domain/heal';
 import { buildRunImpactRecords } from '@/contexts/execution/domain/impact';
 import {
+  formatMergeScopePrompt,
+  mergePolicyFromManifest,
+  resolveMergeScope,
+} from '@/contexts/execution/domain/merge-scope';
+import {
   appendValidationPrompt,
   appendValidationPromptAsShellComments,
   assembleAgentPrompt,
 } from '@/contexts/execution/domain/prompt-assembly';
-
-const DEFAULT_AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 
 interface ValidationProfileConfig {
   steps?: Array<{ name: string; command: string; timeout?: string }>;
@@ -487,20 +491,20 @@ export class RunCoordinator {
 
         if (controller.signal.aborted || agentResult.canceled) {
           this.finishAttempt(attempt, 'canceled', agentResult);
-          await this.cleanupWorkspace(workspacePath, branchName, false);
+          await this.cleanupWorkspace(workspacePath, branchName);
           return this.terminalRun(run, RunState.Canceled);
         }
 
         if (agentResult.timedOut) {
           this.finishAttempt(attempt, 'timed_out', agentResult);
-          await this.cleanupWorkspace(workspacePath, branchName, false);
+          await this.cleanupWorkspace(workspacePath, branchName);
           return this.terminalRun(run, RunState.TimedOut);
         }
 
         if (agentResult.exitCode !== 0) {
           this.finishAttempt(attempt, 'failed', agentResult);
           lastFailureMessage = `Agent exited with code ${agentResult.exitCode}`;
-          await this.cleanupWorkspace(workspacePath, branchName, false);
+          await this.cleanupWorkspace(workspacePath, branchName);
           if (attemptNumber < maxAttempts) {
             continue;
           }
@@ -545,7 +549,7 @@ export class RunCoordinator {
         if (!validationResult.passed) {
           this.writeValidationArtifact(run.id, validationResults);
           lastFailureMessage = formatValidationFailureMessage(validationResults);
-          await this.cleanupWorkspace(workspacePath, branchName, false);
+          await this.cleanupWorkspace(workspacePath, branchName);
           if (attemptNumber < maxAttempts) {
             continue;
           }
@@ -607,12 +611,9 @@ export class RunCoordinator {
           validationResults,
         );
         this.recordImpactItems(run, attempt, artifact.handoff, artifact.filesChanged);
-        await this.cleanupWorkspace(
-          workspacePath,
-          branchName,
-          true,
-          Boolean(runContext?.resumeBranch),
-        );
+        await this.cleanupWorkspace(workspacePath, branchName, {
+          keepBranch: Boolean(runContext?.resumeBranch),
+        });
         return this.terminalRun(run, RunState.Succeeded);
       }
 
@@ -767,7 +768,7 @@ export class RunCoordinator {
     const attempts = this.repos.attempts.listByRun(run.id);
     const attempt = attempts[attempts.length - 1];
     if (attempt?.workspacePath && attempt.branchName) {
-      await this.cleanupWorkspace(attempt.workspacePath, attempt.branchName, false);
+      await this.cleanupWorkspace(attempt.workspacePath, attempt.branchName);
     }
 
     this.failRun(run, reason ?? 'Rejected by operator');
@@ -879,7 +880,7 @@ export class RunCoordinator {
     });
 
     if (result.conflict) {
-      await this.cleanupWorkspace(input.workspacePath, input.branchName, false);
+      await this.cleanupWorkspace(input.workspacePath, input.branchName);
       return this.terminalRun(run, RunState.Conflict);
     }
 
@@ -893,7 +894,9 @@ export class RunCoordinator {
         input.validationResults,
         result,
       );
-      await this.cleanupWorkspace(input.workspacePath, input.branchName, true, true);
+      await this.cleanupWorkspace(input.workspacePath, input.branchName, {
+        keepBranch: true,
+      });
       return this.failRun(
         run,
         `Pull request create failed via ${tool}. Branch ${input.branchName} may already be pushed; placeholder ${result.prUrl ?? 'local://pr/' + input.branchName}. Restart gojo after install if prTool was recently added, then check ${tool} auth.`,
@@ -921,7 +924,9 @@ export class RunCoordinator {
       input.mode === 'commit-only' ||
       input.mode === 'pull-request' ||
       input.mode === 'update-pull-request';
-    await this.cleanupWorkspace(input.workspacePath, input.branchName, true, keepBranch);
+    await this.cleanupWorkspace(input.workspacePath, input.branchName, {
+      keepBranch,
+    });
 
     return this.terminalRun(run, RunState.Succeeded);
   }
@@ -1186,6 +1191,7 @@ export class RunCoordinator {
     try {
       // Shell: script body + validation comments only (no markdown instructions).
       // AI adapters: notice + instruction files + agent prompt + validation gate.
+      const mergeScopePrompt = this.resolveMergeScopePrompt(agent);
       const prompt = assembleAgentPrompt({
         taskPrompt: agent.prompt,
         adapterName,
@@ -1194,6 +1200,7 @@ export class RunCoordinator {
         progressReporting: this.apiBaseUrl !== null,
         ...(subject ? { subject } : {}),
         ...(instructions !== undefined ? { instructions } : {}),
+        ...(mergeScopePrompt ? { mergeScopePrompt } : {}),
       });
 
       const platformEnv: Record<string, string> = {
@@ -1222,7 +1229,7 @@ export class RunCoordinator {
           workspacePath,
           prompt,
           env: agentEnv,
-          timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
+          timeoutMs: resolveAgentTimeoutMs(agent, this.repos.profiles),
           signal,
           onOutput: (stream, chunk) => {
             buffers[stream] += chunk;
@@ -1451,7 +1458,7 @@ export class RunCoordinator {
     const attempt = attempts[attempts.length - 1];
     if (attempt?.workspacePath && attempt.branchName) {
       try {
-        await this.cleanupWorkspace(attempt.workspacePath, attempt.branchName, false);
+        await this.cleanupWorkspace(attempt.workspacePath, attempt.branchName);
       } catch {
         // Best-effort cleanup for orphaned worktrees.
       }
@@ -1505,23 +1512,48 @@ export class RunCoordinator {
     return [...names];
   }
 
+  /**
+   * Always remove the worktree once a run attempt is done. Keep the local
+   * branch only when it was (or may have been) pushed / resumed.
+   */
   private async cleanupWorkspace(
     workspacePath: string,
     branchName: string,
-    success: boolean,
-    keepBranch = false,
+    options: { keepBranch?: boolean } = {},
   ): Promise<void> {
-    if (!success) {
-      return;
-    }
-
     try {
       await this.workspace.cleanup(workspacePath, branchName, {
-        keepBranch,
+        keepBranch: options.keepBranch ?? false,
       });
     } catch {
       // Worktree may already be removed during recovery.
     }
+  }
+
+  /** Injected merge allowlist from agent `mergePolicy` + sibling agents. */
+  private resolveMergeScopePrompt(agent: Agent): string | null {
+    const project = this.repos.projects.findById(agent.projectId);
+    if (!project) return null;
+    let manifest = null;
+    try {
+      const raw = JSON.parse(project.manifestJson || '{}') as unknown;
+      const parsed = safeParseProjectManifest(raw);
+      if (parsed.success) manifest = parsed.data;
+    } catch {
+      return null;
+    }
+    const policy = mergePolicyFromManifest(manifest, agent.name);
+    if (!policy) return null;
+    const siblings = this.repos.agents.listByProject(agent.projectId);
+    const scope = resolveMergeScope({
+      mergeAgentName: agent.name,
+      policy,
+      projectAgents: siblings.map((row) => ({
+        name: row.name,
+        enabled: row.enabled,
+      })),
+    });
+    return formatMergeScopePrompt(scope);
   }
 
   private writeValidationArtifact(runId: string, results: ValidationStepResult[]): void {

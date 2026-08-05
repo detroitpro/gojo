@@ -117,7 +117,7 @@ gojo keeps generated files out of the commits it makes, so you do not have to ge
 !.gojo/labels.md
 ```
 
-Ignoring everything and re-including the registration files means any generated file gojo adds later is ignored automatically. Run `gojo project doctor <project-id>` (or check the project's Health panel) to see whether a repo follows this.
+Ignoring everything and re-including the registration files means any generated file gojo adds later is ignored automatically. Run `gojo project doctor <project-id>` (or open the project's **Health** page in the admin UI) to see whether a repo follows this.
 
 ## 3. Sync and run
 

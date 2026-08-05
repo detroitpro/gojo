@@ -59,10 +59,18 @@ export type ProfilePermissions = z.infer<typeof ProfilePermissionsSchema>;
  * the Tasks→Agents vocabulary rebrand; the previous top-level `agents:` map is
  * now `profiles:` and describes how an adapter is invoked.
  */
+/** Duration grammar shared with runtime `parseTimeout` (`ms`|`s`|`m`|`h`). */
+const DurationStringSchema = z
+  .string()
+  .regex(
+    /^(\d+(?:\.\d+)?)(ms|s|m|h)$/,
+    'Invalid timeout format (expected e.g. 30s, 10m, 1h)',
+  );
+
 export const ProfileConfigSchema = z.object({
   adapter: z.string().min(1),
   model: z.string().optional(),
-  timeout: z.string().optional(),
+  timeout: DurationStringSchema.optional(),
   readOnly: z.boolean().optional(),
   permissions: ProfilePermissionsSchema.optional(),
 });
@@ -72,7 +80,7 @@ export type ProfileConfig = z.infer<typeof ProfileConfigSchema>;
 export const ValidationStepSchema = z.object({
   name: z.string().min(1),
   command: z.string().min(1),
-  timeout: z.string().optional(),
+  timeout: DurationStringSchema.optional(),
 });
 
 export type ValidationStep = z.infer<typeof ValidationStepSchema>;
@@ -235,6 +243,26 @@ export const AgentEnvironmentSchema = z
 export type AgentEnvironment = z.infer<typeof AgentEnvironmentSchema>;
 
 /**
+ * Which sibling agents' PR heads a merge/babysit agent may touch.
+ * Resolved at runtime to `gojo/run/<agent>/…` prefixes — do not duplicate
+ * branch lists in prompt files.
+ */
+export const AgentMergePolicySchema = z.object({
+  /**
+   * `"*"` = every enabled agent in the project (minus this agent and
+   * `excludeAgents`). Otherwise an explicit list of agent names.
+   */
+  includeAgents: z.union([
+    z.literal('*'),
+    z.array(z.string().min(1)).min(1),
+  ]),
+  /** Always excluded, even when `includeAgents` is `"*"`. */
+  excludeAgents: z.array(z.string().min(1)).optional(),
+});
+
+export type AgentMergePolicy = z.infer<typeof AgentMergePolicySchema>;
+
+/**
  * A work unit definition. Formerly `TaskConfig` before the Tasks→Agents
  * vocabulary rebrand; `agent` here refers to the profile name (adapter+model)
  * from the top-level `profiles:` map.
@@ -252,6 +280,11 @@ export const AgentConfigSchema = z.object({
   integration: AgentIntegrationSchema.optional(),
   failurePolicy: AgentFailurePolicySchema.optional(),
   selfHeal: AgentSelfHealSchema.optional(),
+  /**
+   * When set, gojo injects a **Gojo merge scope** section listing allowed
+   * `gojo/run/<agent>/…` head prefixes derived from sibling agents.
+   */
+  mergePolicy: AgentMergePolicySchema.optional(),
   /** Overrides project-level routing for this agent only. */
   notifications: NotificationsConfigSchema.optional(),
   /**

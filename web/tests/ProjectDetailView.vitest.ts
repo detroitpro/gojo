@@ -53,7 +53,9 @@ vi.mock("@/contexts/work/contract", async (importOriginal) => ({
   resolveWorkItem: mocks.resolveWorkItem,
 }));
 
-import ProjectDetailView from "@/contexts/catalog/views/ProjectDetailView.vue";
+import ProjectHistoryView from "@/contexts/catalog/views/ProjectHistoryView.vue";
+import ProjectOverviewView from "@/contexts/catalog/views/ProjectOverviewView.vue";
+import ProjectShellView from "@/contexts/catalog/views/ProjectShellView.vue";
 
 function workItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -89,7 +91,55 @@ function workItem(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function mountView() {
+function projectRoutes() {
+  return [
+    {
+      path: "/projects/:id",
+      component: ProjectShellView,
+      children: [
+        {
+          path: "",
+          name: "project-detail",
+          redirect: { name: "project-overview" },
+        },
+        {
+          path: "overview",
+          name: "project-overview",
+          component: ProjectOverviewView,
+        },
+        {
+          path: "history",
+          name: "project-history",
+          component: ProjectHistoryView,
+        },
+        {
+          path: "health",
+          name: "project-health",
+          component: { template: "<div>Health</div>" },
+        },
+        {
+          path: "impact",
+          name: "project-impact",
+          component: { template: "<div>Impact</div>" },
+        },
+        {
+          path: "configuration",
+          name: "project-configuration",
+          component: { template: "<div>Configuration</div>" },
+        },
+      ],
+    },
+    { path: "/projects", name: "projects", component: { template: "<div />" } },
+    { path: "/runs/:id", name: "run-detail", component: { template: "<div />" } },
+    { path: "/agents", name: "agents", component: { template: "<div />" } },
+    { path: "/schedules", name: "schedules", component: { template: "<div />" } },
+    { path: "/runs", name: "runs", component: { template: "<div />" } },
+    { path: "/integrations", name: "integrations", component: { template: "<div />" } },
+    { path: "/impact", name: "impact", component: { template: "<div />" } },
+  ];
+}
+
+async function mountShell(path = "/projects/project-1/overview") {
   refreshBindings.length = 0;
   mocks.getProject.mockResolvedValue({
     id: "project-1",
@@ -122,11 +172,21 @@ async function mountView() {
     },
   });
   mocks.listAgents.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
-  mocks.listProjectWork.mockResolvedValue({
-    items: [workItem()],
-    total: 1,
-    limit: 100,
-    offset: 0,
+  mocks.listProjectWork.mockImplementation((_id: string, query?: { history?: boolean }) => {
+    if (query?.history) {
+      return Promise.resolve({
+        items: [],
+        total: 0,
+        limit: 25,
+        offset: 0,
+      });
+    }
+    return Promise.resolve({
+      items: [workItem()],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
   });
   mocks.getProjectWorkStatus.mockResolvedValue({
     working: 0,
@@ -186,32 +246,29 @@ async function mountView() {
 
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [
-      { path: "/projects/:id", name: "project-detail", component: ProjectDetailView },
-      { path: "/projects", name: "projects", component: { template: "<div />" } },
-      { path: "/runs/:id", name: "run-detail", component: { template: "<div />" } },
-      { path: "/agents", name: "agents", component: { template: "<div />" } },
-      { path: "/schedules", name: "schedules", component: { template: "<div />" } },
-      { path: "/runs", name: "runs", component: { template: "<div />" } },
-      { path: "/integrations", name: "integrations", component: { template: "<div />" } },
-      { path: "/impact", name: "impact", component: { template: "<div />" } },
-    ],
+    routes: projectRoutes(),
   });
-  await router.push("/projects/project-1");
+  await router.push(path);
   await router.isReady();
-  const wrapper = mount(ProjectDetailView, {
+  const wrapper = mount(ProjectShellView, {
     global: {
       plugins: [createPinia(), router],
       stubs: { ProjectImpactSection: true },
     },
   });
   await flushPromises();
-  return wrapper;
+  return { wrapper, router };
 }
 
-describe("ProjectDetailView attention actions", () => {
-  test("links stale work and rechecks it into History", async () => {
-    const wrapper = await mountView();
+describe("Project shell overview attention actions", () => {
+  test("redirects project-detail to overview", async () => {
+    const { router } = await mountShell("/projects/project-1");
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe("project-overview");
+  });
+
+  test("links stale work and clears Needs attention after recheck", async () => {
+    const { wrapper, router } = await mountShell();
     expect(wrapper.text()).toContain("Needs attention");
     expect(wrapper.text()).toContain("Add report-only maintain-issue-tags agent");
     expect(wrapper.text()).toContain("Recheck now");
@@ -222,30 +279,33 @@ describe("ProjectDetailView attention actions", () => {
       );
     expect(link).toBeTruthy();
 
+    const closedItem = workItem({
+      attention: "none",
+      delivery: "closed",
+      syncState: "current",
+      lastError: null,
+      completedAt: "2026-07-27T21:00:00.000Z",
+    });
     mocks.recheckWorkItem.mockResolvedValue({
       status: "terminal",
       detail: null,
-      work: workItem({
-        attention: "none",
-        delivery: "closed",
-        syncState: "current",
-        lastError: null,
-        completedAt: "2026-07-27T21:00:00.000Z",
-      }),
+      work: closedItem,
     });
-    mocks.listProjectWork.mockResolvedValue({
-      items: [
-        workItem({
-          attention: "none",
-          delivery: "closed",
-          syncState: "current",
-          lastError: null,
-          completedAt: "2026-07-27T21:00:00.000Z",
-        }),
-      ],
-      total: 1,
-      limit: 100,
-      offset: 0,
+    mocks.listProjectWork.mockImplementation((_id: string, query?: { history?: boolean }) => {
+      if (query?.history) {
+        return Promise.resolve({
+          items: [closedItem],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return Promise.resolve({
+        items: [],
+        total: 0,
+        limit: 100,
+        offset: 0,
+      });
     });
     mocks.getProjectWorkStatus.mockResolvedValue({
       working: 0,
@@ -271,10 +331,13 @@ describe("ProjectDetailView attention actions", () => {
     expect(wrapper.findAll("button").some((button) => button.text().includes("Recheck now"))).toBe(
       false,
     );
+    expect(wrapper.text()).toContain("Verified Add report-only maintain-issue-tags agent as closed");
+
+    await router.push({ name: "project-history", params: { id: "project-1" } });
+    await flushPromises();
     expect(wrapper.text()).toContain("History");
     expect(wrapper.find('[aria-label="Closed"]').exists()).toBe(true);
     expect(wrapper.find('[aria-label="Issue"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain("Verified Add report-only maintain-issue-tags agent as closed");
     wrapper.unmount();
   });
 });

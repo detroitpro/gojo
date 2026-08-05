@@ -11,7 +11,9 @@ export type {
   InstanceDoctorResult,
   InstanceNetworkDoctor,
   ProjectBaseCheckout,
+  ProjectDoctorOptions,
   ProjectDoctorResult,
+  ProjectRefConflict,
   ProjectValidationToolCheck,
   ProjectWorkspaceFilesCheck,
 } from "./doctor";

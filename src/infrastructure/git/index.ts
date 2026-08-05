@@ -11,6 +11,7 @@ export {
   execGit,
   fetch,
   fetchAndFastForwardBranch,
+  findConflictingParentRef,
   getBranch,
   getHead,
   GitError,

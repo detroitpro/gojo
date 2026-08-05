@@ -8,10 +8,33 @@ import {
   deleteBranch,
   execGit,
   fetchAndFastForwardBranch,
+  findConflictingParentRef,
   hasRemote,
   removeWorktree,
   resolveRemoteTrackingRef,
 } from '@/infrastructure/git/git';
+import {
+  buildRunBranchName,
+  RUN_BRANCH_NAMESPACE,
+} from '@/contexts/execution/domain/run-branch';
+
+export { RUN_BRANCH_NAMESPACE, buildRunBranchName };
+
+export class WorkspaceRefConflictError extends Error {
+  readonly branchName: string;
+  readonly blockingRef: string;
+
+  constructor(branchName: string, blockingRef: string) {
+    super(
+      `Cannot create run branch '${branchName}': leaf ref '${blockingRef}' exists. ` +
+        `Delete or rename '${blockingRef}' (gojo never deletes refs it did not create). ` +
+        `Platform run branches live under '${RUN_BRANCH_NAMESPACE}/…'.`,
+    );
+    this.name = 'WorkspaceRefConflictError';
+    this.branchName = branchName;
+    this.blockingRef = blockingRef;
+  }
+}
 
 export interface PrepareAttemptInput {
   repoPath: string;
@@ -43,21 +66,6 @@ export interface CleanupOptions {
   keepBranch?: boolean;
 }
 
-function sanitizeSegment(value: string, fallback: string): string {
-  return (
-    value
-      .trim()
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 64) || fallback
-  );
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 interface WorktreeRecord {
   repoPath: string;
   branchName: string;
@@ -79,18 +87,25 @@ export class WorkspaceManager {
     date = new Date(),
     attemptNumber = 1,
   ): string {
-    const safeProject = sanitizeSegment(projectName, 'project');
-    const safeAgent = sanitizeSegment(agentName, 'agent');
-    // Flat attempt suffix — nested refs like run-xxx/a2 fail when run-xxx already exists.
-    const attemptSuffix = attemptNumber > 1 ? `-a${attemptNumber}` : '';
-    // Agent segment stays immediately under `gojo/` so allowlists like
-    // `gojo/maintain-quality` still match; project disambiguates the global worktree root.
-    return `gojo/${safeAgent}/${safeProject}/${formatDate(date)}/run-${runId}${attemptSuffix}`;
+    return buildRunBranchName(agentName, runId, projectName, date, attemptNumber);
   }
 
   buildWorktreePath(branchName: string): string {
     const safePath = branchName.replace(/\//g, '__');
     return join(this.rootDir, safePath);
+  }
+
+  /** Reverse of buildWorktreePath for orphan sweep / doctor. */
+  branchNameFromWorktreePath(worktreePath: string): string | null {
+    const resolved = resolve(worktreePath);
+    if (!this.isPathInsideRoot(resolved) || resolved === this.rootDir) {
+      return null;
+    }
+    const relative = resolved.slice(this.rootDir.length).replace(/^[/\\]/, '');
+    if (!relative || relative.includes('/') || relative.includes('\\')) {
+      return null;
+    }
+    return relative.replace(/__/g, '/');
   }
 
   /** True when path resolves inside the worktrees root (blocks path escape). */
@@ -229,6 +244,10 @@ export class WorkspaceManager {
 
     await this.reclaimWorktreePath(input.repoPath, worktreePath);
     if (!resumeBranch) {
+      const blocking = await findConflictingParentRef(input.repoPath, branchName);
+      if (blocking) {
+        throw new WorkspaceRefConflictError(branchName, blocking);
+      }
       if (await branchExists(input.repoPath, branchName)) {
         await deleteBranch(input.repoPath, branchName);
       }
