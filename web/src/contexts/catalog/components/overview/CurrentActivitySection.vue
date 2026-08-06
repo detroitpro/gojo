@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
-import type { WorkItem } from "@/contexts/work/types";
+import type { WorkItem } from "@/contexts/work/contract";
 import {
   executionStageLabel,
   formatRelativeTime,

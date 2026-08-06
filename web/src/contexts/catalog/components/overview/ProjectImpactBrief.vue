@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { ArrowRight } from "lucide-vue-next";
 
 import { getDashboardImpact, useOperationsStore } from "@/contexts/operations/contract";
-import type { DashboardImpact } from "@/contexts/operations/types";
+import type { DashboardImpact } from "@/contexts/operations/contract";
 import { listIntegrations } from "@/contexts/delivery/contract";
 import { listProjectWork } from "@/contexts/work/contract";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";

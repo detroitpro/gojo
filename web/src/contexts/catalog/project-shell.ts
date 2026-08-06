@@ -1,7 +1,7 @@
 import type { InjectionKey, Ref } from "vue";
 
 import type { Agent, Project, ProjectSyncResult } from "@/contexts/catalog/types";
-import type { ProjectDoctorResult } from "@/contexts/operations/types";
+import type { ProjectDoctorResult } from "@/contexts/operations/contract";
 
 export type ProjectShellContext = {
   projectId: Ref<string>;

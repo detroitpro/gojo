@@ -11,7 +11,7 @@ import StatGrid from "@/ui/StatGrid.vue";
 import StatTile from "@/ui/StatTile.vue";
 import VerificationBadge from "@/ui/status/VerificationBadge.vue";
 import { compareLabel } from "@/kernel/stat-metrics";
-import type { DashboardImpact } from "@/contexts/operations/types";
+import type { DashboardImpact } from "@/contexts/operations/contract";
 
 const props = withDefaults(
   defineProps<{

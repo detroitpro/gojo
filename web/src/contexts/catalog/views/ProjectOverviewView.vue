@@ -18,7 +18,7 @@ import {
   resolveWorkItem,
   useWorkStore,
 } from "@/contexts/work/contract";
-import type { ProjectSource, WorkItem, WorkStatus } from "@/contexts/work/types";
+import type { ProjectSource, WorkItem, WorkStatus } from "@/contexts/work/contract";
 import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
 import {
   buildProgressSummary,
