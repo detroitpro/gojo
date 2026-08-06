@@ -1,0 +1,6 @@
+{
+  "name": "gojo.yaml",
+  "description": "gojo project manifest (profiles, agents, schedules)",
+  "fileMatch": ["gojo.yaml", "**/.gojo/project.yaml"],
+  "url": "https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json"
+}

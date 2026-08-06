@@ -12,3 +12,15 @@ Shared wire contracts for the gojo daemon, CLI, and admin UI.
 
 Do not import `@gojo/contracts/schemas` from `web/` — it pulls Zod into the browser bundle.
 Prefer `@gojo/contracts/types` (or the browser wire mirror in `web/src/lib/ws-types.ts` when zero shared runtime is required).
+
+## `gojo.yaml` JSON Schema
+
+[`schemas/gojo.project.schema.json`](./schemas/gojo.project.schema.json) is
+**generated** from `ProjectManifestSchema` for editor autocomplete (YAML Language
+Server). Do not hand-edit it.
+
+```bash
+bun run generate:manifest-schema
+```
+
+See [`docs/manifest-json-schema.md`](../../docs/manifest-json-schema.md).

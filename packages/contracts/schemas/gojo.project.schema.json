@@ -1,0 +1,679 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json",
+  "title": "gojo project manifest",
+  "description": "JSON Schema for repository-root gojo.yaml (or legacy .gojo/project.yaml). Generated from ProjectManifestSchema in @gojo/contracts. Runtime Sync still enforces Zod cross-field rules not expressible here.",
+  "$ref": "#/definitions/GojoProjectManifest",
+  "definitions": {
+    "GojoProjectManifest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "Manifest format version. Must be 1."
+        },
+        "project": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Human-readable project name."
+            },
+            "defaultBranch": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Git default branch used as the integration base (e.g. main)."
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "When false, Sync gates all new work for the project. Omitted ⇒ true."
+            }
+          },
+          "required": [
+            "name",
+            "defaultBranch"
+          ],
+          "additionalProperties": false,
+          "description": "Project identity and enablement."
+        },
+        "repository": {
+          "type": "object",
+          "properties": {
+            "remote": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Git remote name used for fetch/push (usually origin)."
+            },
+            "syncBeforeRun": {
+              "type": "boolean",
+              "description": "Fetch and fast-forward the base, then re-sync the manifest before each run."
+            },
+            "requireCleanBase": {
+              "type": "boolean",
+              "description": "Refuse runs when the primary checkout base is dirty."
+            },
+            "submodules": {
+              "type": "boolean",
+              "description": "Initialize and update git submodules when preparing worktrees."
+            },
+            "gitLfs": {
+              "type": "boolean",
+              "description": "Pull Git LFS objects when preparing worktrees."
+            }
+          },
+          "required": [
+            "remote",
+            "syncBeforeRun",
+            "requireCleanBase",
+            "submodules",
+            "gitLfs"
+          ],
+          "additionalProperties": false,
+          "description": "Git repository sync and worktree preparation options."
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "apiUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "Forge API base URL when it differs from the git remote host (self-hosted Forgejo/Gitea)."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Overrides for the repository source connection derived from the remote."
+        },
+        "instructions": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Repo-relative markdown files prepended to every agent prompt."
+            },
+            "scheduledRunNotice": {
+              "type": "string",
+              "description": "Extra notice injected for scheduled (cron) runs."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Shared prompt instructions for all agents in the project."
+        },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "adapter": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Installed adapter id (shell, cursor, claude-code, …)."
+              },
+              "model": {
+                "type": "string",
+                "description": "Model id passed to the adapter when applicable."
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(\\d+(?:\\.\\d+)?)(ms|s|m|h)$",
+                "description": "Wall-clock timeout for adapter execution."
+              },
+              "readOnly": {
+                "type": "boolean",
+                "description": "When true, the adapter must not modify the worktree."
+              },
+              "permissions": {
+                "type": "object",
+                "properties": {
+                  "filesystem": {
+                    "type": "string",
+                    "enum": [
+                      "project",
+                      "read-only",
+                      "none"
+                    ],
+                    "description": "Filesystem access granted to the adapter."
+                  },
+                  "shell": {
+                    "type": "string",
+                    "enum": [
+                      "allowlisted",
+                      "none",
+                      "full"
+                    ],
+                    "description": "Shell execution policy for the adapter."
+                  },
+                  "network": {
+                    "type": "string",
+                    "enum": [
+                      "restricted",
+                      "none",
+                      "full"
+                    ],
+                    "description": "Network access policy for the adapter."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Adapter execution permissions on a profile."
+              }
+            },
+            "required": [
+              "adapter"
+            ],
+            "additionalProperties": false,
+            "description": "Adapter + model + permissions binding referenced by agents."
+          },
+          "description": "Named adapter+model configurations referenced by agents."
+        },
+        "validationProfiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Step label shown in run activity."
+                    },
+                    "command": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Shell command run in the worktree."
+                    },
+                    "timeout": {
+                      "$ref": "#/definitions/GojoProjectManifest/properties/profiles/additionalProperties/properties/timeout",
+                      "description": "Per-step timeout override."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "command"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One command in a validation profile."
+                },
+                "minItems": 1,
+                "description": "Ordered validation commands; all must succeed when required."
+              }
+            },
+            "required": [
+              "steps"
+            ],
+            "additionalProperties": false,
+            "description": "Named set of validation steps referenced by agents."
+          },
+          "description": "Named validation step sets referenced by agents."
+        },
+        "agents": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Short human description of the work unit."
+              },
+              "profile": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the profiles: entry that provides adapter/model."
+              },
+              "promptFile": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Repo-relative path to the agent prompt or script (usually under .gojo/agents/)."
+              },
+              "validationProfile": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the validationProfiles: entry to run after the agent."
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "When false, Sync disables this agent. Omitted ⇒ true."
+              },
+              "concurrency": {
+                "type": "object",
+                "properties": {
+                  "projectLimit": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "Max concurrent runs for this agent within the project."
+                  },
+                  "overlapPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "queue",
+                      "cancel"
+                    ],
+                    "description": "What to do when a new run would overlap an in-flight run."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Per-agent concurrency controls."
+              },
+              "trigger": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "on": {
+                        "type": "string",
+                        "const": "issue-label",
+                        "description": "Fire when a trusted actor applies authorizing labels."
+                      },
+                      "requireLabels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "description": "All of these labels must be present to authorize the claim."
+                      },
+                      "anyLabels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "description": "At least one of these labels must also be present when set."
+                      },
+                      "excludeLabels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": "Skip the issue when any of these labels are present."
+                      },
+                      "trustedActors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "description": "Only these source-native actors may apply the authorizing label."
+                      },
+                      "maxOpenClaims": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "description": "Maximum open claimed issues this agent may hold at once."
+                      }
+                    },
+                    "required": [
+                      "on",
+                      "requireLabels",
+                      "trustedActors",
+                      "maxOpenClaims"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Trigger on issue labels from trusted actors."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "on": {
+                        "type": "string",
+                        "const": "pull-request-checks-settled",
+                        "description": "Fire when checks settle on PRs authored by listed agents."
+                      },
+                      "fromAgents": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "description": "Agent names whose pull requests this trigger watches."
+                      }
+                    },
+                    "required": [
+                      "on",
+                      "fromAgents"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Trigger when pull-request checks settle for sibling agents."
+                  }
+                ],
+                "description": "Event-driven trigger; omit for schedule-only or manual agents."
+              },
+              "integration": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "commit-only",
+                      "pull-request",
+                      "auto-merge",
+                      "await-approval"
+                    ],
+                    "description": "How successful work is integrated back to the forge."
+                  },
+                  "targetBranch": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Branch that receives commits or is the PR base."
+                  },
+                  "requireAllValidations": {
+                    "type": "boolean",
+                    "description": "When true, all validation steps must pass before integration."
+                  },
+                  "postApprovalMode": {
+                    "type": "string",
+                    "enum": [
+                      "commit-only",
+                      "pull-request",
+                      "auto-merge"
+                    ],
+                    "description": "Integration mode applied after an operator approves an await-approval run."
+                  },
+                  "approval": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "reviewer",
+                      "auto"
+                    ],
+                    "description": "Authority required before the platform may merge an agent-authored PR."
+                  },
+                  "autonomyLabels": {
+                    "type": "object",
+                    "properties": {
+                      "auto": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Issue label that raises autonomy to auto-merge authority."
+                      }
+                    },
+                    "required": [
+                      "auto"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Labels that opt a linked source issue into a stronger authority policy."
+                  },
+                  "fixRounds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Maximum automated repair rounds after red CI or requested changes."
+                  },
+                  "prTool": {
+                    "type": "string",
+                    "enum": [
+                      "gh",
+                      "tea"
+                    ],
+                    "description": "CLI used to open pull requests: gh (GitHub) or tea (Gitea/Forgejo)."
+                  },
+                  "prLogin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Tea --login account alias (Forgejo/Gitea). Ignored for gh."
+                  },
+                  "prRemote": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Tea --remote for host discovery. Ignored for gh. Default: origin."
+                  },
+                  "prApiUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Forgejo/Gitea API base URL when not discoverable from the remote."
+                  },
+                  "prRepo": {
+                    "type": "string",
+                    "minLength": 3,
+                    "description": "Forgejo/Gitea repository slug owner/name."
+                  },
+                  "prMergeStyle": {
+                    "type": "string",
+                    "enum": [
+                      "squash",
+                      "merge",
+                      "rebase"
+                    ],
+                    "description": "Merge style for platform or native forge merge. Default: squash."
+                  },
+                  "prAutoMerge": {
+                    "type": "boolean",
+                    "description": "Pull-request mode only: request native forge auto-merge when checks succeed."
+                  }
+                },
+                "required": [
+                  "mode",
+                  "targetBranch"
+                ],
+                "additionalProperties": false,
+                "description": "How an agent integrates successful work (commit, PR, approval)."
+              },
+              "failurePolicy": {
+                "type": "object",
+                "properties": {
+                  "maxAttemptsPerRun": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "Retry attempts within a single run for transient failures."
+                  },
+                  "disableAfterConsecutiveFailedRuns": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "Disable the agent after this many consecutive failed runs."
+                  },
+                  "backoff": {
+                    "type": "string",
+                    "enum": [
+                      "exponential",
+                      "linear",
+                      "none"
+                    ],
+                    "description": "Backoff strategy between retry attempts."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Retry and disable policy after failures."
+              },
+              "selfHeal": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Name of the in-repo healer agent to enqueue on failure."
+                  },
+                  "afterConsecutiveFailedRuns": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "Fire the healer after this many consecutive failed runs (default 1)."
+                  }
+                },
+                "required": [
+                  "agent"
+                ],
+                "additionalProperties": false,
+                "description": "Enqueue a healer agent after consecutive failures."
+              },
+              "mergePolicy": {
+                "type": "object",
+                "properties": {
+                  "includeAgents": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "*"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      }
+                    ],
+                    "description": "\"*\" for every enabled sibling agent (minus self/excludeAgents), or an explicit name list."
+                  },
+                  "excludeAgents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Agent names always excluded, even when includeAgents is \"*\"."
+                  }
+                },
+                "required": [
+                  "includeAgents"
+                ],
+                "additionalProperties": false,
+                "description": "Allowed sibling agent PR head prefixes for merge/babysit agents (injected at runtime)."
+              },
+              "notifications": {
+                "type": "object",
+                "properties": {
+                  "onSuccess": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Notification channel ids to ping on success."
+                  },
+                  "onFailure": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Notification channel ids to ping on failure."
+                  },
+                  "onDisabled": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Notification channel ids to ping when the agent is disabled."
+                  },
+                  "onApprovalNeeded": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Notification channel ids to ping when approval is required."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Overrides project-level notification routing for this agent only."
+              },
+              "environment": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Repo-relative dotenv path (never absolute)."
+                  },
+                  "include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1,
+                    "description": "Variable names to load from the dotenv file."
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Subset of include that must be present or the run fails."
+                  }
+                },
+                "required": [
+                  "file",
+                  "include"
+                ],
+                "additionalProperties": false,
+                "description": "Load allowlisted dotenv variables from the primary checkout into agent + validation."
+              }
+            },
+            "required": [
+              "description",
+              "profile",
+              "promptFile",
+              "validationProfile"
+            ],
+            "additionalProperties": false,
+            "description": "Work-unit definition: profile, prompt, validation, and policies."
+          },
+          "description": "Work-unit definitions keyed by agent name."
+        },
+        "schedules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the agents: entry this schedule fires."
+              },
+              "cron": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Cron expression for the schedule."
+              },
+              "timezone": {
+                "type": "string",
+                "minLength": 1,
+                "description": "IANA timezone for the cron expression (e.g. America/New_York)."
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "When false, Sync disables this schedule. Omitted ⇒ true."
+              }
+            },
+            "required": [
+              "agent",
+              "cron",
+              "timezone"
+            ],
+            "additionalProperties": false,
+            "description": "Cron schedule that enqueues a named agent."
+          },
+          "description": "Named cron schedules that enqueue agents."
+        },
+        "notifications": {
+          "$ref": "#/definitions/GojoProjectManifest/properties/agents/additionalProperties/properties/notifications",
+          "description": "Default notification routing for agents that omit their own notifications block."
+        }
+      },
+      "required": [
+        "version",
+        "project",
+        "repository",
+        "profiles",
+        "validationProfiles",
+        "agents"
+      ],
+      "additionalProperties": false,
+      "description": "Repository-root gojo.yaml project manifest."
+    }
+  }
+}

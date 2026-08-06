@@ -14,9 +14,12 @@ The vocabulary you'll see in `gojo.yaml`:
 
 ## 1. Manifest in the repository
 
-In the root of your Git project, create `gojo.yaml`:
+In the root of your Git project, create `gojo.yaml`. The modeline on line 1
+lets VS Code / Cursor (Red Hat YAML) autocomplete against the published schema;
+see [Settings](/settings) for `yaml.schemas` and Schema Store notes.
 
 ```yaml
+# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
 version: 1
 
 project:

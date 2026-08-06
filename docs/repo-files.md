@@ -12,7 +12,7 @@ these belong in git.
 
 | Path | Purpose |
 |------|---------|
-| `gojo.yaml` (or legacy `.gojo/project.yaml`) | Manifest: `profiles:`, `agents:`, schedules |
+| `gojo.yaml` (or legacy `.gojo/project.yaml`) | Manifest: `profiles:`, `agents:`, schedules — editor schema: [manifest-json-schema.md](./manifest-json-schema.md) |
 | `.gojo/agents/**` | Agent prompt files and prompt scripts |
 | `.gojo/instructions.md` | Shared instructions prepended for every agent |
 | `.gojo/labels.md` | Label taxonomy for issue/PR agents |

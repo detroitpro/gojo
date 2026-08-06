@@ -21,6 +21,9 @@ export GOJO_RUN_CLOUD_INCOMPATIBLE_TESTS=1
 echo "==> typecheck (daemon)"
 bun run typecheck
 
+echo "==> gojo.yaml JSON Schema drift"
+bun run "$ROOT/scripts/generate-manifest-json-schema.ts" --check
+
 echo "==> src/ layout"
 bash "$ROOT/scripts/check-src-layout.sh"
 
