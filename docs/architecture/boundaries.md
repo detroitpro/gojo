@@ -40,7 +40,7 @@ api ──────────────► platform (registry dispatch)
 platform/runtime ─► composition root → bounded contexts
 contexts/*        ─► its own domain / application / ports / infrastructure only
 scheduling/       ─► persistence repos, coordinator.enqueueRun (create/trigger only)
-execution/coordinator ─► workspace, git, agent-adapters, validation, delivery integration, persistence
+execution/infrastructure/coordinator ─► workspace, git, agent-adapters, validation, delivery integration, persistence
 infrastructure/agent-adapters ─► process (subprocess), not scheduler
 delivery/         ─► git, merge queue, persistence
 work/             ─► persistence, secrets, provider APIs (never scheduler lease)
