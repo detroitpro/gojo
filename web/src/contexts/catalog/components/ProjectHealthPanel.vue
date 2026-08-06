@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
 import type { Project } from "@/contexts/catalog/types";
-import type { ProjectDoctorResult } from "@/contexts/operations/types";
+import type { ProjectDoctorResult } from "@/contexts/operations/contract";
 import {
   computeProjectHealth,
   projectHealthFactors,

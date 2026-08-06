@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { AlertTriangle, CheckCircle2, ExternalLink, Play, RefreshCw } from "lucide-vue-next";
 
-import type { WorkItem } from "@/contexts/work/types";
+import type { WorkItem } from "@/contexts/work/contract";
 import {
   attentionMenuItems,
   attentionPrimaryAction,

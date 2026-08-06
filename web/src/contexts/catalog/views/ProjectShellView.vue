@@ -23,7 +23,7 @@ import {
 import { projectShellKey } from "@/contexts/catalog/project-shell";
 import type { Agent, Project, ProjectSyncResult } from "@/contexts/catalog/types";
 import { getProjectDoctor } from "@/contexts/operations/contract";
-import type { ProjectDoctorResult } from "@/contexts/operations/types";
+import type { ProjectDoctorResult } from "@/contexts/operations/contract";
 import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
 import { computeProjectHealth } from "@/kernel/project-manifest";
 import { formatRelativeTime } from "@/kernel/project-overview";
