@@ -334,11 +334,12 @@ agents:
 
 schedules:
   self-heal:
+    enabled: false
     agent: self-heal
     cron: "0 7 * * *"
     timezone: America/Detroit
   maintain-quality:
-    agent: maintain-quality
+    agent: maintain-architecture
     cron: "0 2 * * *"
     timezone: America/Detroit
   maintain-tests:
@@ -354,6 +355,7 @@ schedules:
     cron: "0 4 * * *"
     timezone: America/Detroit
   maintain-issue-tags:
+    enabled: false
     agent: maintain-issue-tags
     cron: "30 5 * * *"
     timezone: America/Detroit
@@ -361,9 +363,8 @@ schedules:
     agent: activity-digest
     cron: "0 8 * * *"
     timezone: America/Detroit
-  # Runs after maintain-quality (02:00) so that run's syncBeforeRun has fetched
-  # main and registered this agent + schedule before the first deploy fire.
   deploy-instance:
+    enabled: false
     agent: deploy-instance
     cron: "15 2 * * *"
     timezone: America/Detroit
