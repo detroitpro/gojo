@@ -21,7 +21,7 @@ Digest agents ([`.gojo/agents/activity-digest.md`](../.gojo/agents/activity-dige
 
 ## Runtime assembly
 
-Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/contexts/execution/prompt-assembly.ts`](../src/contexts/execution/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
+Coordinator builds adapter prompts as: `scheduledRunNotice` → `instructions.files` (worktree) → `promptFile` → validation section → progress-reporting contract (when the run has an API token). Shell adapters skip instructions. The progress block is **platform-injected for every project** (`title` = current focus, not work identity); project `.gojo/instructions.md` is only per-repo shared guidance via the manifest. See [`src/contexts/execution/domain/prompt-assembly.ts`](../src/contexts/execution/domain/prompt-assembly.ts) and [`docs/modules/runs.md`](modules/runs.md).
 
 ## Canonical verify (validation ↔ CI)
 

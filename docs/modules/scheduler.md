@@ -12,7 +12,7 @@ HTTP/CLI for instance scheduling policy go through the platform registry
 (`scheduling.policy.get` / `scheduling.policy.set`). Removable leftovers:
 [`removal-backlog.md`](../architecture/removal-backlog.md).
 
-Cron fire times are **suggested starts** (`notBeforeAt`). The run **dispatcher** (`src/contexts/execution/dispatcher.ts`) admits queued runs under the instance scheduling policy. Scheduled runs also get `expiresAt` = the next cron occurrence after the fire time; if they never get a slot, the dispatcher marks them `Skipped`.
+Cron fire times are **suggested starts** (`notBeforeAt`). The run **dispatcher** (`src/contexts/execution/application/dispatcher.ts`) admits queued runs under the instance scheduling policy. Scheduled runs also get `expiresAt` = the next cron occurrence after the fire time; if they never get a slot, the dispatcher marks them `Skipped`.
 
 Includes cron helpers, disable/outcome recording, and policy checks.
 

@@ -147,7 +147,7 @@ Include:
 - recommendedNextActions
 - agentAssessment.successful and confidence
 
-Use schemaVersion 2. Set runId to a placeholder ULID if you do not know the platform id;
+Use schemaVersion 3. Set runId to a placeholder ULID if you do not know the platform id;
 gojo will still associate the artifact with the real run.
 
 Also report impact — one \`impact.items\` entry per upgraded package
