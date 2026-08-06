@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
 version: 1
 
 project:

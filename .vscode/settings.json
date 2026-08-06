@@ -1,0 +1,8 @@
+{
+  "yaml.schemas": {
+    "packages/contracts/schemas/gojo.project.schema.json": [
+      "gojo.yaml",
+      ".gojo/project.yaml"
+    ]
+  }
+}

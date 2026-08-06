@@ -49,6 +49,23 @@ and provenance are explained in [Project visibility and sources](/project-visibi
 
 The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavior: profiles, agents, validation profiles, schedules, notifications. **Sync** upserts by name into the database and **soft-disables** agents and schedules missing from the manifest (rows are kept for history). Prefer frequency-free keys — put cadence in `cron` / `timezone` only (see [Agent prompts](/agent-prompts)).
 
+### Editor autocomplete for `gojo.yaml`
+
+A JSON Schema is published at
+`https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json` (generated
+from the same Zod contract Sync uses). With the Red Hat YAML extension (or any
+YAML Language Server client):
+
+1. **Modeline** — first line of the file:
+   `# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json`
+2. **Workspace settings** — map that URL under `yaml.schemas` to `gojo.yaml` /
+   `.gojo/project.yaml`.
+3. **Schema Store** — when the catalog entry is live, matching `gojo.yaml` by
+   filename needs no per-repo setup (`yaml.schemaStore.enable` defaults to on).
+
+Cross-field rules (for example `prAutoMerge` only with pull-request mode) remain
+enforced at Sync time, not only in the editor.
+
 Optional `enabled` flags (default `true` when omitted) are also applied on Sync — **YAML wins** over prior ops toggles:
 
 | Location | Effect |

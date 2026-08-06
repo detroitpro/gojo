@@ -19,6 +19,7 @@ Do **not** maintain a separate ADR log. Put engineering notes on the relevant ar
 - [Removal backlog](./architecture/removal-backlog.md) — superseded code (`rg '@removal'`)
 - [Agent prompts](./agent-prompts.md) — constrained limits for `.gojo/agents/`
 - [Repository files](./repo-files.md) — which `.gojo/` files are committed vs generated
+- [Manifest JSON Schema](./manifest-json-schema.md) — editor autocomplete for `gojo.yaml`
 - Modules:
   - [runs](./modules/runs.md) (includes self-healing plumbing)
   - [work](./modules/work.md) (cross-source project visibility)
