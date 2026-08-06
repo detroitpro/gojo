@@ -49,6 +49,28 @@ describe("secrets/store", () => {
     expect(store.get("token")).toBeNull();
   });
 
+  test("set overwrites an existing secret value", () => {
+    const store = openStore();
+    store.set("token", "first");
+    store.set("token", "second");
+    expect(store.get("token")).toBe("second");
+  });
+
+  test("repository deleteByName removes project-scoped secrets", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "gojo-secrets-test-"));
+    db = Database.open(join(tempDir, "gojo.db"));
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({ name: "demo", repoPath: "/tmp/demo" });
+
+    repos.secrets.upsert({ name: "token", projectId: project.id, ciphertext: "cipher" });
+    expect(repos.secrets.findByName("token", project.id)?.ciphertext).toBe("cipher");
+
+    expect(repos.secrets.deleteByName("token", project.id)).toBe(true);
+    expect(repos.secrets.findByName("token", project.id)).toBeNull();
+    expect(repos.secrets.deleteByName("token", project.id)).toBe(false);
+  });
+
   test("supports project-scoped secrets", () => {
     const store = openStore();
     const project = createRepositories(db!).projects.create({

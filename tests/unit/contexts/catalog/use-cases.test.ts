@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { FixedClock, InMemoryUnitOfWork } from "@/kernel";
 import { browseFilesystemQuery } from "@/contexts/catalog/application/browse-filesystem";
+import { createProjectCommand } from "@/contexts/catalog/application/create-project";
 import { deleteProjectCommand } from "@/contexts/catalog/application/delete-project";
 import { setAgentEnabledCommand } from "@/contexts/catalog/application/set-agent-enabled";
 import { setProjectEnabledCommand } from "@/contexts/catalog/application/set-project-enabled";
@@ -92,6 +93,58 @@ const schedule: Schedule = {
   lastRunAt: null,
   createdAt: "2026-01-01T00:00:00.000Z",
 };
+
+describe("contexts/catalog create-project", () => {
+  test("rejects blank name or repoPath", async () => {
+    const deps = {
+      createProject: () => {
+        throw new Error("should not be called");
+      },
+      toProjectDetail: () => ({ id: project.id }) as never,
+      ensureProjectRepositorySource: () => {},
+      appendEvent: () => {},
+    };
+
+    const blankName = await createProjectCommand(deps, { name: "  ", repoPath: "/repo" });
+    expect(blankName.ok).toBe(false);
+    if (!blankName.ok) {
+      expect(blankName.error.code).toBe("validation_error");
+      expect(blankName.error.message).toContain("name and repoPath are required");
+    }
+
+    const blankRepo = await createProjectCommand(deps, { name: "demo", repoPath: " " });
+    expect(blankRepo.ok).toBe(false);
+    if (!blankRepo.ok) {
+      expect(blankRepo.error.code).toBe("validation_error");
+    }
+  });
+
+  test("creates project and emits event when repository discovery throws", async () => {
+    const events: Array<{ type: string; topics: string[] }> = [];
+    const deps = {
+      createProject: () => project,
+      toProjectDetail: () => ({ id: project.id, name: project.name }) as never,
+      ensureProjectRepositorySource: () => {
+        throw new Error("no git remote");
+      },
+      appendEvent: (event: { type: string; topics: string[] }) => {
+        events.push(event);
+      },
+    };
+
+    const res = await createProjectCommand(deps, {
+      name: "demo",
+      repoPath: "/repo",
+      defaultBranch: "main",
+    });
+    expect(res.ok).toBe(true);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "project.created",
+      topics: expect.arrayContaining(["projects", "sources"]),
+    });
+  });
+});
 
 describe("contexts/catalog sync-project", () => {
   test("returns not_found when project does not exist", async () => {
