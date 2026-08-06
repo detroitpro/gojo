@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json",
+  "$id": "https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json",
   "title": "gojo project manifest",
   "description": "JSON Schema for repository-root gojo.yaml (or legacy .gojo/project.yaml). Generated from ProjectManifestSchema in @gojo/contracts. Runtime Sync still enforces Zod cross-field rules not expressible here.",
   "$ref": "#/definitions/GojoProjectManifest",

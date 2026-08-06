@@ -51,13 +51,13 @@ The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavio
 
 ### Editor autocomplete for `gojo.yaml`
 
-A JSON Schema is published at
-`https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json` (generated
-from the same Zod contract Sync uses). With the Red Hat YAML extension (or any
-YAML Language Server client):
+A JSON Schema is published from `main` at
+`https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json`
+(generated from the same Zod contract Sync uses). With the Red Hat YAML
+extension (or any YAML Language Server client):
 
 1. **Modeline** — first line of the file:
-   `# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json`
+   `# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json`
 2. **Workspace settings** — map that URL under `yaml.schemas` to `gojo.yaml` /
    `.gojo/project.yaml`.
 3. **Schema Store** — when the catalog entry is live, matching `gojo.yaml` by
