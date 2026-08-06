@@ -27,12 +27,13 @@ authoritative.
 
 ## Hosted URL (Option 2)
 
-Stable public URL after the docs site deploys:
+Canonical public URL (always available from `main`):
 
-`https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json`
+`https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json`
 
-Schema Store catalog registration should point at that URL with
-`fileMatch` patterns `gojo.yaml` and `**/.gojo/project.yaml` (see
+The same file is also copied to `site/public/schemas/` for the docs site when
+GitHub Pages deploys. Schema Store catalog registration should point at the
+raw URL with `fileMatch` patterns `gojo.yaml` and `**/.gojo/project.yaml` (see
 [`packages/contracts/schemas/schemastore-catalog-entry.json`](../packages/contracts/schemas/schemastore-catalog-entry.json)).
 
 ## Associating the schema in an editor (Option 1)
@@ -42,7 +43,7 @@ Schema Store catalog registration should point at that URL with
 Add as the first line of `gojo.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 ```
 
@@ -53,7 +54,7 @@ With the Red Hat YAML extension (or compatible client):
 ```json
 {
   "yaml.schemas": {
-    "https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json": [
+    "https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json": [
       "gojo.yaml",
       ".gojo/project.yaml"
     ]

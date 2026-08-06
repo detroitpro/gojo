@@ -22,7 +22,7 @@ describe('gojo.project.schema.json', () => {
       definitions?: { GojoProjectManifest?: { required?: string[] } };
     };
     expect(schema.$id).toBe(
-      'https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json',
+      'https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json',
     );
     expect(schema.$ref).toBe('#/definitions/GojoProjectManifest');
     expect(schema.definitions?.GojoProjectManifest?.required).toEqual(

@@ -16,8 +16,9 @@ const CONTRACTS_OUT = join(
 );
 const SITE_OUT = join(ROOT, 'site/public/schemas/gojo.project.schema.json');
 
+/** Stable raw URL (GitHub Pages also mirrors under site/public/schemas/). */
 const HOSTED_URL =
-  'https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json';
+  'https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json';
 
 function buildSchema(): Record<string, unknown> {
   const generated = zodToJsonSchema(ProjectManifestSchema, {

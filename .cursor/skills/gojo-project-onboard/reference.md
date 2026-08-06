@@ -11,11 +11,11 @@ Condensed contract for scaffolding. Source of truth: `packages/contracts/src/man
 ## Manifest shape
 
 Prefer a yaml-language-server modeline on line 1 so editors autocomplete against
-`https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json` (see
+`https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json` (see
 `docs/manifest-json-schema.md`).
 
 ```yaml
-# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 
 project:

@@ -19,7 +19,7 @@ lets VS Code / Cursor (Red Hat YAML) autocomplete against the published schema;
 see [Settings](/settings) for `yaml.schemas` and Schema Store notes.
 
 ```yaml
-# yaml-language-server: $schema=https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 
 project:
