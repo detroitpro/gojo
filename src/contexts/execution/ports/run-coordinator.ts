@@ -1,3 +1,4 @@
+import type { Run } from "@shared/entities";
 import type { RunTrigger } from "@shared/scheduling";
 
 /**
@@ -30,4 +31,8 @@ export interface RunCoordinatorPort {
       references: string[];
     },
   ): { id: string; state: string; projectId: string; agentId: string };
+  /** Admit a queued run into execution (dispatcher admission loop). */
+  executeRun(runId: string): Promise<Run>;
+  /** Keep the run's work item axes in sync with run state (dispatcher expiry path). */
+  syncWorkFromRun(run: Run): void;
 }

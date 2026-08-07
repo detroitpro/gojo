@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { setSchedulingPolicy } from "@/infrastructure/persistence/instance-settings";
 import { RunDispatcher } from "@/contexts/execution/application/dispatcher";
-import type { RunCoordinator } from "@/contexts/execution/infrastructure/coordinator";
+import type { RunCoordinatorPort } from "@/contexts/execution/ports/run-coordinator";
 import { createRepositories } from "@/platform/create-repositories";
 import {
   Database
@@ -48,7 +48,7 @@ describe("runs/dispatcher", () => {
         });
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const runA = repos.runs.create({
       projectId: projectA.id,
@@ -89,7 +89,7 @@ describe("runs/dispatcher", () => {
         throw new Error("should not execute expired runs");
       }),
       syncWorkFromRun: mock(() => {}),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const expired = repos.runs.create({
       projectId: projectA.id,
@@ -154,7 +154,7 @@ describe("runs/dispatcher", () => {
         executed.push(runId);
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const dispatcher = new RunDispatcher({
       db: db!,
@@ -194,7 +194,7 @@ describe("runs/dispatcher", () => {
         });
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const dispatcher = new RunDispatcher({
       db: db!,
@@ -234,7 +234,7 @@ describe("runs/dispatcher", () => {
         });
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const dispatcher = new RunDispatcher({
       db: db!,
@@ -269,7 +269,7 @@ describe("runs/dispatcher", () => {
         executed.push(runId);
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
     const dispatcher = new RunDispatcher({
       db: db!,
       coordinator,
@@ -309,7 +309,7 @@ describe("runs/dispatcher", () => {
         });
         return repos.runs.findById(runId)!;
       }),
-    } as unknown as RunCoordinator;
+    } as unknown as RunCoordinatorPort;
 
     const dispatcher = new RunDispatcher({
       db: db!,
