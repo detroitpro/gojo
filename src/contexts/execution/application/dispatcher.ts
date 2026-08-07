@@ -7,13 +7,13 @@ import type { Database } from '@/infrastructure/persistence/db';
 import { createRepositories } from "@/platform/create-repositories";
 
 import { selectAdmissions } from './admission';
-import type { RunCoordinator } from '@/contexts/execution/infrastructure/coordinator';
+import type { RunCoordinatorPort } from '../ports/run-coordinator';
 
 const DEFAULT_TICK_MS = 5_000;
 
 export interface RunDispatcherDeps {
   db: Database;
-  coordinator: RunCoordinator;
+  coordinator: RunCoordinatorPort;
   tickIntervalMs?: number;
   /** Injected for tests. Defaults to os.loadavg()[0] / cpus().length. */
   loadPerCpu?: () => number;
@@ -22,7 +22,7 @@ export interface RunDispatcherDeps {
 
 export class RunDispatcher {
   private readonly db: Database;
-  private readonly coordinator: RunCoordinator;
+  private readonly coordinator: RunCoordinatorPort;
   private readonly repos;
   private readonly tickIntervalMs: number;
   private readonly loadPerCpu: () => number;

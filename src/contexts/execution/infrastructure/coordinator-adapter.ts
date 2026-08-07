@@ -1,3 +1,4 @@
+import type { Run } from "@shared/entities";
 import type { AppContext } from "@/platform/app-context";
 
 import type { RunCoordinatorPort } from "../ports/run-coordinator";
@@ -58,5 +59,13 @@ export class AppContextCoordinatorAdapter implements RunCoordinatorPort {
       projectId: run.projectId,
       agentId: run.agentId,
     };
+  }
+
+  async executeRun(runId: string) {
+    return this.ctx.coordinator.executeRun(runId);
+  }
+
+  syncWorkFromRun(run: Run): void {
+    this.ctx.coordinator.syncWorkFromRun(run);
   }
 }
