@@ -106,6 +106,24 @@ describe("cli/style and table", () => {
     }
   });
 
+  test("FORCE_COLOR enables ANSI even when stream is not a TTY", async () => {
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "-e",
+        `process.env.FORCE_COLOR = "1";
+delete process.env.NO_COLOR;
+const { colorEnabled, style } = await import("./src/transports/cli/style.ts");
+const stream = { isTTY: false };
+if (!colorEnabled(stream)) process.exit(2);
+if (style.green("ok") !== "\\u001b[32mok\\u001b[0m") process.exit(3);`,
+      ],
+      { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
+    );
+    await proc.exited;
+    expect(proc.exitCode).toBe(0);
+  });
+
   test("formatTable renders headers and rows", () => {
     const text = formatTable(
       [{ name: "a", on: "yes" }],
