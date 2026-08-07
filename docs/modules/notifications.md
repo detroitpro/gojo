@@ -46,7 +46,7 @@ treated as absent and falls back to the project.
 ```
 
 `summary` and `handoffStatus` come from the run's handoff, resolved by `resolveRunHandoffSummary` in
-`src/contexts/execution/inspect.ts`: the merged artifact first, then the newest attempt's raw `handoff_json` so runs
+`src/contexts/execution/application/inspect.ts` (re-exported on `execution/contract.ts`): the merged artifact first, then the newest attempt's raw `handoff_json` so runs
 that failed before the artifact was written still carry text. The coordinator writes the artifact
 before emitting `run.finished`, so the hook always sees a completed handoff.
 

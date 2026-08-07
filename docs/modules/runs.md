@@ -6,23 +6,23 @@
 
 Orchestrates a single run end-to-end: prepare workspace, invoke adapter (with retries), validate, integrate, persist events/artifacts, emit notification hooks, optionally enqueue a project healer.
 
-Primary type: run **coordinator** (`coordinator.ts`). Related:
+Primary type: run **coordinator** (`infrastructure/coordinator.ts`, exposed via `RunCoordinatorPort`). Related:
 
 | File | Role |
 |------|------|
-| `admission.ts` | Pure `selectAdmissions` — caps, priority, fairness, stagger, load guard, expiry |
-| `dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; calls `executeRun` for admits |
-| `prompt-assembly.ts` | Build adapter prompt: optional `instructions` + agent prompt + validation gate |
-| `agent-env.ts` | Allowlisted dotenv load from the primary checkout; merge + redaction helpers |
-| `inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
-| `events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
-| `event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
-| `failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
-| `heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
+| `application/admission.ts` | Pure `selectAdmissions` — caps, priority, fairness, stagger, load guard, expiry |
+| `application/dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; admits via `RunCoordinatorPort.executeRun` |
+| `domain/prompt-assembly.ts` | Build adapter prompt: optional `instructions` + agent prompt + validation gate |
+| `domain/agent-env.ts` | Allowlisted dotenv load from the primary checkout; merge + redaction helpers |
+| `application/inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
+| `infrastructure/events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
+| `infrastructure/event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
+| `domain/failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |
+| `domain/heal.ts` | Decide whether to enqueue a healer (`trigger=heal`) with loop guards |
 
 ## Admission / dispatcher
 
-All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. The dispatcher admits under `SchedulingPolicy` (`packages/contracts/src/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
+All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enqueueRun` — they do **not** call `executeRun` directly. `RunDispatcher` depends on `RunCoordinatorPort` (`ports/run-coordinator.ts`), not the infrastructure coordinator class. The dispatcher admits under `SchedulingPolicy` (`packages/contracts/src/scheduling.ts`, stored as `instance_settings.scheduling_policy`):
 
 - Defaults: `maxConcurrentRuns: 2`, `maxConcurrentRunsPerProject: 1`, `minStartIntervalMs: 30000`, `maxLoadPerCpu: 1.0`
 - Priority: manual/api/web `10`, source work `15`, heal `20`, schedule `30` (lower first), with round-robin fairness across `projectId`
@@ -30,7 +30,7 @@ All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enq
 
 ## List APIs (paging + sort)
 
-Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in `src/infrastructure/persistence/paged-lists.ts` / router memory sorts; unknown `sort` falls back to the resource default. Shared parsers live in `packages/contracts/src/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
+Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in context-owned paged-list adapters (`contexts/catalog/infrastructure/catalog-paged-lists.ts`, `contexts/execution/infrastructure/run-paged-lists.ts`, `contexts/delivery/infrastructure/integration-paged-lists.ts`) and shared allowlists in `packages/contracts/src/list-api.ts`; unknown `sort` falls back to the resource default. Shared parsers live in `packages/contracts/src/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
 
 Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged|committed` (and `gojo integration list --open|--merged|--committed`) as a compatibility/specialist view. Project summaries and Overview attention/delivery nudges derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
 
@@ -132,7 +132,7 @@ durable approval control plane.
 After integration the coordinator persists two canonical record sets (accounting failures never fail the run):
 
 - **`run_integrations`** (one compatibility row per run) — mode, provider, PR number/URL, commit SHA, and integration status. The reconciler never abandons a nonterminal PR: current opens are checked every minute and errors back off to at most fifteen minutes. The linked Work resource carries source observation/freshness and provider sync discovers human/bot work as well as gojo-created work.
-- **`run_impact_items`** (unique per `(run, category, subject)`) — built by `impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema. Verification stays an item-level concern (shown on run detail).
+- **`run_impact_items`** (unique per `(run, category, subject)`) — built by `domain/impact.ts` from the normalized handoff. Platform-detected changes (dependency manifests, docs, test files) are `verified`; agent `impact.items` claims whose `evidence.files` intersect the observed diff are `corroborated`; the rest stay `claimed`. One item per concrete subject; aggregate totals are rejected by the schema. Verification stays an item-level concern (shown on run detail).
 
 The agent handoff is runtime-validated (`normalizeAgentHandoff` / `recoverAgentHandoffReport`, schema v1/v2/v3) before PR description generation and persistence; invalid handoffs fall back to the platform baseline with `handoff-validation:` warnings recorded in `unresolvedIssues`. Invalid optional `impact` / `assets` / `prUrl` are dropped so review `subjectActions.verdict` still applies. Schema v3 adds bounded `subjectActions` (labels, comment, reviewer verdict); the platform validates and executes them. Aggregates are served by `contexts/operations/infrastructure/impact-analytics.ts` via `GET /api/v1/dashboard/impact`. Dashboard `categoryTotals` count **distinct runs** per category (excluding `rejected`), not rows — so a single dependency bump that wrote `package.json`, a lockfile, and a package claim still counts as one. Category totals intentionally overlap when one run produced impact in more than one category.
 
