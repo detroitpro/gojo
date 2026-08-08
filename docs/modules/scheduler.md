@@ -1,6 +1,6 @@
 # Module: scheduler
 
-**Paths:** `src/contexts/scheduling/`, pilot context `src/contexts/scheduling/`
+**Paths:** `src/contexts/scheduling/`
 
 ## Responsibility
 

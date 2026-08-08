@@ -61,7 +61,7 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 
 | Command | Purpose |
 | --- | --- |
-| `gojo project add <name> <repoPath> [--branch] [--remote]` | Register a repo |
+| `gojo project add <name> <repoPath> [--branch] [--remote <url>]` | Register a repo (`--remote` stores the git remote URL; omit to infer from `git remote get-url origin`) |
 | `gojo project list\|inspect\|sync\|enable\|disable\|doctor\|remove` | Manage projects (`enable`/`disable` are runtime gates; Sync reapplies YAML) |
 | `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …] [--history]` | Paged work ledger (first page; filters match API enums; `--history` includes completed/verified-terminal items) |
 | `gojo project status <id>` | Canonical work counts (verified open, stale, attention, …) |
@@ -95,7 +95,8 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 
 | Command | Purpose |
 | --- | --- |
-| `gojo agent list --project <id>\|inspect\|run\|enable\|disable\|cancel\|retry` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
+| `gojo agent list --project <id>\|inspect\|run\|enable\|disable` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
+| `gojo agent cancel\|retry <runId>` | Cancel or re-enqueue a run by **run** id (not agent id) |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs

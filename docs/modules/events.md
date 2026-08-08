@@ -1,8 +1,8 @@
 # Module: platform events
 
 **Paths:** `packages/contracts/src/events.ts`, `packages/contracts/src/ws.ts`, `src/platform/events/`, `src/transports/http/ws/`,
-`src/infrastructure/persistence/platform-events.ts`, `web/src/lib/ws-client.ts`,
-`web/src/lib/platform-events.ts`, `web/src/composables/useLiveQuery.ts`
+`web/src/infrastructure/ws-client.ts`, `web/src/infrastructure/platform-events.ts`,
+`web/src/platform/useLiveQuery.ts`
 
 ## Responsibility
 
@@ -42,7 +42,7 @@ append targeted invalidations after their durable mutation.
 
 ## Browser behavior
 
-The Vue shell owns one shared `GojoSocket` (`web/src/lib/ws-client.ts`). Views
+The Vue shell owns one shared `GojoSocket` (`web/src/infrastructure/ws-client.ts`). Views
 subscribe by topic and optionally project through `PlatformEventHub`, coalesce
 bursts, and serialize refreshes. The last valid platform sequence is kept in
 session storage. Disconnects use exponential reconnect, focus/online repair, and

@@ -11,7 +11,7 @@ Shared wire contracts for the gojo daemon, CLI, and admin UI.
 | `@gojo/contracts/types` | Type-only exports safe for the Vite bundle |
 
 Do not import `@gojo/contracts/schemas` from `web/` — it pulls Zod into the browser bundle.
-Prefer `@gojo/contracts/types` (or the browser wire mirror in `web/src/lib/ws-types.ts` when zero shared runtime is required).
+Prefer `@gojo/contracts/types` (or `packages/contracts/src/ws.ts` when zero shared runtime is required).
 
 ## `gojo.yaml` JSON Schema
 
