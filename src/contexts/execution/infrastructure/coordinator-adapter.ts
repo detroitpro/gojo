@@ -5,12 +5,9 @@ import type { RunCoordinatorPort } from "../ports/run-coordinator";
 
 /**
  * Adapts the live `RunCoordinator` on an `AppContext` to the execution port.
- * This is the seam that lets the application/use-case layer stay decoupled
- * from `src/runs/coordinator.ts` while that file is migrated in place.
  *
- * @removal(when: src/runs moves under src/contexts/execution/infrastructure):
- * replace this passthrough with a direct RunCoordinator construction from the
- * module builder — removal-backlog E-EX1
+ * @removal(when: AppContext is a thin wrapper over composeModules): replace
+ * this passthrough with direct port wiring from the composition root — R8
  */
 export class AppContextCoordinatorAdapter implements RunCoordinatorPort {
   constructor(private readonly ctx: AppContext) {}

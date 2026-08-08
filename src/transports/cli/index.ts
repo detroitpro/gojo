@@ -14,7 +14,7 @@ import {
 } from "@/platform/config/instance";
 import { resolvePaths } from "@/platform/config/paths";
 import { instanceDoctor, projectDoctor } from "@/contexts/operations/infrastructure/diagnostics/doctor";
-import { getRunArtifacts, getRunDiff } from "@/contexts/execution/application/inspect";
+import { getRunArtifacts, getRunDiff } from "@/contexts/execution/contract";
 import { ensureProjectRepositorySource } from "@/contexts/work/infrastructure/source-sync";
 import { getAgentDetail } from "@/contexts/catalog/infrastructure/catalog-paged-lists";
 import { listIntegrationsPage } from "@/contexts/delivery/infrastructure/integration-paged-lists";

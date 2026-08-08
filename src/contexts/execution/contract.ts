@@ -80,6 +80,13 @@ export {
   type RunHandoffSummary,
 } from "./application/inspect";
 
+export {
+  replayRunEvents,
+  tagLiveRunEvent,
+  type ReplayRunEventsInput,
+  type WorkEventRow,
+} from "./infrastructure/event-replay";
+
 export { createRunRepositories } from "./infrastructure/run-repositories";
 export { listRunsPage } from "./infrastructure/run-paged-lists";
 export type { ListRunsPageInput, RunListRow } from "./infrastructure/run-paged-lists";
