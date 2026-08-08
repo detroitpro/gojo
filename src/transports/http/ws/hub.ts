@@ -8,7 +8,7 @@ import type {
   ServerFrame,
 } from "@shared/ws";
 import { matchesPlatformEvent } from "@/platform/events/platform-event-filter";
-import { replayRunEvents, tagLiveRunEvent } from "@/contexts/execution/infrastructure/event-replay";
+import { replayRunEvents, tagLiveRunEvent } from "@/contexts/execution/contract";
 
 const PLATFORM_REPLAY_LIMIT = 500;
 const FALLBACK_INTERVAL_MS = 5_000;
