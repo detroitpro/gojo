@@ -1,6 +1,6 @@
 # Module: work
 
-**Paths:** `packages/contracts/src/work.ts`, `src/infrastructure/persistence/work-repositories.ts`
+**Paths:** `packages/contracts/src/work.ts`, `src/contexts/work/` (repositories in `src/contexts/work/infrastructure/work-repositories.ts`)
 
 ## Responsibility
 
