@@ -14,13 +14,5 @@ if ! command -v bun >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -d "$ROOT/node_modules" ]]; then
-  bun install
-fi
-
-if [[ -f "$ROOT/web/package.json" && ! -d "$ROOT/web/node_modules" ]]; then
-  bun install --cwd web
-fi
-
 echo "==> test + coverage report (daemon; informational, not a fail gate)"
-bun test --coverage --coverage-reporter=text
+bash scripts/daemon-test.sh --coverage --coverage-reporter=text
