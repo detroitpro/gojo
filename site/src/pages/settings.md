@@ -115,10 +115,13 @@ profiles:
     timeout: 45m
 ```
 
-| Concern | Guidance |
+| Field | Role |
 | --- | --- |
-| Timeouts | Keep tighter than "hope it finishes"; platform cancels and cleans up |
-| Permissions | Scope filesystem/shell/network in the profile; don't hand production deploy secrets to a docs agent |
+| `adapter` | Installed CLI id (`shell`, `cursor`, `claude-code`, …) |
+| `model` | Optional model id passed to the adapter |
+| `timeout` | Wall-clock cap (`30s`, `10m`, `1h`, …); platform cancels and cleans up |
+| `readOnly` | Optional; when `true`, the adapter must not modify the worktree (typical for reviewer/triage profiles) |
+| `permissions` | Optional filesystem/shell/network scope; don't hand production deploy secrets to a docs agent |
 
 ## Agents
 
@@ -140,6 +143,8 @@ In the web UI, **Agents** lists synced agents with success rate and last run. **
 | `integration` | What happens to Git after validation |
 | `failurePolicy` | `maxAttemptsPerRun`, `backoff`, schedule disable threshold |
 | `selfHeal` | Optional `{ agent, afterConsecutiveFailedRuns? }` — enqueue an in-repo healer on failure (see [Self-healing](/self-healing)) |
+| `mergePolicy` | Optional `{ includeAgents, excludeAgents? }` — for merge/babysit agents; gojo injects allowed `gojo/run/<agent>/…` head prefixes at run time (see [Agent prompts](/agent-prompts)) |
+| `notifications` | Optional per-agent routing block — **replaces** project-level `notifications` for that agent only (see [Notifications](/notifications)) |
 
 `trigger.on: issue-label` supports `requireLabels`, `anyLabels`,
 `excludeLabels`, `trustedActors`, and `maxOpenClaims`.
