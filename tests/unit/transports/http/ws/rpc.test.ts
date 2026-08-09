@@ -105,6 +105,26 @@ describe("handleRpcFrame", () => {
     });
   });
 
+  test("normalizes api paths without a leading slash and forwards POST bodies", async () => {
+    const data = await boot();
+    const health = await handleRpcFrame(ctx!, data, {
+      t: "req",
+      id: 11,
+      method: "GET",
+      path: "api/v1/health",
+    });
+    expect(health).toMatchObject({ t: "res", id: 11, ok: true });
+
+    const login = await handleRpcFrame(ctx!, data, {
+      t: "req",
+      id: 12,
+      method: "POST",
+      path: "/api/v1/auth/login",
+      body: { username: "admin", password: "secret-pass" },
+    });
+    expect(login).toMatchObject({ t: "res", id: 12, ok: true });
+  });
+
   test("session RPC mutation passes CSRF when publicBaseUrl is set", async () => {
     tempDir = mkdtempSync(`${tmpdir()}/gojo-ws-rpc-csrf-`);
     ctx = await createAppContext(tempDir);
