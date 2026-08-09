@@ -13,6 +13,7 @@ const docPaths = [
   "/advanced-agent",
   "/agent-prompts",
   "/issue-driven-agents",
+  "/post-ci-security-review",
   "/advanced-usage",
   "/self-healing",
   "/settings",
@@ -64,6 +65,11 @@ const inDocs = docPaths.some((route) => current(route));
             href={href("/issue-driven-agents")}
             aria-current={current("/issue-driven-agents") ? "page" : undefined}
             >Issue-driven agents</a
+          >
+          <a
+            href={href("/post-ci-security-review")}
+            aria-current={current("/post-ci-security-review") ? "page" : undefined}
+            >Post-CI security review</a
           >
           <a
             href={href("/advanced-usage")}
