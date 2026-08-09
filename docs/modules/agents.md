@@ -17,7 +17,7 @@
 ## Vocabulary
 
 - **Adapter** — the invocation surface for a coding agent implementation (shell, Cursor Agent, Claude Code). Top-level UI/CLI "Adapters" tab in the ops console; `gojo adapter detect|list|inspect|test`.
-- **Profile** — an entry in a project manifest's `profiles:` map that binds an adapter to a model, timeout, and permissions. Referenced from an agent (work unit) as `profile: <name>`.
+- **Profile** — an entry in a project manifest's `profiles:` map that binds an adapter to a model, timeout, optional `readOnly: true` (reviewer/triage — must not edit the worktree), and permissions. Referenced from an agent (work unit) as `profile: <name>`.
 - **Agent** — the work-unit definition (was "task" pre-rebrand). Lives under `agents:` in `gojo.yaml`; prompts live under `.gojo/agents/`.
 
 The folder stays `src/infrastructure/agent-adapters/` for now because it holds the adapter *implementations*.
