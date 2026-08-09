@@ -11,6 +11,7 @@ description: Guides and reference for operating gojo — from first shell agent 
 - [Advanced agent](/advanced-agent) — Claude Code / Cursor dependency maintenance with PRs
 - [Agent prompt best practices](/agent-prompts) — constrained limits, hard rules, handoffs
 - [Issue-driven agents](/issue-driven-agents) — start trusted work from a forge issue and control review, repair, and merge remotely
+- [Post-CI security review](/post-ci-security-review) — dedicated checks-settled security gate; suggest vs fix via `fixRounds`
 - [Advanced usage](/advanced-usage) — multi-role agents, approvals, secrets, hygiene
 - [Self-healing](/self-healing) — recover from failed agents with in-repo healer PRs
 

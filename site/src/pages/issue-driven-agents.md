@@ -257,6 +257,10 @@ The Gojo repository dogfoods these prompts in
 | `approval: auto` | Platform may apply automatically after all gates |
 | `autonomyLabels.auto: gojo:auto-merge` | That trusted issue label upgrades the work to auto authority |
 
+For a **security-focused** checks-settled gate (dedicated agent, block on
+findings, suggest vs auto-fix via `fixRounds`), see
+[Post-CI security review](/post-ci-security-review).
+
 In every mode, Gojo's managed flow re-reads live checks and serializes merges
 through the project merge queue. Prompts should still forbid direct source
 mutation, and host-level adapter credentials must follow the trust guidance
