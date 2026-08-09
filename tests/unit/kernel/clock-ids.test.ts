@@ -11,6 +11,16 @@ describe("kernel/clock", () => {
     expect(clock.nowMs()).toBe(Date.parse("2026-01-01T00:00:01.000Z"));
   });
 
+  test("FixedClock.now returns a copy and set moves the instant", () => {
+    const clock = new FixedClock(new Date("2026-01-01T00:00:00.000Z"));
+    const first = clock.now();
+    first.setUTCFullYear(2099);
+    expect(clock.nowIso()).toBe("2026-01-01T00:00:00.000Z");
+
+    clock.set(new Date("2026-06-15T12:00:00.000Z"));
+    expect(clock.nowIso()).toBe("2026-06-15T12:00:00.000Z");
+  });
+
   test("SystemClock returns a Date", () => {
     const clock = new SystemClock();
     expect(clock.now()).toBeInstanceOf(Date);

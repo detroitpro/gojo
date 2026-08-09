@@ -1,9 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { join } from "node:path";
 
 import {
   findCommandHelp,
   findGroup,
+  printCommandHelp,
+  printGroupHelp,
+  printOverviewHelp,
   suggestCommands,
 } from "@/transports/cli/help";
 import { colorEnabled, style } from "@/transports/cli/style";
@@ -22,6 +25,12 @@ describe("cli/help registry", () => {
   test("suggests nearby commands", () => {
     const suggestions = suggestCommands("aut");
     expect(suggestions.some((s) => s.includes("auth"))).toBe(true);
+  });
+
+  test("findCommandHelp returns null for missing group or subcommand", () => {
+    expect(findCommandHelp()).toBeNull();
+    expect(findCommandHelp("not-a-group")).toBeNull();
+    expect(findCommandHelp("auth", "not-a-sub")).toBeNull();
   });
 
   test("top-level help lists auth and work-status", async () => {
@@ -86,6 +95,61 @@ describe("cli/help registry", () => {
       expect(err).toMatch(/gojo auth password/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("cli/help printers", () => {
+  const spies: Array<ReturnType<typeof spyOn>> = [];
+
+  afterEach(() => {
+    for (const spy of spies) {
+      spy.mockRestore();
+    }
+    spies.length = 0;
+  });
+
+  function captureStdout(): string[] {
+    const lines: string[] = [];
+    spies.push(
+      spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        lines.push(args.map(String).join(" "));
+      }),
+    );
+    return lines;
+  }
+
+  test("print helpers render overview, group, and command sections", () => {
+    const prev = process.env["NO_COLOR"];
+    process.env["NO_COLOR"] = "1";
+    try {
+      const overview = captureStdout();
+      printOverviewHelp();
+      expect(overview.some((line) => /gojo/.test(line))).toBe(true);
+      expect(overview.some((line) => /auth/.test(line))).toBe(true);
+
+      const group = findGroup("instance");
+      expect(group).not.toBeNull();
+      const groupLines = captureStdout();
+      printGroupHelp(group!);
+      expect(groupLines.some((line) => /\bset\b/.test(line) && /network fields/i.test(line))).toBe(
+        true,
+      );
+
+      const cmd = findCommandHelp("instance", "set");
+      expect(cmd).not.toBeNull();
+      const cmdLines = captureStdout();
+      printCommandHelp(cmd!);
+      expect(cmdLines.some((line) => /--public-base-url/.test(line))).toBe(true);
+      expect(cmdLines.some((line) => /instance set --public-base-url/.test(line))).toBe(true);
+      expect(cmdLines.some((line) => /instance\.yaml/.test(line))).toBe(true);
+      expect(cmdLines.some((line) => /instance show/.test(line))).toBe(true);
+    } finally {
+      if (prev === undefined) {
+        delete process.env["NO_COLOR"];
+      } else {
+        process.env["NO_COLOR"] = prev;
+      }
     }
   });
 });

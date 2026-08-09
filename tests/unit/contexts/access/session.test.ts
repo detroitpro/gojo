@@ -45,4 +45,17 @@ describe("auth/session", () => {
     );
     expect(verifySessionToken(expired, SECRET)).toBeNull();
   });
+
+  test("verifySessionToken rejects malformed v2 and invalid legacy v1 tokens", () => {
+    expect(verifySessionToken("v2.user.exp.sig", SECRET)).toBeNull();
+
+    const expiresAtRaw = "not-a-number";
+    const issuedAtRaw = String(Date.now());
+    const data = `v2.user-1.${expiresAtRaw}.${issuedAtRaw}`;
+    const signature = createHmac("sha256", SECRET).update(data).digest("base64url");
+    expect(verifySessionToken(`${data}.${signature}`, SECRET)).toBeNull();
+
+    const expiresAt = Date.now() + 60_000;
+    expect(verifySessionToken(`v1.user-1.${expiresAt}.tampered-signature`, SECRET)).toBeNull();
+  });
 });
