@@ -2,43 +2,24 @@ import { randomBytes } from "node:crypto";
 
 import { ulid } from "ulid";
 
+import type { UserRole } from "@gojo/contracts";
+
+import type {
+  ApiTokenRecord,
+  UserPublic,
+  UserRecord,
+} from "@/contexts/access/domain/users";
 import type { Database } from "@/infrastructure/persistence/db";
-import type { UserRole } from "@/infrastructure/persistence/types";
 
 import { hashPassword, verifyPassword } from "./password";
 import { createSessionToken as buildSessionToken, verifySessionToken as parseSessionToken } from "./session";
 import { createApiToken, hashToken, verifyToken } from "./tokens";
 
+export type { ApiTokenRecord, UserPublic, UserRecord } from "@/contexts/access/domain/users";
+
 const SESSION_SECRET_NAME = "__gojo_session_secret__";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD_LENGTH = 8;
-
-export interface UserRecord {
-  id: string;
-  username: string;
-  passwordHash: string;
-  role: UserRole;
-  createdAt: string;
-  passwordUpdatedAt: string;
-}
-
-/** Public user fields — never includes password hashes. */
-export interface UserPublic {
-  id: string;
-  username: string;
-  role: UserRole;
-  createdAt: string;
-}
-
-export interface ApiTokenRecord {
-  id: string;
-  userId: string;
-  tokenHash: string;
-  name: string;
-  scopesJson: string;
-  createdAt: string;
-  expiresAt: string | null;
-}
 
 interface UserRow {
   id: string;
