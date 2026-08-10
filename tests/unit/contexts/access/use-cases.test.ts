@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ApiTokenRecord, UserRecord } from "@/contexts/access/infrastructure/auth/users";
+import type { ApiTokenRecord, UserRecord } from "@/contexts/access/domain/users";
 import { createApiTokenCommand } from "@/contexts/access/application/create-api-token";
 import { getMeQuery } from "@/contexts/access/application/get-me";
 import { listApiTokensQuery } from "@/contexts/access/application/list-api-tokens";

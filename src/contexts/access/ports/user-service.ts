@@ -1,4 +1,4 @@
-import type { ApiTokenRecord, UserRecord } from "@/contexts/access/infrastructure/auth/users";
+import type { ApiTokenRecord, UserRecord } from "@/contexts/access/domain/users";
 
 /**
  * Port over the JSON-facing subset of the user service.

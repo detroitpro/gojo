@@ -41,11 +41,8 @@ export type {
 } from "./application/revoke-api-token";
 export { revokeApiTokenCommand } from "./application/revoke-api-token";
 
-export {
-  UserService,
-  type ApiTokenRecord,
-  type UserRecord,
-} from "./infrastructure/auth/users";
+export type { ApiTokenRecord, UserPublic, UserRecord } from "./domain/users";
+export { UserService } from "./infrastructure/auth/users";
 export { SecretStore } from "./infrastructure/secrets/store";
 export {
   createSessionToken,
