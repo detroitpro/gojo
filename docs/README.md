@@ -36,6 +36,7 @@ User-facing guides (site):
 
 - Self-healing: [`site/src/pages/self-healing.md`](../site/src/pages/self-healing.md)
 - Agent prompt best practices: [`site/src/pages/agent-prompts.md`](../site/src/pages/agent-prompts.md)
+- Post-CI security review: [`site/src/pages/post-ci-security-review.md`](../site/src/pages/post-ci-security-review.md)
 
 ## Quality gate
 
