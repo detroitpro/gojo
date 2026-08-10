@@ -3,6 +3,10 @@ import { describe, expect, mock, test } from "bun:test";
 import { approveRunCommand, rejectRunCommand } from "@/contexts/execution/application/approve-run";
 import { cancelRunCommand } from "@/contexts/execution/application/cancel-run";
 import { getRunDiffQuery, getRunQuery } from "@/contexts/execution/application/get-run";
+import {
+  detailQuery,
+  updateRunProgressCommand,
+} from "@/contexts/execution/application/update-progress";
 import { retryRunCommand } from "@/contexts/execution/application/retry-run";
 import type { RunCoordinatorPort } from "@/contexts/execution/ports/run-coordinator";
 import type { RunDetail, RunReadModel } from "@/contexts/execution/ports/run-read-model";
@@ -163,6 +167,67 @@ describe("execution run commands", () => {
     expect(uow.events()[0]?.type).toBe("execution.run.canceled");
   });
 
+  test("approveRunCommand returns err when run is missing", async () => {
+    const result = await approveRunCommand(
+      {
+        coordinator: {} as RunCoordinatorPort,
+        reads: stubReads({}),
+        clock: clock(),
+        uow: new InMemoryUnitOfWork(),
+      },
+      { runId: "run_missing" },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("run not found");
+    }
+  });
+
+  test("approveRunCommand approves awaiting run and emits execution.run.approved", async () => {
+    const awaiting = runDetail({
+      id: "run_approval",
+      projectId: "prj_1",
+      agentId: "agt_1",
+      state: RunState.AwaitingApproval,
+    });
+    const succeeded = runDetail({
+      id: "run_approval",
+      projectId: "prj_1",
+      agentId: "agt_1",
+      state: RunState.Succeeded,
+    });
+    let reads = 0;
+    const uow = new InMemoryUnitOfWork();
+    const approveRun = mock(async () => {});
+
+    const result = await approveRunCommand(
+      {
+        coordinator: { approveRun } as unknown as RunCoordinatorPort,
+        reads: stubReads({
+          detail: () => {
+            reads += 1;
+            return reads === 1 ? awaiting : succeeded;
+          },
+        }),
+        clock: clock(),
+        uow,
+      },
+      { runId: "run_approval" },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({
+        runId: "run_approval",
+        state: RunState.Succeeded,
+      });
+    }
+    expect(approveRun).toHaveBeenCalledWith("run_approval");
+    expect(uow.events()[0]?.type).toBe("execution.run.approved");
+    expect(uow.events()[0]?.data).toEqual({ state: RunState.Succeeded });
+  });
+
   test("approveRunCommand and rejectRunCommand require AwaitingApproval", async () => {
     const running = runDetail({
       id: "run_running",
@@ -222,6 +287,99 @@ describe("execution run commands", () => {
       state: RunState.Failed,
       reason: "needs work",
     });
+  });
+
+  test("updateRunProgressCommand records progress and emits execution.run.progress", async () => {
+    const uow = new InMemoryUnitOfWork();
+    const updateProgress = mock(() => ({
+      id: "run_1",
+      state: RunState.Running,
+      projectId: "prj_1",
+      agentId: "agt_1",
+    }));
+
+    const result = await updateRunProgressCommand(
+      {
+        coordinator: { updateProgress } as unknown as RunCoordinatorPort,
+        reads: stubReads({}),
+        clock: clock(),
+        uow,
+      },
+      {
+        runId: "run_1",
+        title: "Running tests",
+        summary: "Added coverage for approve and progress commands",
+        blockedReason: null,
+        references: ["tests/unit/contexts/execution/run-commands.test.ts"],
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ runId: "run_1", state: RunState.Running });
+    }
+    expect(updateProgress).toHaveBeenCalledWith("run_1", {
+      title: "Running tests",
+      summary: "Added coverage for approve and progress commands",
+      blockedReason: null,
+      references: ["tests/unit/contexts/execution/run-commands.test.ts"],
+    });
+    expect(uow.events()[0]?.type).toBe("execution.run.progress");
+    expect(uow.events()[0]?.data).toEqual({
+      title: "Running tests",
+      blocked: false,
+    });
+  });
+
+  test("updateRunProgressCommand returns err when coordinator throws", async () => {
+    const updateProgress = mock(() => {
+      throw new Error("run not running");
+    });
+
+    const result = await updateRunProgressCommand(
+      {
+        coordinator: { updateProgress } as unknown as RunCoordinatorPort,
+        reads: stubReads({}),
+        clock: clock(),
+        uow: new InMemoryUnitOfWork(),
+      },
+      {
+        runId: "run_1",
+        title: "Blocked",
+        summary: "Cannot update",
+        blockedReason: "stuck",
+        references: [],
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe("run not running");
+    }
+  });
+
+  test("detailQuery returns detail or not found", () => {
+    const detail = runDetail({
+      id: "run_1",
+      projectId: "prj_1",
+      agentId: "agt_1",
+      state: RunState.Running,
+    });
+    const reads = stubReads({
+      detail: (runId) => (runId === "run_1" ? detail : null),
+    });
+
+    const found = detailQuery({ reads }, { runId: "run_1" });
+    expect(found.ok).toBe(true);
+    if (found.ok) {
+      expect(found.value.run).toEqual(detail.run);
+    }
+
+    const missing = detailQuery({ reads }, { runId: "run_missing" });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.error).toContain("run not found");
+    }
   });
 
   test("getRunQuery returns detail and getRunDiffQuery maps read errors", async () => {
