@@ -48,7 +48,9 @@ instructions:
     Unattended scheduled run. Prefer small diffs. Write .gojo/handoff.json.
 ```
 
-At run time gojo prepends `scheduledRunNotice`, then each listed file (from the worktree), then your `promptFile`, then the validation gate. Missing listed files fail the run. Shell adapters skip this layer (the prompt is a script).
+At run time gojo assembles AI adapter prompts as: `scheduledRunNotice` → each `instructions.files` entry (from the worktree) → your `promptFile` → the validation gate → the platform-injected **progress reporting** contract (when the daemon exposes an API base URL). Source-triggered runs also prepend an untrusted subject block before the agent prompt. Merge/babysit agents may receive an injected **Gojo merge scope** section before validation. Missing listed instruction files fail the run. Shell adapters skip the instructions layer (the prompt is a script) and receive validation steps as shell comments only.
+
+Progress reporting is fleet-wide: adapters POST `title` (current focus — not the durable agent name), optional `summary`, and optional `blockedReason` to `POST /runs/:id/progress` with the run-scoped `GOJO_API_TOKEN`. See [Project visibility](/project-visibility#adapter-focus) and [Self-healing](/self-healing).
 
 Use the shared file for code qualities, "no features / no secrets / stay in worktree," and handoff judgment. Keep **agent-specific** goals, scope, numeric limits, and process in the `promptFile`.
 

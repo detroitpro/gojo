@@ -46,6 +46,10 @@ Scheduled → Queued → Preparing → Running → Validating
 
 Other terminals include Failed, Canceled, TimedOut, Conflict, Skipped, and InfrastructureFailure.
 
+## Progress during runs
+
+AI adapters receive a run-scoped `GOJO_API_TOKEN` restricted to `POST /runs/:id/progress`. They report **current focus** (`title` plus optional `summary` and `blockedReason`) while work is in flight; that subtitle does not rename the durable work item (the agent name stays the run title). Operators see these updates on project work views and run detail — the platform does not scrape adapter console output to guess intent.
+
 ## Worktrees
 
 Worktrees give each attempt a dedicated filesystem directory linked to the same repo object database. No two active attempts share a worktree. Failed worktrees can be retained briefly for diagnosis; successful ones are cleaned up according to policy.
