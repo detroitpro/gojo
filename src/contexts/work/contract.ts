@@ -114,10 +114,13 @@ export {
 export { createWorkRepositories } from "./infrastructure/work-repositories";
 export type {
   ProjectSource,
+  RunContextRecord,
   SourceConnection,
+  WorkEvent,
+  WorkLink,
   WorkListInput,
   WorkPage,
-  WorkRepositories,
-} from "./infrastructure/work-repositories";
+} from "./ports/work-entities";
+export type { WorkRepositories } from "./infrastructure/work-repositories";
 export { createWorkStatusRollup } from "./infrastructure/work-status-rollup";
 export type { WorkStatusRollup } from "./infrastructure/work-status-rollup";

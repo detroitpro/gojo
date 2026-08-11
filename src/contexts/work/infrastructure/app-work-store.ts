@@ -7,7 +7,7 @@ import type {
   WorkStatus,
   WorkStatusCompareWindow,
 } from "@shared/work";
-import type { WorkListInput, WorkPage } from "@/contexts/work/infrastructure/work-repositories";
+import type { WorkListInput, WorkPage } from "../ports/work-entities";
 
 import type {
   CreateProjectSourceCommand,

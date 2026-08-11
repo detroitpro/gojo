@@ -10,7 +10,7 @@ import type {
   WorkStatus,
   WorkStatusCompareWindow,
 } from "@shared/work";
-import type { WorkPage } from "@/contexts/work/infrastructure/work-repositories";
+import type { WorkPage } from "./ports/work-entities";
 import {
   InMemoryUnitOfWork,
   SystemClock,
