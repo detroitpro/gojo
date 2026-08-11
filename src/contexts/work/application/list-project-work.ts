@@ -7,7 +7,7 @@ import type {
   WorkOutcome,
   WorkProvenance,
 } from "@shared/work";
-import type { WorkPage } from "@/contexts/work/infrastructure/work-repositories";
+import type { WorkPage } from "../ports/work-entities";
 
 import type { WorkStore } from "../ports/work-store";
 

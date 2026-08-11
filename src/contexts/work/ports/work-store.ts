@@ -8,13 +8,13 @@ import type {
 
 import type {
   ProjectSource,
+  RunContextRecord,
   SourceConnection,
   WorkEvent,
   WorkLink,
   WorkListInput,
   WorkPage,
-  RunContextRecord,
-} from "@/contexts/work/infrastructure/work-repositories";
+} from "./work-entities";
 
 /** Snapshot of a project source enriched with connection + cursor. */
 export type ProjectSourceRow = ProjectSource & {
