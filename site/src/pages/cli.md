@@ -103,11 +103,11 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 
 | Command | Purpose |
 | --- | --- |
-| `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `artifacts` returns handoff, validation, and failure JSON) |
+| `gojo run list [--project <id>] [--limit <n>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `logs` accepts `--follow`; `artifacts` returns handoff, validation, and failure JSON) |
 | `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |
-| `gojo approval list\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`) |
+| `gojo approval list [--state <state>] [--project <id>]\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`) |
 | `gojo work claim <workItemId> --agent <name-or-id>` | Explicitly enqueue an issue against an eligible issue-triggered agent |
 
 Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).

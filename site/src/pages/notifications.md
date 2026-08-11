@@ -13,8 +13,9 @@ Gojo separates **where** notifications go (instance channels) from **when** they
 | Channels | Instance Settings (or API) | Named endpoints: Slack/Discord/Teams/webhook URL, or Telegram bot token + chat id |
 | Routing | `gojo.yaml` → `notifications` (project or per-agent) | Which channel names fire on success, failure, or schedule auto-disable |
 
-1. A run finishes (`run.finished`) or a durable PR approval enters
-   `awaiting-human` (`run.awaiting_approval`).
+1. A run finishes (`run.finished`) or needs operator approval
+   (`run.awaiting_approval` — an `await-approval` integration run after commit,
+   or a durable PR approval that entered `awaiting-human`).
 2. Gojo reads the matching project routing.
 3. Those **names** look up channels on the instance.
 4. Delivery is **queued** with retries so a flaky provider does not change run
@@ -70,7 +71,7 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 | `onSuccess` | Run ended in `Succeeded` |
 | `onFailure` | Run ended in any other terminal state (failed, canceled, timed out, …) |
 | `onDisabled` | After a scheduled run, the schedule was auto-disabled for consecutive failures |
-| `onApprovalNeeded` | A reviewed PR enters `awaiting-human` before the run is terminal |
+| `onApprovalNeeded` | An `await-approval` run commits and pauses for operator sign-off, or a durable PR approval enters `awaiting-human` (manual authority after checks/review) |
 
 Approval-needed payloads include the approval id, PR URL when available, checks
 state, reviewer verdict, and a short-lived single-use confirmation URL when

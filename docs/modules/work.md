@@ -1,6 +1,6 @@
 # Module: work
 
-**Paths:** `packages/contracts/src/work.ts`, `src/contexts/work/` (repositories in `src/contexts/work/infrastructure/work-repositories.ts`)
+**Paths:** `packages/contracts/src/work.ts`, `src/contexts/work/ports/work-entities.ts` (persisted entity types), `src/contexts/work/infrastructure/work-repositories.ts` (SQLite adapters)
 
 ## Responsibility
 
