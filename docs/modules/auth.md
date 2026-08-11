@@ -1,6 +1,6 @@
 # Module: auth
 
-**Paths:** `src/contexts/access/infrastructure/auth/`, `src/transports/http/auth.ts`, CLI `setup` / `auth`, `src/contexts/access/` (bounded context)
+**Paths:** `src/contexts/access/domain/users.ts`, `src/contexts/access/infrastructure/auth/`, `src/transports/http/auth.ts`, CLI `setup` / `auth`, `src/contexts/access/` (bounded context)
 
 > The **access** bounded context (`src/contexts/access/`) owns the JSON-facing
 > subset of this module. `GET /api/v1/auth/me` and `GET/POST/DELETE
@@ -8,8 +8,9 @@
 > (`access.me.get`, `access.tokens.list`, `access.tokens.create`,
 > `access.tokens.revoke`). Login, logout, setup, password change, and approval
 > link routes stay in `src/transports/http/router.ts` because they need `Set-Cookie` / HTML
-> transport. `src/contexts/access/infrastructure/auth/` remains as the infrastructure adapter behind the
-> `UserServicePort` (tracked in `docs/architecture/removal-backlog.md` as R18).
+> transport. User/token records live in `domain/users.ts`; `infrastructure/auth/` implements
+> `UserServicePort` (the old top-level `src/auth/` shim was retired as R18 in
+> [`removal-backlog.md`](../architecture/removal-backlog.md)).
 
 ## Responsibility
 
