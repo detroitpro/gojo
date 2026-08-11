@@ -32,7 +32,7 @@ All trigger paths (scheduler, source work, API, CLI, heal) call `coordinator.enq
 
 Unbounded admin lists (`/runs`, `/agents`, `/schedules`, `/projects`, `/queue` waiting, `/auth/tokens`, `/backups`, `/integrations`) accept `limit`/`offset` plus `sort`/`order` (`asc`|`desc`). Sort keys are whitelisted per resource in context-owned paged-list adapters (`contexts/catalog/infrastructure/catalog-paged-lists.ts`, `contexts/execution/infrastructure/run-paged-lists.ts`, `contexts/delivery/infrastructure/integration-paged-lists.ts`) and shared allowlists in `packages/contracts/src/list-api.ts`; unknown `sort` falls back to the resource default. Shared parsers live in `packages/contracts/src/pagination.ts` (`parseSortParams`). Agent lists support `sort=successRate` over the same last-5-run window as the Success column (null/no-history last); default click order is ascending so failing agents surface first.
 
-Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=open|merged|committed` (and `gojo integration list --open|--merged|--committed`) as a compatibility/specialist view. Project summaries and Overview attention/delivery nudges derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
+Gojo-tracked PRs remain available through `GET /api/v1/integrations?status=all|open|merged|committed` (and `gojo integration list [--all|--open|--merged|--committed]`) as a compatibility/specialist view. Omitting `status` (or `--all`) returns open+merged PRs sorted by recent activity; `committed` is opt-in. Project summaries and Overview attention/delivery nudges derive open counts from Work: only source-current open/draft/review PRs count as verified open; stale last-known-open work is separate. `GET /api/v1/projects?hasOpenPrs=true` uses the same verified semantics.
 
 Enable gates for **new** work (in-flight runs continue):
 
@@ -141,7 +141,7 @@ Dashboard tiles drill into list endpoints (gateway, not dead ends):
 - `GET /api/v1/dashboard` — inventory pulse; Projects/Agents/Schedules tiles are
   `enabled*/total` (`enabledProjects/projects`, `enabledAgents/agents`,
   `enabledSchedules/schedules`).
-- `GET /api/v1/integrations?status=open|merged|committed` — optional `projectId`, `from`/`to` on run `created_at`. `committed` means `commit_sha IS NOT NULL` (no PR required).
+- `GET /api/v1/integrations?status=all|open|merged|committed` — default `all` (open+merged PRs, sort `activityAt`). Optional `projectId`, `from`/`to` on run `created_at`, plus `limit`/`offset`/`sort`/`order`. `committed` means `commit_sha IS NOT NULL` (no PR required).
 - `GET /api/v1/impact/items` — paged `run_impact_items` (excludes `rejected`) with optional `category`, `projectId`, `from`/`to`.
 - `GET /api/v1/runs` — optional `from`/`to` on `created_at` (plus existing `state` / `projectId` filters) for Succeeded-runs drill-down.
 

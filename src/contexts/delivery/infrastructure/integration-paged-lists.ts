@@ -8,11 +8,12 @@ import type { Database } from "@/infrastructure/persistence/db";
 import { buildWhere, sqlOrderBy } from "@/infrastructure/persistence/sql-paging";
 import {
   INTEGRATION_SORT_ALLOWED,
+  defaultIntegrationSort,
   type IntegrationListItem,
   type IntegrationListStatus,
 } from "@shared/list-api";
 
-export { INTEGRATION_SORT_ALLOWED };
+export { INTEGRATION_SORT_ALLOWED, defaultIntegrationSort };
 
 export type { IntegrationListItem, IntegrationListStatus };
 /** @deprecated Prefer IntegrationListItem from @shared/list-api */
@@ -26,6 +27,8 @@ export type ListIntegrationsPageInput = PageParams &
     to?: string | null;
   };
 
+const ACTIVITY_AT_SQL = "COALESCE(ri.merged_at, ri.opened_at, r.created_at)";
+
 export function listIntegrationsPage(
   db: Database,
   input: ListIntegrationsPageInput,
@@ -36,6 +39,9 @@ export function listIntegrationsPage(
 
   if (input.status === "committed") {
     clauses.push("ri.commit_sha IS NOT NULL");
+  } else if (input.status === "all") {
+    clauses.push("ri.status IN ('open', 'merged')");
+    clauses.push("(ri.pr_url IS NOT NULL OR ri.pr_number IS NOT NULL)");
   } else {
     clauses.push("ri.status = ?");
     params.push(input.status);
@@ -70,17 +76,11 @@ export function listIntegrationsPage(
       )
       .get(...params)?.count ?? 0;
 
-  const defaultSort =
-    input.status === "merged"
-      ? "mergedAt"
-      : input.status === "committed"
-        ? "createdAt"
-        : "openedAt";
   const { sort, order } = parseSortParams(
     { sort: input.sort, order: input.order },
     {
       allowed: INTEGRATION_SORT_ALLOWED,
-      defaultSort,
+      defaultSort: defaultIntegrationSort(input.status),
       defaultOrder: "desc",
     },
   );
@@ -88,6 +88,7 @@ export function listIntegrationsPage(
     sort,
     order,
     {
+      activityAt: ACTIVITY_AT_SQL,
       openedAt: "ri.opened_at",
       mergedAt: "ri.merged_at",
       createdAt: "r.created_at",
@@ -170,4 +171,3 @@ export function listIntegrationsPage(
     offset: input.offset,
   };
 }
-

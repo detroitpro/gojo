@@ -243,7 +243,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
       {
         path: "integration list",
         summary: "List integrations by status",
-        usage: "gojo integration list --open|--merged|--committed [--project <id>]",
+        usage: "gojo integration list [--all|--open|--merged|--committed] [--project <id>]",
       },
     ],
   },

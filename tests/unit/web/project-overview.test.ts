@@ -3,16 +3,19 @@ import { describe, expect, test } from "bun:test";
 import type { WorkItem } from "@gojo/contracts/types";
 
 import {
+  RECENT_CHANGES_LIMIT,
   buildProgressSummary,
   collapseHistoryForOverview,
   formatActivitySummaryLine,
+  formatClockTime,
+  formatFeedCountsLine,
   forgeWorkListUrl,
   formatAvailableWorkLine,
+  groupChangesByDay,
   inventoryAvailableWork,
   isAttentionWork,
   presentAttentionItem,
   presentCompletedWork,
-  resolveActivityRange,
   summarizeCompletedWork,
 } from "../../../web/src/kernel/project-overview.ts";
 
@@ -55,37 +58,11 @@ function work(overrides: Partial<WorkItem> = {}): WorkItem {
 }
 
 describe("project-overview helpers", () => {
-  test("resolveActivityRange defaults to last 24 hours", () => {
-    const nowMs = Date.parse("2026-08-04T12:00:00.000Z");
-    const storage = {
-      getItem: () => null,
-      setItem: () => undefined,
-      removeItem: () => undefined,
-      clear: () => undefined,
-      key: () => null,
-      length: 0,
-    } as Storage;
-    const range = resolveActivityRange("24h", "project-1", { nowMs, storage });
-    expect(range.label).toBe("Last 24 hours");
-    expect(range.from).toBe("2026-08-03T12:00:00.000Z");
+  test("RECENT_CHANGES_LIMIT is 25", () => {
+    expect(RECENT_CHANGES_LIMIT).toBe(25);
   });
 
-  test("resolveActivityRange uses last check when available", () => {
-    const nowMs = Date.parse("2026-08-04T12:00:00.000Z");
-    const storage = {
-      getItem: () => "2026-08-04T08:00:00.000Z",
-      setItem: () => undefined,
-      removeItem: () => undefined,
-      clear: () => undefined,
-      key: () => null,
-      length: 0,
-    } as Storage;
-    const range = resolveActivityRange("last-check", "project-1", { nowMs, storage });
-    expect(range.label).toBe("Since your last check");
-    expect(range.from).toBe("2026-08-04T08:00:00.000Z");
-  });
-
-  test("presentCompletedWork emphasizes outcome and agent", () => {
+  test("presentCompletedWork emphasizes outcome, agent, and PR ref", () => {
     const presented = presentCompletedWork(
       work({
         deliveredWork: [
@@ -105,8 +82,60 @@ describe("project-overview helpers", () => {
     expect(presented.outcomeTitle).toBe("Harden worktree lifecycle");
     expect(presented.description).toContain("remote branch cleanup");
     expect(presented.agentLabel).toContain("Repository Maintainer");
-    expect(presented.deliveryRefs.some((ref) => ref.includes("PR #142"))).toBe(true);
+    expect(presented.prRef).toEqual({
+      label: "#142",
+      url: "https://github.com/acme/repo/pull/142",
+    });
+    expect(presented.kindLabel).toBe("Run");
+    expect(presented.resultItem).toEqual({
+      resolution: null,
+      delivery: "none",
+      outcome: "succeeded",
+    });
+    expect(presented.clockTime).toMatch(/^\d{2}:\d{2}$/);
     expect(presented.completedRelative).toContain("minute");
+  });
+
+  test("formatClockTime returns locale HH:MM", () => {
+    expect(formatClockTime("2026-08-04T15:07:00.000Z")).toMatch(/^\d{2}:\d{2}$/);
+    expect(formatClockTime(null)).toBe("—");
+    expect(formatClockTime("not-a-date")).toBe("—");
+  });
+
+  test("groupChangesByDay labels Today, Yesterday, and dated groups", () => {
+    const nowMs = Date.parse("2026-08-04T18:00:00.000Z");
+    const today = presentCompletedWork(
+      work({ id: "today", completedAt: "2026-08-04T16:00:00.000Z" }),
+      nowMs,
+    );
+    const yesterday = presentCompletedWork(
+      work({ id: "yesterday", completedAt: "2026-08-03T16:00:00.000Z" }),
+      nowMs,
+    );
+    const older = presentCompletedWork(
+      work({ id: "older", completedAt: "2026-08-01T16:00:00.000Z" }),
+      nowMs,
+    );
+    const groups = groupChangesByDay([today, yesterday, older], nowMs);
+    expect(groups.map((g) => g.label)).toEqual(["Today", "Yesterday", expect.stringMatching(/Aug/)]);
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(["today"]);
+    expect(groups[1]!.items.map((i) => i.id)).toEqual(["yesterday"]);
+    expect(groups[2]!.items.map((i) => i.id)).toEqual(["older"]);
+  });
+
+  test("groupChangesByDay preserves input order within and across days", () => {
+    const nowMs = Date.parse("2026-08-04T18:00:00.000Z");
+    const a = presentCompletedWork(
+      work({ id: "a", completedAt: "2026-08-04T17:00:00.000Z" }),
+      nowMs,
+    );
+    const b = presentCompletedWork(
+      work({ id: "b", completedAt: "2026-08-04T15:00:00.000Z" }),
+      nowMs,
+    );
+    const groups = groupChangesByDay([a, b], nowMs);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(["a", "b"]);
   });
 
   test("summarizeCompletedWork counts merges and runs", () => {
@@ -125,6 +154,7 @@ describe("project-overview helpers", () => {
     expect(metrics.runsCompleted).toBe(1);
     expect(metrics.prsMerged).toBe(1);
     expect(formatActivitySummaryLine(metrics)).toContain("2 work items completed");
+    expect(formatFeedCountsLine(metrics)).toBe("2 changes · 1 merged · 1 run");
   });
 
   test("collapseHistoryForOverview hides nested deliveries", () => {
@@ -141,17 +171,28 @@ describe("project-overview helpers", () => {
     expect(top.map((item) => item.id)).toEqual(["work-1"]);
   });
 
-  test("buildProgressSummary stays outcome-oriented", () => {
+  test("buildProgressSummary stays outcome-oriented without a time window", () => {
     const summary = buildProgressSummary({
-      rangeLabel: "Last 24 hours",
       completed: [work()],
       attentionCount: 0,
       activeCount: 0,
       projectEnabled: true,
     });
     expect(summary.derived).toBe(true);
+    expect(summary.text).toContain("Recently");
     expect(summary.text).toContain("Harden worktree lifecycle");
     expect(summary.text).toContain("No active work is currently blocked");
+  });
+
+  test("buildProgressSummary reports empty feed", () => {
+    const summary = buildProgressSummary({
+      completed: [],
+      attentionCount: 1,
+      activeCount: 0,
+      projectEnabled: true,
+    });
+    expect(summary.text).toContain("No completed changes yet");
+    expect(summary.text).toContain("1 item still needs attention");
   });
 
   test("presentAttentionItem explains stale work", () => {
@@ -210,5 +251,4 @@ describe("project-overview helpers", () => {
       "/-/issues?state=opened",
     );
   });
-
 });

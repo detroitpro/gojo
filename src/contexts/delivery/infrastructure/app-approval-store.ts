@@ -86,7 +86,7 @@ export class AppApprovalStore implements ApprovalStore {
     offset: number;
     sort: string;
     order: "asc" | "desc";
-    status: "open" | "merged" | "committed";
+    status: "all" | "open" | "merged" | "committed";
     projectId?: string | null;
     from?: string | null;
     to?: string | null;

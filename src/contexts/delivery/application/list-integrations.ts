@@ -1,12 +1,19 @@
 import { ok, type Result } from "@/kernel";
+import {
+  INTEGRATION_LIST_STATUSES,
+  INTEGRATION_SORT_ALLOWED,
+  defaultIntegrationSort,
+  type IntegrationListStatus,
+} from "@shared/list-api";
+import { parsePageParams, parseSortParams } from "@shared/pagination";
 import { useCaseFailure, type UseCaseFailure } from "@/platform/errors";
 
 import type { ApprovalStore, IntegrationsPage } from "../ports/approval-store";
 
 export type ListIntegrationsInput = {
   status: string | null;
-  limit: number;
-  offset: number;
+  limit?: string | number | null;
+  offset?: string | number | null;
   sort?: string | null;
   order?: "asc" | "desc" | null;
   projectId?: string | null;
@@ -16,38 +23,36 @@ export type ListIntegrationsInput = {
 
 export type ListIntegrationsDeps = { store: ApprovalStore };
 
-const ALLOWED_STATUS = ["open", "merged", "committed"] as const;
-type AllowedStatus = (typeof ALLOWED_STATUS)[number];
-
-const ALLOWED_SORT = new Set([
-  "openedAt",
-  "mergedAt",
-  "createdAt",
-  "projectName",
-  "agentName",
-  "prNumber",
-]);
+const ALLOWED_STATUS = new Set<string>(INTEGRATION_LIST_STATUSES);
 
 export async function listIntegrationsQuery(
   deps: ListIntegrationsDeps,
   input: ListIntegrationsInput,
 ): Promise<Result<IntegrationsPage, UseCaseFailure>> {
-  if (!input.status || !ALLOWED_STATUS.includes(input.status as AllowedStatus)) {
+  const rawStatus = input.status?.trim() || "all";
+  if (!ALLOWED_STATUS.has(rawStatus)) {
     return useCaseFailure(
       "validation_error",
-      `status is required (${ALLOWED_STATUS.join("|")})`,
+      `status must be one of ${INTEGRATION_LIST_STATUSES.join("|")}`,
       400,
     );
   }
-  const status = input.status as AllowedStatus;
-  const defaultSort =
-    status === "merged" ? "mergedAt" : status === "committed" ? "createdAt" : "openedAt";
-  const sort = ALLOWED_SORT.has(input.sort ?? "") ? input.sort! : defaultSort;
-  const order = input.order === "asc" ? "asc" : "desc";
+  const status = rawStatus as IntegrationListStatus;
+  const page = parsePageParams({
+    limit: input.limit != null ? String(input.limit) : null,
+    offset: input.offset != null ? String(input.offset) : null,
+  });
+  const { sort, order } = parseSortParams(
+    { sort: input.sort ?? null, order: input.order ?? null },
+    {
+      allowed: INTEGRATION_SORT_ALLOWED,
+      defaultSort: defaultIntegrationSort(status),
+      defaultOrder: "desc",
+    },
+  );
   return ok(
     deps.store.listIntegrations({
-      limit: input.limit,
-      offset: input.offset,
+      ...page,
       sort,
       order,
       status,

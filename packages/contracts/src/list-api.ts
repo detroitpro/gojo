@@ -47,11 +47,12 @@ export const TOKEN_SORT_ALLOWED = ["name", "createdAt", "expiresAt"] as const;
 
 export const BACKUP_SORT_ALLOWED = ["name", "createdAt"] as const;
 
-export const INTEGRATION_LIST_STATUSES = ["open", "merged", "committed"] as const;
+export const INTEGRATION_LIST_STATUSES = ["all", "open", "merged", "committed"] as const;
 
 export type IntegrationListStatus = (typeof INTEGRATION_LIST_STATUSES)[number];
 
 export const INTEGRATION_SORT_ALLOWED = [
+  "activityAt",
   "openedAt",
   "mergedAt",
   "createdAt",
@@ -59,6 +60,14 @@ export const INTEGRATION_SORT_ALLOWED = [
   "agentName",
   "prNumber",
 ] as const;
+
+/** Default list sort key for each integration list status filter. */
+export function defaultIntegrationSort(status: IntegrationListStatus): string {
+  if (status === "merged") return "mergedAt";
+  if (status === "committed") return "createdAt";
+  if (status === "all") return "activityAt";
+  return "openedAt";
+}
 
 export const IMPACT_ITEM_SORT_ALLOWED = [
   "createdAt",

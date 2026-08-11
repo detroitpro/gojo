@@ -7,6 +7,7 @@ import type { DashboardImpact } from "@/contexts/operations/contract";
 import { listIntegrations } from "@/contexts/delivery/contract";
 import { listProjectWork } from "@/contexts/work/contract";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
+import { useSoftLoading } from "@/platform/useSoftLoading";
 import type { AvailableWorkInventory } from "@/kernel/project-overview";
 import { forgeWorkListUrl } from "@/kernel/project-overview";
 import { compareLabel } from "@/kernel/stat-metrics";
@@ -39,7 +40,12 @@ const closedPrsInPeriod = ref<number | null>(null);
 const openIssuesTotal = ref<number | null>(null);
 const openPullRequestsTotal = ref<number | null>(null);
 const openIntegrationPrs = ref<number | null>(null);
-const loading = ref(true);
+const {
+  loading,
+  begin: beginImpact,
+  end: endImpact,
+  reset: resetImpact,
+} = useSoftLoading();
 const error = ref<string | null>(null);
 
 const operationsStore = useOperationsStore();
@@ -228,7 +234,7 @@ async function loadBacklogCounts() {
 }
 
 async function loadImpact() {
-  loading.value = true;
+  const initial = beginImpact();
   error.value = null;
   try {
     impact.value = await getDashboardImpact({
@@ -237,16 +243,18 @@ async function loadImpact() {
     });
     await loadBacklogCounts();
   } catch (err) {
-    impact.value = null;
-    closedIssuesInPeriod.value = null;
-    mergedPrsInPeriod.value = null;
-    closedPrsInPeriod.value = null;
-    openIssuesTotal.value = null;
-    openPullRequestsTotal.value = null;
-    openIntegrationPrs.value = null;
+    if (initial) {
+      impact.value = null;
+      closedIssuesInPeriod.value = null;
+      mergedPrsInPeriod.value = null;
+      closedPrsInPeriod.value = null;
+      openIssuesTotal.value = null;
+      openPullRequestsTotal.value = null;
+      openIntegrationPrs.value = null;
+    }
     error.value = err instanceof Error ? err.message : "Failed to load impact";
   } finally {
-    loading.value = false;
+    endImpact(initial);
   }
 }
 
@@ -260,11 +268,13 @@ watch(
     openIssuesTotal.value = null;
     openPullRequestsTotal.value = null;
     openIntegrationPrs.value = null;
+    resetImpact();
     void loadImpact();
   },
 );
 
 watch(impactRange, () => {
+  resetImpact();
   void loadImpact();
 });
 
@@ -296,8 +306,8 @@ bindStoreRefresh(operationsStore, loadImpact);
       </div>
     </div>
     <div class="panel-body">
-      <div v-if="loading" class="muted text-sm">Loading impact…</div>
-      <div v-else-if="error" class="alert alert-error">{{ error }}</div>
+      <div v-if="loading && !impact" class="muted text-sm">Loading impact…</div>
+      <div v-else-if="error && !impact" class="alert alert-error">{{ error }}</div>
       <div v-else-if="!hasAnySignal" class="muted text-sm">
         Impact data will appear after the project has completed enough runs to establish a
         reporting period.

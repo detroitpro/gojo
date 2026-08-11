@@ -1,61 +1,73 @@
 <script setup lang="ts">
-import type { ActivityRangePreset, ActivitySummaryMetrics, CompletedWorkPresentation } from "@/kernel/project-overview";
+import { ref } from "vue";
+import { Copy } from "lucide-vue-next";
 
-import ActivityRangeSelector from "./ActivityRangeSelector.vue";
-import ActivitySummary from "./ActivitySummary.vue";
-import CompletedWorkList from "./CompletedWorkList.vue";
-import ProgressSummary from "./ProgressSummary.vue";
+import type {
+  ActivitySummaryMetrics,
+  ChangeDayGroup,
+} from "@/kernel/project-overview";
+import { formatFeedCountsLine } from "@/kernel/project-overview";
+import AppButton from "@/ui/AppButton.vue";
 
-const preset = defineModel<ActivityRangePreset>("preset", { required: true });
-const customFrom = defineModel<string>("customFrom", { default: "" });
-const customTo = defineModel<string>("customTo", { default: "" });
+import ChangeFeed from "./ChangeFeed.vue";
 
-defineProps<{
-  rangeLabel: string;
-  hasLastCheck: boolean;
+const props = defineProps<{
   metrics: ActivitySummaryMetrics;
-  items: CompletedWorkPresentation[];
+  groups: ChangeDayGroup[];
+  impactByRun: Record<string, string[]>;
+  digestText: string;
   loading?: boolean;
   error?: string | null;
   emptyMessage: string;
   emptyHint?: string | null;
-  progressText: string;
   projectId: string;
 }>();
 
 const emit = defineEmits<{
   retry: [];
-  regenerate: [];
 }>();
+
+const copied = ref(false);
+
+async function copyDigest() {
+  try {
+    await navigator.clipboard.writeText(props.digestText);
+    copied.value = true;
+    window.setTimeout(() => {
+      copied.value = false;
+    }, 2000);
+  } catch {
+    copied.value = false;
+  }
+}
 </script>
 
 <template>
   <section class="recent-activity panel mb-7" aria-labelledby="recent-activity-heading">
     <div class="panel-header recent-activity__header">
-      <h2 id="recent-activity-heading">{{ rangeLabel }}</h2>
-      <ActivityRangeSelector
-        v-model:preset="preset"
-        v-model:custom-from="customFrom"
-        v-model:custom-to="customTo"
-        :has-last-check="hasLastCheck"
-      />
+      <div class="recent-activity__heading">
+        <h2 id="recent-activity-heading">Recent changes</h2>
+        <span class="recent-activity__counts">{{ formatFeedCountsLine(metrics) }}</span>
+      </div>
+      <AppButton
+        size="sm"
+        variant="ghost"
+        :icon="Copy"
+        :aria-label="copied ? 'Digest copied' : 'Copy digest'"
+        @click="copyDigest()"
+      >
+        {{ copied ? "Copied" : "Copy" }}
+      </AppButton>
     </div>
     <div class="panel-body">
-      <ActivitySummary :metrics="metrics" :range-label="rangeLabel" :loading="loading" />
-      <ProgressSummary
-        v-if="!loading && items.length > 0"
-        :text="progressText"
-        :range-label="rangeLabel"
-        :derived="true"
-        :supporting-to="{ name: 'project-history', params: { id: projectId } }"
-        @regenerate="emit('regenerate')"
-      />
-      <CompletedWorkList
-        :items="items"
+      <ChangeFeed
+        :groups="groups"
+        :impact-by-run="impactByRun"
         :loading="loading"
         :error="error"
         :empty-message="emptyMessage"
         :empty-hint="emptyHint"
+        :project-id="projectId"
         @retry="emit('retry')"
       />
     </div>
@@ -68,11 +80,31 @@ const emit = defineEmits<{
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-.recent-activity__header h2 {
+.recent-activity__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.recent-activity__heading h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.recent-activity__counts {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
 }
 </style>

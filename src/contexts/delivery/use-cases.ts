@@ -265,8 +265,8 @@ export const ListIntegrations = defineQuery<
     try {
       const page = await runtime.delivery.listIntegrations({
         status: input.status ?? null,
-        limit: input.limit ?? 20,
-        offset: input.offset ?? 0,
+        limit: input.limit ?? null,
+        offset: input.offset ?? null,
         sort: input.sort ?? null,
         order: input.order ?? null,
         projectId: input.projectId ?? null,

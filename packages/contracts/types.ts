@@ -111,6 +111,7 @@ export {
   RUN_SORT_ALLOWED,
   SCHEDULE_SORT_ALLOWED,
   TOKEN_SORT_ALLOWED,
+  defaultIntegrationSort,
 } from "./src/list-api";
 export type {
   ImpactItemListRow,

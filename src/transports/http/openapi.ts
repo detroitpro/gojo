@@ -76,8 +76,50 @@ const legacyOpenApiPaths = {
         {
           name: "status",
           in: "query",
-          required: true,
-          schema: { type: "string", enum: ["open", "merged", "committed"] },
+          required: false,
+          schema: {
+            type: "string",
+            enum: ["all", "open", "merged", "committed"],
+            default: "all",
+          },
+          description:
+            "List filter. `all` = open+merged PRs (default). `committed` = rows with commit_sha.",
+        },
+        { name: "limit", in: "query", schema: { type: "integer", default: 25 } },
+        { name: "offset", in: "query", schema: { type: "integer", default: 0 } },
+        {
+          name: "sort",
+          in: "query",
+          schema: {
+            type: "string",
+            enum: [
+              "activityAt",
+              "openedAt",
+              "mergedAt",
+              "createdAt",
+              "projectName",
+              "agentName",
+              "prNumber",
+            ],
+          },
+        },
+        {
+          name: "order",
+          in: "query",
+          schema: { type: "string", enum: ["asc", "desc"], default: "desc" },
+        },
+        { name: "projectId", in: "query", schema: { type: "string" } },
+        {
+          name: "from",
+          in: "query",
+          schema: { type: "string", format: "date-time" },
+          description: "Filter on run created_at (inclusive lower bound)",
+        },
+        {
+          name: "to",
+          in: "query",
+          schema: { type: "string", format: "date-time" },
+          description: "Filter on run created_at (inclusive upper bound)",
         },
       ],
     },

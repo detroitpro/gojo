@@ -267,14 +267,32 @@ describe("contexts/delivery approval use cases", () => {
     }
   });
 
-  test("listIntegrationsQuery requires known status", async () => {
+  test("listIntegrationsQuery rejects unknown status", async () => {
     const store = new MemoryApprovalStore();
     const result = await listIntegrationsQuery(
       { store },
-      { status: null, limit: 20, offset: 0 },
+      { status: "closed", limit: 25, offset: 0 },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("validation_error");
+  });
+
+  test("listIntegrationsQuery defaults omitted status to all", async () => {
+    const store = new MemoryApprovalStore();
+    let capturedStatus = "";
+    let capturedSort = "";
+    store.listIntegrations = ((input: Parameters<ApprovalStore["listIntegrations"]>[0]) => {
+      capturedStatus = input.status;
+      capturedSort = input.sort;
+      return { items: [], total: 0, limit: input.limit, offset: input.offset };
+    }) as ApprovalStore["listIntegrations"];
+    const result = await listIntegrationsQuery(
+      { store },
+      { status: null, limit: 25, offset: 0 },
+    );
+    expect(result.ok).toBe(true);
+    expect(capturedStatus).toBe("all");
+    expect(capturedSort).toBe("activityAt");
   });
 
   test("listIntegrationsQuery defaults sort/order per status", async () => {
@@ -288,7 +306,7 @@ describe("contexts/delivery approval use cases", () => {
     }) as ApprovalStore["listIntegrations"];
     const result = await listIntegrationsQuery(
       { store },
-      { status: "merged", limit: 20, offset: 0 },
+      { status: "merged", limit: 25, offset: 0 },
     );
     expect(result.ok).toBe(true);
     expect(capturedSort).toBe("mergedAt");

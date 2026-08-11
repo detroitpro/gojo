@@ -1041,8 +1041,23 @@ describe("api/router", () => {
       nextCheckAt: "2026-07-27T19:00:00.000Z",
     });
 
-    const missingStatus = await fetch(`${baseUrl}/api/v1/integrations`, { headers: auth });
-    expect(missingStatus.status).toBe(400);
+    const defaultRes = await fetch(`${baseUrl}/api/v1/integrations`, { headers: auth });
+    expect(defaultRes.status).toBe(200);
+    const defaultBody = (await defaultRes.json()) as {
+      data: {
+        integrations: Array<{ runId: string; status: string }>;
+        total: number;
+        limit: number;
+      };
+    };
+    expect(defaultBody.data.limit).toBe(25);
+    expect(defaultBody.data.total).toBeGreaterThanOrEqual(1);
+    expect(defaultBody.data.integrations.some((row) => row.runId === run.id)).toBe(true);
+
+    const badStatus = await fetch(`${baseUrl}/api/v1/integrations?status=closed`, {
+      headers: auth,
+    });
+    expect(badStatus.status).toBe(400);
 
     const openRes = await fetch(`${baseUrl}/api/v1/integrations?status=open`, { headers: auth });
     expect(openRes.status).toBe(200);
@@ -1087,6 +1102,17 @@ describe("api/router", () => {
       openedAt: "2026-07-18T00:00:00.000Z",
       mergedAt: "2026-07-21T00:00:00.000Z",
     });
+
+    const allRes = await fetch(
+      `${baseUrl}/api/v1/integrations?status=all&projectId=${project.id}`,
+      { headers: auth },
+    );
+    expect(allRes.status).toBe(200);
+    const allBody = (await allRes.json()) as {
+      data: { integrations: Array<{ prNumber: number | null; status: string }>; total: number };
+    };
+    expect(allBody.data.total).toBe(2);
+    expect(allBody.data.integrations.map((row) => row.status).sort()).toEqual(["merged", "open"]);
 
     const mergedRes = await fetch(
       `${baseUrl}/api/v1/integrations?status=merged&projectId=${project.id}`,

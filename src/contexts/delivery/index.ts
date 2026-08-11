@@ -55,8 +55,8 @@ export type DeliveryModule = {
   ): Promise<{ intent: ControlIntent; successStatus: 201 | 409 }>;
   listIntegrations(input: {
     status: string | null;
-    limit: number;
-    offset: number;
+    limit?: string | number | null;
+    offset?: string | number | null;
     sort?: string | null;
     order?: "asc" | "desc" | null;
     projectId?: string | null;

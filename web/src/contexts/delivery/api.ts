@@ -1,10 +1,10 @@
 import type { Approval, ApprovalState } from "./types";
-import type { IntegrationListItem } from "@gojo/contracts/types";
+import type { IntegrationListItem, IntegrationListStatus } from "@gojo/contracts/types";
 import { request } from "@/infrastructure/http";
 import { buildListQuery, type ListQuery, type PaginatedResult } from "@/kernel/pagination";
 
 export async function listIntegrations(
-  query: ListQuery & { status: "open" | "merged" | "committed" },
+  query: ListQuery & { status?: IntegrationListStatus },
 ): Promise<PaginatedResult<IntegrationListItem>> {
   const { data } = await request<{
     integrations: IntegrationListItem[];

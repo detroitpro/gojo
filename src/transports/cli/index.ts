@@ -1438,18 +1438,25 @@ async function runIntegrationCommand(
   await withContext(getHome(parsed), async (ctx) => {
     switch (sub) {
       case "list": {
+        const wantAll = hasFlag(parsed, "all");
         const wantOpen = hasFlag(parsed, "open");
         const wantMerged = hasFlag(parsed, "merged");
         const wantCommitted = hasFlag(parsed, "committed");
-        const selected = [wantOpen, wantMerged, wantCommitted].filter(Boolean).length;
-        if (selected !== 1) {
+        const selected = [wantAll, wantOpen, wantMerged, wantCommitted].filter(Boolean).length;
+        if (selected > 1) {
           die(
-            "usage: gojo integration list --open|--merged|--committed [--project <id>]",
+            "usage: gojo integration list [--all|--open|--merged|--committed] [--project <id>]",
             format,
           );
         }
         const projectId = getFlagString(parsed, "project");
-        const status = wantOpen ? "open" : wantMerged ? "merged" : "committed";
+        const status = wantOpen
+          ? "open"
+          : wantMerged
+            ? "merged"
+            : wantCommitted
+              ? "committed"
+              : "all";
         const result = listIntegrationsPage(ctx.db, {
           limit: DEFAULT_PAGE_LIMIT,
           offset: 0,

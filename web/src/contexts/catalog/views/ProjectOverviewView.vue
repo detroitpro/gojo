@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, inject, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { GitMerge } from "lucide-vue-next";
 
 import AttentionSummary from "@/contexts/catalog/components/overview/AttentionSummary.vue";
@@ -8,7 +8,7 @@ import CurrentActivitySection from "@/contexts/catalog/components/overview/Curre
 import RecentActivitySection from "@/contexts/catalog/components/overview/RecentActivitySection.vue";
 import ProjectImpactSection from "@/contexts/catalog/components/overview/ProjectImpactBrief.vue";
 import { projectShellKey } from "@/contexts/catalog/project-shell";
-import { runAgent } from "@/contexts/catalog/contract";
+import { listImpactItems, runAgent } from "@/contexts/catalog/contract";
 import {
   getProjectWorkStatus,
   listProjectSources,
@@ -21,25 +21,22 @@ import {
 import type { ProjectSource, WorkItem, WorkStatus } from "@/contexts/work/contract";
 import { MAX_PAGE_LIMIT } from "@/kernel/pagination";
 import {
+  RECENT_CHANGES_LIMIT,
   buildProgressSummary,
   collapseHistoryForOverview,
-  defaultActivityPreset,
+  groupChangesByDay,
   inventoryAvailableWork,
   isActiveWork,
   isAttentionWork,
   presentCompletedWork,
-  readLastCheckAt,
   repositoryBrowseUrl,
-  resolveActivityRange,
   summarizeCompletedWork,
-  writeLastCheckAt,
-  type ActivityRangePreset,
 } from "@/kernel/project-overview";
 import { attentionPrimaryAction } from "@/kernel/work-attention";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
+import { useSoftLoading } from "@/platform/useSoftLoading";
 import AppButton from "@/ui/AppButton.vue";
 import ConfirmDialog from "@/ui/ConfirmDialog.vue";
-import { useRouter } from "vue-router";
 
 const shellContext = inject(projectShellKey);
 if (!shellContext) {
@@ -54,17 +51,23 @@ const { project, projectId, dataVersion } = shell;
 
 const activeItems = ref<WorkItem[]>([]);
 const historyItems = ref<WorkItem[]>([]);
+const impactByRun = ref<Record<string, string[]>>({});
 const workStatus = ref<WorkStatus | null>(null);
 const projectSources = ref<ProjectSource[]>([]);
-const loadingActive = ref(true);
-const loadingHistory = ref(true);
+const {
+  loading: loadingActive,
+  begin: beginActive,
+  end: endActive,
+  reset: resetActive,
+} = useSoftLoading();
+const {
+  loading: loadingHistory,
+  begin: beginHistory,
+  end: endHistory,
+  reset: resetHistory,
+} = useSoftLoading();
 const historyError = ref<string | null>(null);
 const activeError = ref<string | null>(null);
-
-const rangePreset = ref<ActivityRangePreset>("24h");
-const customFrom = ref("");
-const customTo = ref("");
-const progressTick = ref(0);
 
 const attentionBusyId = ref("");
 const resolveOpen = ref(false);
@@ -77,17 +80,6 @@ const mergeBabysitter = computed(
       (agent) => agent.name === "maintain-merge" && agent.enabled,
     ) ?? null,
 );
-
-const hasLastCheck = computed(() => Boolean(readLastCheckAt(projectId.value)));
-
-const activityRange = computed(() => {
-  const fromLocal = customFrom.value ? new Date(customFrom.value).toISOString() : null;
-  const toLocal = customTo.value ? new Date(customTo.value).toISOString() : null;
-  return resolveActivityRange(rangePreset.value, projectId.value, {
-    customFrom: fromLocal,
-    customTo: toLocal,
-  });
-});
 
 const sourceWebUrls = computed(() => {
   const map = new Map<string, string | null>();
@@ -115,24 +107,22 @@ const completedPresentations = computed(() =>
   collapseHistoryForOverview(historyItems.value).map((item) => presentCompletedWork(item)),
 );
 
+const dayGroups = computed(() => groupChangesByDay(completedPresentations.value));
+
 const activityMetrics = computed(() => summarizeCompletedWork(historyItems.value));
 
 const activeCount = computed(() => activeItems.value.filter(isActiveWork).length);
 
-const progressText = computed(() => {
-  void progressTick.value;
-  return buildProgressSummary({
-    rangeLabel: activityRange.value.label,
+const digestText = computed(() =>
+  buildProgressSummary({
     completed: historyItems.value,
     attentionCount: attentionItems.value.length,
     activeCount: activeCount.value,
     projectEnabled: project.value?.enabled !== false,
-  }).text;
-});
-
-const emptyMessage = computed(
-  () => `No work was completed during ${activityRange.value.label.toLowerCase()}.`,
+  }).text,
 );
+
+const emptyMessage = "No completed changes yet.";
 
 const emptyHint = computed(() => {
   if (project.value?.enabled === false) {
@@ -151,7 +141,7 @@ const emptyHint = computed(() => {
 const openPrTotal = computed(() => workStatus.value?.verifiedOpen ?? 0);
 
 async function loadActive() {
-  loadingActive.value = true;
+  const initial = beginActive();
   activeError.value = null;
   try {
     const [page, status, sources] = await Promise.all([
@@ -164,39 +154,61 @@ async function loadActive() {
     projectSources.value = sources;
     shell.setOpenPrTotal(status.verifiedOpen);
   } catch (err) {
-    activeItems.value = [];
-    workStatus.value = null;
-    projectSources.value = [];
-    shell.setOpenPrTotal(0);
+    if (initial) {
+      activeItems.value = [];
+      workStatus.value = null;
+      projectSources.value = [];
+      shell.setOpenPrTotal(0);
+    }
     activeError.value = err instanceof Error ? err.message : "Failed to load active work";
   } finally {
-    loadingActive.value = false;
+    endActive(initial);
   }
 }
 
 async function loadHistory() {
-  loadingHistory.value = true;
+  const initial = beginHistory();
   historyError.value = null;
   try {
-    const range = activityRange.value;
     const page = await listProjectWork(projectId.value, {
-      limit: MAX_PAGE_LIMIT,
+      limit: RECENT_CHANGES_LIMIT,
       offset: 0,
       history: true,
-      from: range.from,
-      to: range.to,
     });
     historyItems.value = page.items;
   } catch (err) {
-    historyItems.value = [];
+    if (initial) {
+      historyItems.value = [];
+    }
     historyError.value = err instanceof Error ? err.message : "Failed to load completed work";
   } finally {
-    loadingHistory.value = false;
+    endHistory(initial);
+  }
+}
+
+async function loadImpact() {
+  try {
+    const page = await listImpactItems({
+      projectId: projectId.value,
+      limit: MAX_PAGE_LIMIT,
+      offset: 0,
+    });
+    const next: Record<string, string[]> = {};
+    for (const row of page.items) {
+      const existing = next[row.runId] ?? [];
+      if (!existing.includes(row.category)) {
+        existing.push(row.category);
+      }
+      next[row.runId] = existing;
+    }
+    impactByRun.value = next;
+  } catch {
+    impactByRun.value = {};
   }
 }
 
 async function loadAll() {
-  await Promise.all([loadActive(), loadHistory()]);
+  await Promise.all([loadActive(), loadHistory(), loadImpact()]);
 }
 
 async function runAttentionRecheck(item: WorkItem) {
@@ -302,10 +314,6 @@ async function runMergeBabysitter() {
   }
 }
 
-function markChecked() {
-  writeLastCheckAt(projectId.value);
-}
-
 watch(dataVersion, () => {
   void loadAll();
 });
@@ -313,17 +321,12 @@ watch(dataVersion, () => {
 watch(
   () => projectId.value,
   () => {
-    rangePreset.value = defaultActivityPreset(projectId.value);
     activeItems.value = [];
     historyItems.value = [];
+    impactByRun.value = {};
+    resetActive();
+    resetHistory();
     void loadAll();
-  },
-);
-
-watch(
-  [rangePreset, customFrom, customTo],
-  () => {
-    void loadHistory();
   },
 );
 
@@ -343,13 +346,7 @@ const workStore = useWorkStore();
 bindStoreRefresh(workStore, loadAll);
 
 onMounted(() => {
-  rangePreset.value = defaultActivityPreset(projectId.value);
   void loadAll();
-  markChecked();
-});
-
-onUnmounted(() => {
-  markChecked();
 });
 </script>
 
@@ -398,22 +395,19 @@ onUnmounted(() => {
 
     <div class="overview-layout">
       <div class="overview-layout__main">
+        <CurrentActivitySection :items="activeItems" />
+
         <RecentActivitySection
-          v-model:preset="rangePreset"
-          v-model:custom-from="customFrom"
-          v-model:custom-to="customTo"
-          :range-label="activityRange.label"
-          :has-last-check="hasLastCheck"
           :metrics="activityMetrics"
-          :items="completedPresentations"
+          :groups="dayGroups"
+          :impact-by-run="impactByRun"
+          :digest-text="digestText"
           :loading="loadingHistory"
           :error="historyError"
           :empty-message="emptyMessage"
           :empty-hint="emptyHint"
-          :progress-text="progressText"
           :project-id="projectId"
           @retry="loadHistory"
-          @regenerate="progressTick += 1"
         />
 
         <ProjectImpactSection
@@ -421,8 +415,6 @@ onUnmounted(() => {
           :available-work="availableWork"
           :repository-web-url="repositoryWebUrl"
         />
-
-        <CurrentActivitySection :items="activeItems" />
       </div>
     </div>
 
@@ -466,12 +458,6 @@ onUnmounted(() => {
 
 .delivery-nudge p {
   margin: 0;
-}
-
-.inline-icon {
-  display: inline;
-  vertical-align: -0.15em;
-  margin-right: 0.35rem;
 }
 
 .mb-5 {

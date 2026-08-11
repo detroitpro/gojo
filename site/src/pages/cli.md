@@ -104,7 +104,7 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 | Command | Purpose |
 | --- | --- |
 | `gojo run list [--project <id>] [--limit <n>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `logs` accepts `--follow`; `artifacts` returns handoff, validation, and failure JSON) |
-| `gojo integration list --open\|--merged\|--committed [--project <id>]` | List open, merged, or commit-only gojo-tracked integrations |
+| `gojo integration list [--all\|--open\|--merged\|--committed] [--project <id>]` | List gojo-tracked integrations (default: open+merged) |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |
 | `gojo approval list [--state <state>] [--project <id>]\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`) |

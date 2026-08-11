@@ -451,6 +451,22 @@ describe("paged-lists", () => {
     expect(merged.items[0]?.mergedAt).toBe("2026-07-06T00:00:00.000Z");
     expect(merged.items[0]?.status).toBe("merged");
 
+    const allPrs = listIntegrationsPage(db, { limit: 25, offset: 0, status: "all" });
+    expect(allPrs.total).toBe(3);
+    expect(allPrs.items.map((row) => row.prNumber)).toEqual([2, 3, 1]);
+    expect(allPrs.items.map((row) => row.status)).toEqual(["open", "merged", "open"]);
+
+    const allPage = listIntegrationsPage(db, {
+      limit: 2,
+      offset: 0,
+      status: "all",
+      sort: "activityAt",
+      order: "desc",
+    });
+    expect(allPage.total).toBe(3);
+    expect(allPage.items).toHaveLength(2);
+    expect(allPage.items.map((row) => row.prNumber)).toEqual([2, 3]);
+
     const withPrs = listProjectsPage(db, { limit: 25, offset: 0, hasOpenPrs: true });
     expect(withPrs.total).toBe(1);
     expect(withPrs.items[0]?.id).toBe(withOpen.id);

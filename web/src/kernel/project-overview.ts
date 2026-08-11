@@ -4,48 +4,21 @@ import { attentionReasonLabel } from "./work-attention";
 import {
   collapseHistoryTimeline,
   workAgentProfileLabel,
+  workKindLabel,
   workPrimaryLabel,
   workResultLabel,
   workSecondaryLabel,
 } from "./work-display";
 
-export type ActivityRangePreset = "last-check" | "24h" | "7d" | "custom";
+/** Newest completed changes shown on the project overview feed. */
+export const RECENT_CHANGES_LIMIT = 25;
 
-export type ActivityRange = {
-  preset: ActivityRangePreset;
-  from: string;
-  to: string;
+export type WorkResultSlice = Pick<WorkItem, "resolution" | "delivery" | "outcome">;
+
+export type PrRef = {
   label: string;
+  url: string | null;
 };
-
-const LAST_CHECK_KEY = "gojo.projectLastCheck.";
-
-export function lastCheckStorageKey(projectId: string): string {
-  return `${LAST_CHECK_KEY}${projectId}`;
-}
-
-export function readLastCheckAt(projectId: string, storage: Storage = localStorage): string | null {
-  try {
-    const value = storage.getItem(lastCheckStorageKey(projectId));
-    if (!value) return null;
-    const ms = Date.parse(value);
-    return Number.isFinite(ms) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeLastCheckAt(
-  projectId: string,
-  iso: string = new Date().toISOString(),
-  storage: Storage = localStorage,
-): void {
-  try {
-    storage.setItem(lastCheckStorageKey(projectId), iso);
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
 
 export function formatRelativeTime(iso: string | null | undefined, nowMs = Date.now()): string {
   if (!iso) return "—";
@@ -61,6 +34,17 @@ export function formatRelativeTime(iso: string | null | undefined, nowMs = Date.
   return new Date(ms).toLocaleString();
 }
 
+export function formatClockTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "—";
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 export function durationLabel(fromIso: string | null | undefined, nowMs = Date.now()): string {
   if (!fromIso) return "unknown duration";
   const ms = Date.parse(fromIso);
@@ -73,65 +57,19 @@ export function durationLabel(fromIso: string | null | undefined, nowMs = Date.n
   return `${days} day${days === 1 ? "" : "s"}`;
 }
 
-function isoHoursAgo(hours: number, nowMs = Date.now()): string {
-  return new Date(nowMs - hours * 3_600_000).toISOString();
-}
-
-export function resolveActivityRange(
-  preset: ActivityRangePreset,
-  projectId: string,
-  options: {
-    nowMs?: number;
-    customFrom?: string | null;
-    customTo?: string | null;
-    storage?: Storage;
-  } = {},
-): ActivityRange {
-  const nowMs = options.nowMs ?? Date.now();
-  const to = options.customTo ?? new Date(nowMs).toISOString();
-  const storage = options.storage ?? localStorage;
-
-  if (preset === "custom" && options.customFrom) {
-    return {
-      preset,
-      from: options.customFrom,
-      to,
-      label: "Custom range",
-    };
+function extractPrRef(item: WorkItem): PrRef | null {
+  if (item.kind === "pull-request" && item.webUrl) {
+    const m = /pull\/(\d+)/i.exec(item.webUrl) ?? /merge_requests\/(\d+)/i.exec(item.webUrl);
+    if (m) return { label: `#${m[1]}`, url: item.webUrl };
+    return { label: "PR", url: item.webUrl };
   }
-
-  if (preset === "last-check") {
-    const last = readLastCheckAt(projectId, storage);
-    if (last) {
-      return {
-        preset,
-        from: last,
-        to,
-        label: "Since your last check",
-      };
-    }
+  for (const d of item.deliveredWork ?? []) {
+    if (!d.webUrl) continue;
+    const m = /pull\/(\d+)/i.exec(d.webUrl) ?? /merge_requests\/(\d+)/i.exec(d.webUrl);
+    if (m) return { label: `#${m[1]}`, url: d.webUrl };
+    if (d.kind === "pull-request") return { label: "PR", url: d.webUrl };
   }
-
-  if (preset === "7d") {
-    return {
-      preset: "7d",
-      from: isoHoursAgo(24 * 7, nowMs),
-      to,
-      label: "Last 7 days",
-    };
-  }
-
-  // Default morning review window; also fallback when last-check is unavailable.
-  return {
-    preset: preset === "last-check" ? "24h" : preset,
-    from: isoHoursAgo(24, nowMs),
-    to,
-    label: "Last 24 hours",
-  };
-}
-
-export function defaultActivityPreset(projectId: string, storage: Storage = localStorage): ActivityRangePreset {
-  return readLastCheckAt(projectId, storage) ? "last-check" : "24h";
+  return null;
 }
 
 export type CompletedWorkPresentation = {
@@ -142,11 +80,14 @@ export type CompletedWorkPresentation = {
   agentLabel: string;
   completedAt: string | null;
   completedRelative: string;
+  clockTime: string;
   runId: string | null;
   externalUrl: string | null;
-  deliveryRefs: string[];
+  prRef: PrRef | null;
   followUp: string | null;
   kind: string;
+  kindLabel: string;
+  resultItem: WorkResultSlice;
 };
 
 export function presentCompletedWork(
@@ -154,22 +95,6 @@ export function presentCompletedWork(
   nowMs = Date.now(),
 ): CompletedWorkPresentation {
   const secondary = workSecondaryLabel(item);
-  const deliveries = item.deliveredWork ?? [];
-  const deliveryRefs = deliveries
-    .map((d) => {
-      if (d.webUrl && /pull\/(\d+)/i.exec(d.webUrl)) {
-        return `PR #${/pull\/(\d+)/i.exec(d.webUrl)![1]} (${d.delivery})`;
-      }
-      if (d.delivery === "merged") return `Merged: ${d.title}`;
-      if (d.delivery !== "none") return `${d.title} · ${d.delivery}`;
-      return null;
-    })
-    .filter((v): v is string => Boolean(v));
-
-  if (item.kind === "pull-request" && item.webUrl) {
-    const m = /pull\/(\d+)/i.exec(item.webUrl);
-    if (m) deliveryRefs.unshift(`PR #${m[1]} (${item.delivery})`);
-  }
 
   let followUp: string | null = null;
   if (item.attention !== "none" && item.resolution == null) {
@@ -207,12 +132,92 @@ export function presentCompletedWork(
     agentLabel: workAgentProfileLabel(item),
     completedAt,
     completedRelative: formatRelativeTime(completedAt, nowMs),
+    clockTime: formatClockTime(completedAt),
     runId: item.kind === "run" && item.nativeKey ? item.nativeKey : null,
     externalUrl: item.webUrl,
-    deliveryRefs,
+    prRef: extractPrRef(item),
     followUp,
     kind: item.kind,
+    kindLabel: workKindLabel(item),
+    resultItem: {
+      resolution: item.resolution,
+      delivery: item.delivery,
+      outcome: item.outcome,
+    },
   };
+}
+
+export type ChangeDayGroup = {
+  key: string;
+  label: string;
+  items: CompletedWorkPresentation[];
+};
+
+function startOfLocalDay(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function dayKey(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dayGroupLabel(ms: number, nowMs: number): string {
+  const today = startOfLocalDay(nowMs);
+  const day = startOfLocalDay(ms);
+  const deltaDays = Math.round((today - day) / 86_400_000);
+  if (deltaDays === 0) return "Today";
+  if (deltaDays === 1) return "Yesterday";
+  return new Date(ms).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Group presented changes by local calendar day, preserving input order. */
+export function groupChangesByDay(
+  items: CompletedWorkPresentation[],
+  nowMs = Date.now(),
+): ChangeDayGroup[] {
+  const groups: ChangeDayGroup[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const item of items) {
+    const ms = item.completedAt ? Date.parse(item.completedAt) : Number.NaN;
+    const key = Number.isFinite(ms) ? dayKey(ms) : "unknown";
+    const label = Number.isFinite(ms) ? dayGroupLabel(ms, nowMs) : "Unknown";
+    const existing = indexByKey.get(key);
+    if (existing != null) {
+      groups[existing]!.items.push(item);
+      continue;
+    }
+    indexByKey.set(key, groups.length);
+    groups.push({ key, label, items: [item] });
+  }
+
+  return groups;
+}
+
+export function formatFeedCountsLine(metrics: ActivitySummaryMetrics): string {
+  const parts = [
+    `${metrics.workCompleted} change${metrics.workCompleted === 1 ? "" : "s"}`,
+  ];
+  if (metrics.prsMerged > 0) {
+    parts.push(`${metrics.prsMerged} merged`);
+  }
+  if (metrics.runsCompleted > 0) {
+    parts.push(`${metrics.runsCompleted} run${metrics.runsCompleted === 1 ? "" : "s"}`);
+  }
+  if (metrics.openDeliveries > 0) {
+    parts.push(`${metrics.openDeliveries} open`);
+  }
+  return parts.join(" · ");
 }
 
 export type ActivitySummaryMetrics = {
@@ -271,25 +276,24 @@ export function formatActivitySummaryLine(metrics: ActivitySummaryMetrics): stri
 }
 
 export function buildProgressSummary(input: {
-  rangeLabel: string;
   completed: WorkItem[];
   attentionCount: number;
   activeCount: number;
   projectEnabled: boolean;
 }): { text: string; derived: true } {
-  const { rangeLabel, completed, attentionCount, activeCount, projectEnabled } = input;
+  const { completed, attentionCount, activeCount, projectEnabled } = input;
 
   if (!projectEnabled) {
     return {
       derived: true,
-      text: `The project is disabled. During ${rangeLabel.toLowerCase()}, ${completed.length} work item${completed.length === 1 ? " was" : "s were"} recorded, but new scheduled and API runs are blocked until the project is enabled.`,
+      text: `The project is disabled. ${completed.length} recent work item${completed.length === 1 ? " was" : "s were"} recorded, but new scheduled and API runs are blocked until the project is enabled.`,
     };
   }
 
   if (completed.length === 0) {
     const attention =
       attentionCount > 0
-        ? ` ${attentionCount} item${attentionCount === 1 ? "" : "s"} still need attention.`
+        ? ` ${attentionCount} item${attentionCount === 1 ? "" : "s"} still need${attentionCount === 1 ? "s" : ""} attention.`
         : " No items currently need attention.";
     const active =
       activeCount > 0
@@ -297,7 +301,7 @@ export function buildProgressSummary(input: {
         : " No work is currently active.";
     return {
       derived: true,
-      text: `During ${rangeLabel.toLowerCase()}, no work was completed.${attention}${active}`,
+      text: `No completed changes yet.${attention}${active}`,
     };
   }
 
@@ -339,7 +343,7 @@ export function buildProgressSummary(input: {
 
   return {
     derived: true,
-    text: `During ${rangeLabel.toLowerCase()}, the team completed work on ${outcomeList}${more}.${deliverySentence} ${blocked}${active}`,
+    text: `Recently, the team completed work on ${outcomeList}${more}.${deliverySentence} ${blocked}${active}`,
   };
 }
 

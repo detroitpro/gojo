@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getProjectWorkStatus: vi.fn(),
   listProjectSources: vi.fn(),
   getDashboardImpact: vi.fn(),
+  listImpactItems: vi.fn(),
   listIntegrations: vi.fn(),
   recheckWorkItem: vi.fn(),
   refreshProjectSource: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/contexts/catalog/contract", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/contexts/catalog/contract")>()),
   getProject: mocks.getProject,
   listAgents: mocks.listAgents,
+  listImpactItems: mocks.listImpactItems,
   syncProject: vi.fn(),
   deleteProject: vi.fn(),
   runAgent: vi.fn(),
@@ -191,6 +193,7 @@ type MountOptions = {
   enabled?: boolean;
   activeItems?: unknown[];
   historyItems?: unknown[];
+  impactItems?: unknown[];
   status?: Record<string, unknown>;
   impact?: Record<string, unknown> | null;
   impactReject?: boolean;
@@ -237,6 +240,12 @@ async function mountOverview(options: MountOptions = {}) {
     },
   });
   mocks.listAgents.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
+  mocks.listImpactItems.mockResolvedValue({
+    items: options.impactItems ?? [],
+    total: (options.impactItems ?? []).length,
+    limit: 100,
+    offset: 0,
+  });
   mocks.listProjectWork.mockImplementation(
     (
       _id: string,
@@ -393,7 +402,8 @@ describe("ProjectOverviewView briefing", () => {
     const { wrapper } = await mountOverview();
     expect(wrapper.text()).toContain("No items need your attention");
     expect(wrapper.text()).not.toContain("Needs your attention");
-    expect(wrapper.text()).toContain("No work was completed during");
+    expect(wrapper.text()).toContain("Recent changes");
+    expect(wrapper.text()).toContain("No completed changes yet");
     expect(wrapper.text()).not.toContain("Progress summary");
     expect(wrapper.text()).not.toContain("In progress");
     expect(wrapper.text()).not.toContain("Operations");
@@ -477,14 +487,41 @@ describe("ProjectOverviewView briefing", () => {
   });
 
   test("shows completed work outcomes in the primary section", async () => {
-    const { wrapper } = await mountOverview({
-      historyItems: [completedWork()],
+    const recent = completedWork({
+      completedAt: new Date().toISOString(),
     });
-    expect(wrapper.text()).toContain("Last 24 hours");
+    const { wrapper } = await mountOverview({
+      historyItems: [recent],
+      impactItems: [
+        {
+          id: "impact-1",
+          runId: "run-99",
+          projectId: "project-1",
+          projectName: "quotient-server",
+          agentId: "agent-1",
+          agentName: "Repository Maintainer",
+          category: "documentation",
+          subject: "README",
+          summary: "Updated docs",
+          source: "platform",
+          verification: "verified",
+          confidence: 1,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    expect(wrapper.text()).toContain("Recent changes");
+    expect(wrapper.text()).toContain("Today");
     expect(wrapper.text()).toContain("Repository Maintainer");
     expect(wrapper.text()).toContain("remote branch cleanup");
-    expect(wrapper.text()).toContain("Progress summary");
-    expect(wrapper.text()).toContain("Copy summary");
+    expect(wrapper.text()).toContain("Documentation updates");
+    expect(wrapper.text()).not.toContain("Progress summary");
+    expect(wrapper.text()).toContain("Copy");
+    const runLink = wrapper
+      .findAll("a")
+      .find((anchor) => (anchor.attributes("href") ?? "").includes("/runs/run-99"));
+    expect(runLink).toBeTruthy();
+    expect(runLink!.text()).toContain("Harden worktree lifecycle");
     wrapper.unmount();
   });
 
@@ -561,23 +598,22 @@ describe("ProjectOverviewView briefing", () => {
     wrapper.unmount();
   });
 
-  test("reloads completed work when the time range changes", async () => {
+  test("loads recent completed work without a time window", async () => {
     const { wrapper } = await mountOverview({
       historyItems: [completedWork()],
     });
-    mocks.listProjectWork.mockClear();
-    const select = wrapper.find("#activity-range-preset");
-    await select.setValue("7d");
-    await flushPromises();
-    const historyCalls = mocks.listProjectWork.mock.calls.filter(
-      (call) => call[1] && (call[1] as { history?: boolean }).history,
-    );
-    expect(historyCalls.length).toBeGreaterThan(0);
-    expect(historyCalls.some((call) => {
-      const query = call[1] as { from?: string };
-      return Boolean(query.from);
-    })).toBe(true);
-    expect(wrapper.text()).toContain("Last 7 days");
+    const feedCalls = mocks.listProjectWork.mock.calls.filter((call) => {
+      const query = call[1] as { history?: boolean; kind?: string } | undefined;
+      return Boolean(query?.history) && !query?.kind;
+    });
+    expect(feedCalls.length).toBeGreaterThan(0);
+    expect(
+      feedCalls.every((call) => {
+        const query = call[1] as { from?: string; to?: string; limit?: number };
+        return !query.from && !query.to && query.limit === 25;
+      }),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Recent changes");
     wrapper.unmount();
   });
 

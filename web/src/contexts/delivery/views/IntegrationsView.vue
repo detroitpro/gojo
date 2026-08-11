@@ -12,11 +12,15 @@ import TablePager from "@/ui/TablePager.vue";
 import { bindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useServerTable } from "@/platform/useServerTable";
 import { MAX_PAGE_LIMIT, type SortOrder } from "@/kernel/pagination";
-import { GitCommitHorizontal, GitMerge, GitPullRequest } from "lucide-vue-next";
-import type { IntegrationListStatus } from "@gojo/contracts/types";
+import {
+  defaultIntegrationSort,
+  type IntegrationListStatus,
+} from "@gojo/contracts/types";
+import { GitCommitHorizontal, GitMerge, GitPullRequest, Layers } from "lucide-vue-next";
 import type { Project } from "@/contexts/catalog/types";
 
 const INTEGRATION_SORT_ALLOWED = [
+  "activityAt",
   "openedAt",
   "mergedAt",
   "createdAt",
@@ -26,10 +30,13 @@ const INTEGRATION_SORT_ALLOWED = [
 ] as const;
 
 const STATUSES: { value: IntegrationListStatus; label: string; icon: typeof GitPullRequest }[] = [
+  { value: "all", label: "All", icon: Layers },
   { value: "open", label: "Open", icon: GitPullRequest },
   { value: "merged", label: "Merged", icon: GitMerge },
   { value: "committed", label: "Commits", icon: GitCommitHorizontal },
 ];
+
+type StatusCounts = Record<IntegrationListStatus, number | null>;
 
 const route = useRoute();
 const router = useRouter();
@@ -39,9 +46,15 @@ function queryParam(key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function parseStatus(value: string): IntegrationListStatus {
+  if (value === "open" || value === "merged" || value === "committed" || value === "all") {
+    return value;
+  }
+  return "all";
+}
+
 function initialStatus(): IntegrationListStatus {
-  const value = queryParam("status");
-  return value === "merged" || value === "committed" ? value : "open";
+  return parseStatus(queryParam("status"));
 }
 
 function initialSort(): string {
@@ -49,10 +62,7 @@ function initialSort(): string {
   if ((INTEGRATION_SORT_ALLOWED as readonly string[]).includes(value)) {
     return value;
   }
-  const status = initialStatus();
-  if (status === "merged") return "mergedAt";
-  if (status === "committed") return "createdAt";
-  return "openedAt";
+  return defaultIntegrationSort(initialStatus());
 }
 
 function initialOrder(): SortOrder {
@@ -65,6 +75,12 @@ const statusFilter = ref<IntegrationListStatus>(initialStatus());
 const projectFilter = ref(queryParam("projectId"));
 const fromFilter = ref(queryParam("from"));
 const toFilter = ref(queryParam("to"));
+const statusCounts = ref<StatusCounts>({
+  all: null,
+  open: null,
+  merged: null,
+  committed: null,
+});
 
 const {
   page,
@@ -100,6 +116,33 @@ async function loadProjects() {
   projects.value = result.items;
 }
 
+async function loadCounts() {
+  const base = {
+    limit: 1,
+    offset: 0,
+    projectId: projectFilter.value || undefined,
+    from: fromFilter.value || undefined,
+    to: toFilter.value || undefined,
+  };
+  const [allPage, openPage, mergedPage, committedPage] = await Promise.all([
+    listIntegrations({ ...base, status: "all" }).catch(() => null),
+    listIntegrations({ ...base, status: "open" }).catch(() => null),
+    listIntegrations({ ...base, status: "merged" }).catch(() => null),
+    listIntegrations({ ...base, status: "committed" }).catch(() => null),
+  ]);
+  statusCounts.value = {
+    all: allPage?.total ?? null,
+    open: openPage?.total ?? null,
+    merged: mergedPage?.total ?? null,
+    committed: committedPage?.total ?? null,
+  };
+}
+
+function tabLabel(status: IntegrationListStatus, label: string): string {
+  const count = statusCounts.value[status];
+  return count == null ? label : `${label} (${count})`;
+}
+
 function shortSha(sha: string | null): string {
   if (!sha) return "—";
   return sha.length > 12 ? `${sha.slice(0, 7)}…` : sha;
@@ -114,12 +157,17 @@ function formatWhen(value: string | null): string {
   }
 }
 
+function emptyLabel(status: IntegrationListStatus): string {
+  if (status === "all") return "No open or merged integrations in this filter";
+  if (status === "committed") return "No commit-only integrations in this filter";
+  return `No ${status} integrations in this filter`;
+}
+
 watch(
   () =>
     [route.query.status, route.query.projectId, route.query.from, route.query.to] as const,
   ([status, projectId, from, to]) => {
-    const nextStatus: IntegrationListStatus =
-      status === "merged" || status === "committed" ? status : "open";
+    const nextStatus = parseStatus(typeof status === "string" ? status : "");
     const nextProject = typeof projectId === "string" ? projectId : "";
     const nextFrom = typeof from === "string" ? from : "";
     const nextTo = typeof to === "string" ? to : "";
@@ -132,19 +180,15 @@ watch(
 
 watch([statusFilter, projectFilter, fromFilter, toFilter, sort, order], () => {
   const nextQuery = { ...route.query } as Record<string, string>;
-  nextQuery.status = statusFilter.value;
+  if (statusFilter.value === "all") delete nextQuery.status;
+  else nextQuery.status = statusFilter.value;
   if (projectFilter.value) nextQuery.projectId = projectFilter.value;
   else delete nextQuery.projectId;
   if (fromFilter.value) nextQuery.from = fromFilter.value;
   else delete nextQuery.from;
   if (toFilter.value) nextQuery.to = toFilter.value;
   else delete nextQuery.to;
-  const defaultSort =
-    statusFilter.value === "merged"
-      ? "mergedAt"
-      : statusFilter.value === "committed"
-        ? "createdAt"
-        : "openedAt";
+  const defaultSort = defaultIntegrationSort(statusFilter.value);
   if (sort.value !== defaultSort || order.value !== "desc") {
     nextQuery.sort = sort.value;
     nextQuery.order = order.value;
@@ -164,16 +208,21 @@ watch([statusFilter, projectFilter, fromFilter, toFilter, sort, order], () => {
   }
 });
 
+watch([projectFilter, fromFilter, toFilter], () => {
+  void loadCounts();
+});
+
 const deliveryStore = useDeliveryStore();
 bindStoreRefresh(deliveryStore, load);
 bindStoreRefresh(deliveryStore, loadProjects);
+bindStoreRefresh(deliveryStore, loadCounts);
 </script>
 
 <template>
   <div>
     <PageHeader
       title="Integrations"
-      subtitle="Open PRs, merges, and commits produced by automation runs"
+      subtitle="Recent open and merged PRs from automation runs"
     />
 
     <div v-if="error" class="alert alert-error">{{ error }}</div>
@@ -189,7 +238,7 @@ bindStoreRefresh(deliveryStore, loadProjects);
           :selected="statusFilter === tab.value"
           @click="statusFilter = tab.value"
         >
-          {{ tab.label }}
+          {{ tabLabel(tab.value, tab.label) }}
         </AppButton>
       </div>
       <select
@@ -207,7 +256,7 @@ bindStoreRefresh(deliveryStore, loadProjects);
 
     <div v-if="loading" class="empty">Loading integrations…</div>
     <div v-else-if="integrations.length === 0" class="empty">
-      No {{ statusFilter }} integrations in this filter
+      {{ emptyLabel(statusFilter) }}
     </div>
     <template v-else>
       <div class="table-wrap">
@@ -239,7 +288,7 @@ bindStoreRefresh(deliveryStore, loadProjects);
                 @sort="setSort"
               />
               <SortableTh
-                v-if="statusFilter === 'merged'"
+                v-if="statusFilter === 'merged' || statusFilter === 'all'"
                 column="mergedAt"
                 label="Merged"
                 :sort="sort"
@@ -276,7 +325,9 @@ bindStoreRefresh(deliveryStore, loadProjects);
                 <IntegrationStatusBadge :status="row.status" />
               </td>
               <td v-if="statusFilter !== 'committed'">{{ formatWhen(row.openedAt) }}</td>
-              <td v-if="statusFilter === 'merged'">{{ formatWhen(row.mergedAt) }}</td>
+              <td v-if="statusFilter === 'merged' || statusFilter === 'all'">
+                {{ formatWhen(row.mergedAt) }}
+              </td>
               <td v-if="statusFilter === 'committed'">{{ formatWhen(row.runCreatedAt) }}</td>
               <td>
                 <RouterLink :to="{ name: 'run-detail', params: { id: row.runId } }">
