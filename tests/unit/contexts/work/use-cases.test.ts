@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { FixedClock, InMemoryUnitOfWork } from "@/kernel";
 import { createProjectSourceCommand } from "@/contexts/work/application/create-project-source";
 import { getProjectWorkStatusQuery } from "@/contexts/work/application/get-project-work-status";
+import { getWorkItemDiffQuery } from "@/contexts/work/application/get-work-item-diff";
 import { getWorkItemQuery } from "@/contexts/work/application/get-work-item";
+import { recheckWorkItemCommand } from "@/contexts/work/application/recheck-work-item";
 import { listProjectSourcesQuery } from "@/contexts/work/application/list-project-sources";
 import { listProjectWorkQuery } from "@/contexts/work/application/list-project-work";
 import { rebuildWorkStatusCommand } from "@/contexts/work/application/rebuild-work-status";
@@ -56,6 +58,9 @@ class MemoryWorkStore implements WorkStore {
   createdSources: CreateProjectSourceCommand[] = [];
   refreshCalls: Array<{ sourceId: string; projectId: string }> = [];
   recheckCalls: string[] = [];
+  recheckError: Error | null = null;
+  diffById = new Map<string, string>();
+  diffError: Error | null = null;
   resolveCalls: Array<{ id: string; input: WorkResolveInput }> = [];
   webhookIngests: Array<{ sourceId: string; body: string; signature: string }> = [];
   rebuildInputs: Array<{ projectId?: string; from?: string }> = [];
@@ -111,11 +116,13 @@ class MemoryWorkStore implements WorkStore {
   }
 
   async getWorkItemDiff(id: string): Promise<{ workItemId: string; diff: string }> {
-    return { workItemId: id, diff: "" };
+    if (this.diffError) throw this.diffError;
+    return { workItemId: id, diff: this.diffById.get(id) ?? "" };
   }
 
   async recheckWorkItem(id: string): Promise<WorkRecheckResult> {
     this.recheckCalls.push(id);
+    if (this.recheckError) throw this.recheckError;
     return { status: "recheck_scheduled" } as unknown as WorkRecheckResult;
   }
 
@@ -319,5 +326,37 @@ describe("contexts/work use cases", () => {
     const result = await rebuildWorkStatusCommand({ store }, {});
     expect(result.ok).toBe(true);
     expect(store.rebuildInputs).toEqual([{}]);
+  });
+
+  test("getWorkItemDiffQuery returns diff from store", async () => {
+    const store = new MemoryWorkStore();
+    store.diffById.set("work-1", "diff --git a/foo b/foo");
+    const result = await getWorkItemDiffQuery({ store }, { id: "work-1" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.workItemId).toBe("work-1");
+      expect(result.value.diff).toContain("diff --git");
+    }
+  });
+
+  test("getWorkItemDiffQuery maps store not-found to 404", async () => {
+    const store = new MemoryWorkStore();
+    store.diffError = new Error("Work item not found: work-1");
+    const result = await getWorkItemDiffQuery({ store }, { id: "work-1" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("not_found");
+      expect(result.error.status).toBe(404);
+    }
+  });
+
+  test("recheckWorkItemCommand returns 404 when work item missing", async () => {
+    const store = new MemoryWorkStore();
+    const result = await recheckWorkItemCommand({ store }, { id: "missing" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("not_found");
+      expect(result.error.status).toBe(404);
+    }
   });
 });

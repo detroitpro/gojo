@@ -5,6 +5,7 @@ import { listApprovalsQuery } from "@/contexts/delivery/application/list-approva
 import { listIntegrationsQuery } from "@/contexts/delivery/application/list-integrations";
 import { setApprovalAutonomyCommand } from "@/contexts/delivery/application/set-approval-autonomy";
 import { submitApprovalIntentCommand } from "@/contexts/delivery/application/submit-approval-intent";
+import { runApproveCommand, runRejectCommand } from "@/contexts/delivery/application/run-approve";
 import { submitControlIntentCommand } from "@/contexts/delivery/application/submit-control-intent";
 import type {
   ApprovalDetail,
@@ -292,5 +293,36 @@ describe("contexts/delivery approval use cases", () => {
     expect(result.ok).toBe(true);
     expect(capturedSort).toBe("mergedAt");
     expect(capturedOrder).toBe("desc");
+  });
+
+  test("runApproveCommand approves existing run", async () => {
+    const store = new MemoryApprovalStore();
+    store.runs.set("run-1", { id: "run-1", state: "AwaitingApproval" });
+    store.findRun = (runId) => {
+      const run = store.runs.get(runId);
+      if (!run) return null;
+      if (store.runApprovals.includes(runId)) {
+        return { ...run, state: "Approved" };
+      }
+      return run;
+    };
+    const result = await runApproveCommand({ store }, { id: "run-1" });
+    expect(result.ok).toBe(true);
+    expect(store.runApprovals).toEqual(["run-1"]);
+    if (result.ok) expect(result.value.run?.state).toBe("Approved");
+  });
+
+  test("runRejectCommand returns 404 when run missing", async () => {
+    const store = new MemoryApprovalStore();
+    const result = await runRejectCommand(
+      { store },
+      { id: "missing", reason: "checks failed" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("not_found");
+      expect(result.error.status).toBe(404);
+    }
+    expect(store.runRejections).toHaveLength(0);
   });
 });
