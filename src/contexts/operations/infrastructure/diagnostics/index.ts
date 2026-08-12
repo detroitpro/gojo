@@ -1,4 +1,5 @@
 export {
+  assessSourceWriteCredential,
   firstCommandToken,
   instanceDoctor,
   primaryValidationTool,

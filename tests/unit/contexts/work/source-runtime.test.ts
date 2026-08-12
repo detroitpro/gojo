@@ -702,4 +702,282 @@ describe("sources/runtime", () => {
     );
     db.close();
   });
+
+  test("falls back to default token when named source secret is missing", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "tok-fallback",
+      repoPath: "/tmp/tok-fallback",
+    });
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "github.com",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      configJson: JSON.stringify({ tokenSecretName: "source-github" }),
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/app",
+      displayName: "acme/app",
+    });
+    let observedToken: string | null | undefined;
+    const adapter: SourceAdapter = {
+      type: "github",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+      async listActive(input) {
+        observedToken = input.token;
+        return { items: [], cursor: null, backfillComplete: true };
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([adapter]),
+      resolveSecret: () => null,
+      resolveDefaultToken: () => "fallback-from-gh",
+      platformEvents: new PlatformChangeFeed(db),
+    });
+
+    expect(await service.syncSource(source.id)).toMatchObject({ errors: 0 });
+    expect(observedToken).toBe("fallback-from-gh");
+    db.close();
+  });
+
+  test("prefers named secret over default token when both exist", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "tok-prefer",
+      repoPath: "/tmp/tok-prefer",
+    });
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "github.com",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      configJson: JSON.stringify({ tokenSecretName: "source-github" }),
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/app",
+      displayName: "acme/app",
+    });
+    let listToken: string | null | undefined;
+    let recheckToken: string | null | undefined;
+    const adapter: SourceAdapter = {
+      type: "github",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+      async listActive(input) {
+        listToken = input.token;
+        return {
+          items: [
+            {
+              kind: "pull-request",
+              nativeKey: "1",
+              title: "Open PR",
+              summary: "",
+              delivery: "open",
+              outcome: "pending",
+              provenance: "external",
+              labels: [],
+              nativeState: "opened",
+              nativeJson: "{}",
+              webUrl: "https://github.com/acme/app/pull/1",
+              observedAt: "2026-08-12T00:00:00.000Z",
+            },
+          ],
+          cursor: null,
+          backfillComplete: true,
+        };
+      },
+      async getItem(input) {
+        recheckToken = input.token;
+        return {
+          status: "found",
+          item: {
+            kind: "pull-request",
+            nativeKey: "1",
+            title: "Open PR",
+            summary: "",
+            delivery: "open",
+            outcome: "pending",
+            provenance: "external",
+            labels: [],
+            nativeState: "opened",
+            nativeJson: "{}",
+            webUrl: "https://github.com/acme/app/pull/1",
+            observedAt: "2026-08-12T00:01:00.000Z",
+          },
+        };
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([adapter]),
+      resolveSecret: () => "named-secret",
+      resolveDefaultToken: () => "fallback-from-gh",
+      platformEvents: new PlatformChangeFeed(db),
+    });
+
+    expect(await service.syncSource(source.id)).toMatchObject({ errors: 0 });
+    const workItem = work.items
+      .listByProject(project.id, { limit: 10, offset: 0 })
+      .items.find((item) => item.nativeKey === "1");
+    expect(workItem).toBeTruthy();
+    expect(await service.recheckWorkItem(workItem!.id)).toMatchObject({ status: "active" });
+    expect(listToken).toBe("named-secret");
+    expect(recheckToken).toBe("named-secret");
+    db.close();
+  });
+
+  test("hints missing credentials when sync 404s with a null token", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "tok-404",
+      repoPath: "/tmp/tok-404",
+    });
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "github.com",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      configJson: JSON.stringify({ tokenSecretName: "source-github" }),
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/private",
+      displayName: "acme/private",
+    });
+    const adapter: SourceAdapter = {
+      type: "github",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+      async listActive() {
+        throw new Error(
+          "Source sync failed (HTTP 404) for https://api.github.com/repos/acme/private/pulls",
+        );
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([adapter]),
+      resolveSecret: () => null,
+      resolveDefaultToken: () => null,
+      platformEvents: new PlatformChangeFeed(db),
+    });
+
+    expect(await service.syncSource(source.id)).toMatchObject({ errors: 1 });
+    expect(work.sources.findById(source.id)?.lastError).toContain(
+      "missing source credentials (private repos require a token)",
+    );
+    db.close();
+  });
+
+  test("does not append credential hint when sync 404s with a token present", async () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const project = repos.projects.create({
+      name: "tok-404-auth",
+      repoPath: "/tmp/tok-404-auth",
+    });
+    const work = createWorkRepositories(db);
+    const connection = work.connections.create({
+      name: "github.com",
+      adapter: "github",
+      baseUrl: "https://api.github.com",
+      configJson: JSON.stringify({ tokenSecretName: "source-github" }),
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+    });
+    const source = work.sources.create({
+      projectId: project.id,
+      connectionId: connection.id,
+      kind: "repository",
+      externalKey: "acme/gone",
+      displayName: "acme/gone",
+    });
+    const adapter: SourceAdapter = {
+      type: "github",
+      capabilities: {
+        read: true,
+        list: true,
+        webhooks: true,
+        write: true,
+        workKinds: ["pull-request", "issue"],
+      },
+      async listActive() {
+        throw new Error(
+          "Source sync failed (HTTP 404) for https://api.github.com/repos/acme/gone/pulls",
+        );
+      },
+    };
+    const service = new SourceSyncService({
+      db,
+      registry: new SourceAdapterRegistry([adapter]),
+      resolveSecret: () => "present-token",
+      resolveDefaultToken: () => null,
+      platformEvents: new PlatformChangeFeed(db),
+    });
+
+    expect(await service.syncSource(source.id)).toMatchObject({ errors: 1 });
+    const lastError = work.sources.findById(source.id)?.lastError ?? "";
+    expect(lastError).toContain("HTTP 404");
+    expect(lastError).not.toContain("missing source credentials");
+    db.close();
+  });
 });

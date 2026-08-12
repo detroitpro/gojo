@@ -67,15 +67,23 @@ events require an HMAC-SHA256 signature, durable delivery ID, and event time.
 Duplicate deliveries are ignored and older observations cannot overwrite newer
 state.
 
-Credentials resolve from a connection's secret reference, with conventional
-provider environment variables as a compatibility fallback. GitHub also reuses
-the active `gh` CLI login when no explicit token is configured. Secrets are
-never stored in `project_sources` or native work metadata.
+Credentials resolve from a connection's secret reference, then fall back to
+conventional provider environment variables (and for GitHub, the active `gh`
+CLI login) when the named secret is missing for that project. Shared
+connections often use `tokenSecretName: source-github`, but secrets are
+**project-scoped**: a new GitHub project still needs
+`GOJO_SOURCE_TOKEN=… gojo source token set <source-id> --secret-name source-github`
+(or an instance-level `source-github` secret). Doctor/`gh auth` alone can look
+healthy while sync fails with HTTP 404 on private repos until the secret exists
+or the env/CLI fallback can supply a token. Secrets are never stored in
+`project_sources` or native work metadata.
 
 `GOJO_SOURCE_TOKEN=… gojo source token set <source-id> [--secret-name <name>]`
 stores or rotates the secret (or prompts on a TTY) and persists only its
-reference on the connection. `gojo server doctor` reports missing source write
-credentials. For pull requests, source sync also
+reference on the connection. Prefer keeping `--secret-name source-github` for
+shared GitHub connections so other projects keep the same secret name. `gojo
+server doctor` warns when a configured secret name is missing for a project and
+reports missing source write credentials. For pull requests, source sync also
 polls comments from trusted issue-label actors and converts exact
 `/gojo approve|merge|hold|reject` commands into idempotent control intents.
 

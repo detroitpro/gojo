@@ -174,6 +174,61 @@ async function inspectRefConflicts(
 const INSTANCE_TOOLS = ["git", "bun", "gh", "tea", "sh"] as const;
 
 /** First token of a shell command (validation steps run via `sh -c`). */
+/**
+ * Assess whether a forge source has usable write/sync credentials and emit
+ * operator warnings when the configured secret name is missing for the project.
+ */
+export function assessSourceWriteCredential(input: {
+  displayName: string;
+  adapter: string;
+  secretName: string | null;
+  hasNamedSecret: boolean;
+  env?: NodeJS.ProcessEnv;
+  githubCliTokenAvailable?: () => boolean;
+}): { available: boolean; warnings: string[] } {
+  const env = input.env ?? process.env;
+  const warnings: string[] = [];
+  let available = input.hasNamedSecret;
+
+  if (input.secretName && !input.hasNamedSecret) {
+    warnings.push(
+      `source ${input.displayName}: configured secret "${input.secretName}" is missing for this project; sync falls back to provider env/CLI credentials when available`,
+    );
+  }
+
+  if (!available && input.adapter === "github") {
+    available = Boolean(env["GH_TOKEN"] ?? env["GITHUB_TOKEN"]);
+    if (!available) {
+      try {
+        available = (input.githubCliTokenAvailable ?? defaultGithubCliTokenAvailable)();
+      } catch {
+        available = false;
+      }
+    }
+  } else if (!available && input.adapter === "gitlab") {
+    available = Boolean(env["GITLAB_TOKEN"]);
+  } else if (!available && input.adapter === "forgejo") {
+    available = Boolean(env["FORGEJO_TOKEN"] ?? env["GITEA_TOKEN"]);
+  }
+
+  if (!available) {
+    warnings.push(
+      `source ${input.displayName} (${input.adapter}) has no platform write credential`,
+    );
+  }
+
+  return { available, warnings };
+}
+
+function defaultGithubCliTokenAvailable(): boolean {
+  const auth = Bun.spawnSync({
+    cmd: ["gh", "auth", "token"],
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return auth.exitCode === 0;
+}
+
 export function firstCommandToken(command: string): string {
   const trimmed = command.trim();
   if (!trimmed) {
@@ -552,47 +607,26 @@ export async function instanceDoctor(ctx: AppContext): Promise<InstanceDoctorRes
         typeof config["tokenSecretName"] === "string"
           ? config["tokenSecretName"]
           : null;
-      let available = secretName
+      const hasNamedSecret = secretName
         ? Boolean(
             ctx.secrets.get(secretName, project.id) ??
               ctx.secrets.get(secretName),
           )
         : false;
-      if (!available && connection.adapter === "github") {
-        available = Boolean(
-          process.env["GH_TOKEN"] ?? process.env["GITHUB_TOKEN"],
-        );
-        if (!available) {
-          try {
-            const auth = Bun.spawnSync({
-              cmd: ["gh", "auth", "token"],
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-            available = auth.exitCode === 0;
-          } catch {
-            available = false;
-          }
-        }
-      } else if (!available && connection.adapter === "gitlab") {
-        available = Boolean(process.env["GITLAB_TOKEN"]);
-      } else if (!available && connection.adapter === "forgejo") {
-        available = Boolean(
-          process.env["FORGEJO_TOKEN"] ?? process.env["GITEA_TOKEN"],
-        );
-      }
-      if (!available) {
-        warnings.push(
-          `source ${source.displayName} (${connection.adapter}) has no platform write credential`,
-        );
-      }
+      const assessed = assessSourceWriteCredential({
+        displayName: source.displayName,
+        adapter: connection.adapter,
+        secretName,
+        hasNamedSecret,
+      });
+      warnings.push(...assessed.warnings);
       return [
         {
           sourceId: source.id,
           projectId: project.id,
           adapter: connection.adapter,
           secretName,
-          available,
+          available: assessed.available,
         },
       ];
     }),
