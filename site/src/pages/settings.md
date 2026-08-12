@@ -78,7 +78,7 @@ UI/CLI **Enable/Disable** write the database only (they do not edit the repo’s
 
 ### Projects UI
 
-In the web UI, **Projects** is a list of registered repos. **Open** a project for sub-pages: **Overview** (morning activity briefing — current work, needs attention, recent impact), **History** (completed and verified-terminal work), **Impact** (paged impact items), **Health** (doctor checklist), and **Configuration** (structured synced manifest — not a raw JSON dump). **Sync** reloads the manifest and shows counts (profiles / agents / schedules). **Enable/Disable** pauses or resumes new work for that project without unregistering it. **Remove** unregisters the project from gojo (CASCADE-deletes gojo history for that project) — it does **not** delete the git working tree (you confirm in a dialog first). Prefer Disable over Remove when you only want schedules to stop.
+In the web UI, **Projects** is a list of registered repos. **Open** a project for sub-pages: **Overview** (needs attention, in-progress work, day-grouped **Recent changes** with copyable digest, and impact summary), **History** (completed and verified-terminal work), **Impact** (paged impact items), **Health** (doctor checklist), and **Configuration** (structured synced manifest — not a raw JSON dump). **Sync** reloads the manifest and shows counts (profiles / agents / schedules). **Enable/Disable** pauses or resumes new work for that project without unregistering it. **Remove** unregisters the project from gojo (CASCADE-deletes gojo history for that project) — it does **not** delete the git working tree (you confirm in a dialog first). Prefer Disable over Remove when you only want schedules to stop.
 
 | Area | Meaning |
 | --- | --- |

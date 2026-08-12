@@ -14,7 +14,8 @@ Primary type: run **coordinator** (`infrastructure/coordinator.ts`, exposed via 
 | `application/dispatcher.ts` | `RunDispatcher` — 5s tick + kick on terminal runs; admits via `RunCoordinatorPort.executeRun` |
 | `domain/prompt-assembly.ts` | Build adapter prompt: optional `instructions` + agent prompt + validation gate |
 | `domain/agent-env.ts` | Allowlisted dotenv load from the primary checkout; merge + redaction helpers |
-| `application/inspect.ts` | Diff / artifacts (`handoff.json`, `validation.json`, `failure.json`) |
+| `application/inspect.ts` | Artifacts + handoff summary (`handoff.json`, `validation.json`, `failure.json`) |
+| `infrastructure/run-workspace-diff.ts` | Run workspace diff (git I/O for `gojo run diff` / `GET /runs/:id/diff`) |
 | `infrastructure/events.ts` | Live run event bus; semantic events are durably replayed from `work_events` |
 | `infrastructure/event-replay.ts` | Namespaced durable/live cursor merge for the WebSocket run channel |
 | `domain/failure-policy.ts` | Parse `failure_policy_json` (`maxAttemptsPerRun`, backoff, embedded `selfHeal`) |

@@ -27,7 +27,7 @@ is the number of distinct runs that produced that category of impact, not a
 breakdown by verification level.
 
 The dashboard is a gateway: inventory tiles open Projects / Agents / Schedules /
-Runs, delivery tiles open Integrations (Open / Merged / Commits), and category
+Runs, delivery tiles open Integrations (All / Open / Merged / Commits — default All = open+merged with per-tab counts), and category
 tiles open the Impact items list for that category — so you can dig into the
 non-summarized records behind each number.
 
