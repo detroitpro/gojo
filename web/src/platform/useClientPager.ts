@@ -1,100 +1,74 @@
-import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
+import { useCallback, useMemo, useState } from "react";
 
-import { pageCount, rangeLabel, type SortOrder } from "@/kernel/pagination";
+import { rangeLabel as fmtRangeLabel, pageCount as calcPageCount } from "@/kernel/pagination";
 
-function compareValues(a: unknown, b: unknown, order: SortOrder): number {
-  const dir = order === "asc" ? 1 : -1;
-  if (a == null && b == null) {
-    return 0;
-  }
-  if (a == null) {
-    return 1;
-  }
-  if (b == null) {
-    return -1;
-  }
-  if (typeof a === "number" && typeof b === "number") {
-    return (a - b) * dir;
-  }
-  if (typeof a === "boolean" && typeof b === "boolean") {
-    return (Number(a) - Number(b)) * dir;
-  }
-  return (
-    String(a).localeCompare(String(b), undefined, { sensitivity: "base", numeric: true }) * dir
-  );
+export type Order = "asc" | "desc";
+
+export interface UseClientPagerOptions {
+  defaultSort?: string;
+  defaultOrder?: Order;
 }
 
 export function useClientPager<T>(
-  items: MaybeRefOrGetter<T[]>,
-  pageSize: MaybeRefOrGetter<number> = 25,
-  options?: {
-    defaultSort?: string;
-    defaultOrder?: SortOrder;
-    /** Map sort key → value extractor. When omitted, sorts by object property. */
-    getters?: Record<string, (item: T) => unknown>;
-  },
+  items: readonly T[],
+  pageSize = 25,
+  options: UseClientPagerOptions = {},
 ) {
-  const page = ref(1);
-  const sort = ref(options?.defaultSort ?? "");
-  const order = ref<SortOrder>(options?.defaultOrder ?? "asc");
+  const [page, setPage] = useState(0);
+  const [sort, setSortState] = useState(options.defaultSort ?? "");
+  const [order, setOrder] = useState<Order>(options.defaultOrder ?? "asc");
 
-  const sortedItems = computed(() => {
-    const all = [...toValue(items)];
-    if (!sort.value) {
-      return all;
-    }
-    const key = sort.value;
-    const getter = options?.getters?.[key];
-    return all.sort((a, b) => {
-      const av = getter ? getter(a) : (a as Record<string, unknown>)[key];
-      const bv = getter ? getter(b) : (b as Record<string, unknown>)[key];
-      return compareValues(av, bv, order.value);
-    });
-  });
+  const total = items.length;
+  const pageCount = calcPageCount(total, pageSize);
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = useMemo(() => {
+    const start = safePage * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, safePage, pageSize]);
 
-  const total = computed(() => sortedItems.value.length);
-  const limit = computed(() => Math.max(1, toValue(pageSize)));
-  const pages = computed(() => pageCount(total.value, limit.value));
-  const offset = computed(() => (page.value - 1) * limit.value);
+  const next = useCallback(
+    () => setPage((p) => Math.min(p + 1, pageCount - 1)),
+    [pageCount],
+  );
+  const prev = useCallback(() => setPage((p) => Math.max(p - 1, 0)), []);
+  const reset = useCallback(() => setPage(0), []);
 
-  const pageItems = computed(() => {
-    const all = sortedItems.value;
-    return all.slice(offset.value, offset.value + limit.value);
-  });
+  const setSort = useCallback(
+    (column: string, firstOrder: Order = "asc") => {
+      setSortState((prev) => {
+        if (prev === column) {
+          setOrder((o) => (o === "asc" ? "desc" : "asc"));
+          return prev;
+        }
+        setOrder(firstOrder);
+        return column;
+      });
+      setPage(0);
+    },
+    [],
+  );
 
-  const label = computed(() => rangeLabel(total.value, limit.value, offset.value));
-
-  watch(pages, (count) => {
-    if (page.value > count) {
-      page.value = count;
-    }
-  });
-
-  function reset() {
-    page.value = 1;
-  }
-
-  function setSort(column: string, firstOrder: SortOrder = "asc") {
-    if (sort.value === column) {
-      order.value = order.value === "asc" ? "desc" : "asc";
-    } else {
-      sort.value = column;
-      order.value = firstOrder;
-    }
-    page.value = 1;
-  }
+  const offset = safePage * pageSize;
+  const rangeLabel = fmtRangeLabel(total, pageSize, offset);
 
   return {
-    page,
-    pages,
-    pageItems,
+    page: safePage,
+    pageSize,
+    pageCount,
+    pages: pageCount,
     total,
-    limit,
+    items: pageItems,
+    pageItems,
     offset,
+    next,
+    prev,
+    setPage,
+    canNext: safePage < pageCount - 1,
+    canPrev: safePage > 0,
     sort,
     order,
     setSort,
-    rangeLabel: label,
     reset,
+    rangeLabel,
   };
 }

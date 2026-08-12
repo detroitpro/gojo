@@ -27,9 +27,10 @@ import {
   TriangleAlert,
   Wrench,
   Zap,
-} from "lucide-vue-next";
+  type LucideIcon,
+} from "lucide-react";
 
-import type { BadgeTone, LucideIcon } from "./status-icons";
+import type { BadgeTone } from "./status-icons";
 
 /** Canonical handoff impact categories (keep in sync with HandoffImpactCategory). */
 export const IMPACT_CATEGORIES = [

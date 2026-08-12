@@ -79,6 +79,17 @@ validationProfiles:
       - name: handoff-exists
         command: test -f .gojo/handoff.json
         timeout: 30s
+  web-ui:
+    steps:
+      - name: web-typecheck
+        command: bash scripts/with-bun.sh bun run --cwd web typecheck
+        timeout: 5m
+      - name: web-test
+        command: bash scripts/with-bun.sh bun run --cwd web test
+        timeout: 5m
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
   noop:
     steps:
       - name: noop
@@ -214,6 +225,29 @@ agents:
       agent: self-heal
       afterConsecutiveFailedRuns: 1
 
+  maintain-ui:
+    description: Align web/ with Atlassian Design System; one small DRY PR or no-op
+    profile: cursor
+    promptFile: .gojo/agents/maintain-ui.md
+    validationProfile: web-ui
+    concurrency:
+      projectLimit: 1
+      overlapPolicy: skip
+    integration:
+      mode: pull-request
+      targetBranch: main
+      prTool: gh
+      approval: reviewer
+      fixRounds: 2
+      requireAllValidations: true
+    failurePolicy:
+      maxAttemptsPerRun: 2
+      disableAfterConsecutiveFailedRuns: 3
+      backoff: exponential
+    selfHeal:
+      agent: self-heal
+      afterConsecutiveFailedRuns: 1
+
   maintain-issue-tags:
     description: Ensure GitHub label taxonomy and triage issue tags (no code changes)
     profile: cursor
@@ -287,6 +321,7 @@ agents:
         - maintain-tests
         - maintain-deps
         - maintain-docs
+        - maintain-ui
         - issue-implement
     concurrency:
       projectLimit: 1
@@ -353,6 +388,10 @@ schedules:
   maintain-docs:
     agent: maintain-docs
     cron: "0 4 * * *"
+    timezone: America/Detroit
+  maintain-ui:
+    agent: maintain-ui
+    cron: "0 5 * * *"
     timezone: America/Detroit
   maintain-issue-tags:
     enabled: false

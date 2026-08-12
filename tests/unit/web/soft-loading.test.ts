@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { useSoftLoading } from "../../../web/src/platform/useSoftLoading";
+import { createSoftLoading } from "../../../web/src/platform/useSoftLoading";
 
 describe("useSoftLoading", () => {
   test("only the first begin/end pair toggles loading", () => {
-    const soft = useSoftLoading();
+    const soft = createSoftLoading();
     expect(soft.loading.value).toBe(true);
 
     const first = soft.begin();
@@ -21,7 +21,7 @@ describe("useSoftLoading", () => {
   });
 
   test("reset allows a skeleton on entity navigation", () => {
-    const soft = useSoftLoading();
+    const soft = createSoftLoading();
     soft.end(soft.begin());
     soft.reset();
     expect(soft.loading.value).toBe(true);

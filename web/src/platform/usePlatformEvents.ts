@@ -1,11 +1,4 @@
-import {
-  onScopeDispose,
-  readonly,
-  ref,
-  toValue,
-  watch,
-  type MaybeRefOrGetter,
-} from "vue";
+import { useEffect, useState } from "react";
 
 import {
   platformEventHub,
@@ -16,39 +9,26 @@ import type { PlatformChangeEvent, PlatformEventTopic } from "@gojo/contracts/ty
 
 export interface UsePlatformEventsOptions {
   topics: readonly PlatformEventTopic[];
-  projectId?: MaybeRefOrGetter<string | undefined>;
+  projectId?: string;
   onEvent: (event: PlatformChangeEvent) => void;
   hub?: PlatformEventHub;
 }
 
 export function usePlatformEvents(options: UsePlatformEventsOptions) {
   const hub = options.hub ?? platformEventHub;
-  const status = ref<PlatformEventConnectionStatus>(hub.status);
-  const unsubscribeStatus = hub.subscribeStatus((value) => {
-    status.value = value;
-  });
-  let unsubscribe = hub.subscribe(
-    options.topics,
-    options.onEvent,
-    toValue(options.projectId),
-  );
-  const stopProjectWatch = watch(
-    () => toValue(options.projectId),
-    (projectId, previous) => {
-      if (projectId === previous) return;
-      unsubscribe();
-      unsubscribe = hub.subscribe(options.topics, options.onEvent, projectId);
-    },
-  );
+  const [status, setStatus] = useState<PlatformEventConnectionStatus>(hub.status);
 
-  onScopeDispose(() => {
-    unsubscribe();
-    stopProjectWatch();
-    unsubscribeStatus();
-  });
+  useEffect(() => {
+    const unsubscribeStatus = hub.subscribeStatus(setStatus);
+    const unsubscribe = hub.subscribe(options.topics, options.onEvent, options.projectId);
+    return () => {
+      unsubscribe();
+      unsubscribeStatus();
+    };
+  }, [hub, options.topics, options.projectId, options.onEvent]);
 
   return {
-    status: readonly(status),
+    status,
     reconnect: () => hub.reconnect(),
   };
 }

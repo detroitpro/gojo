@@ -258,11 +258,6 @@ export class GojoSocket {
       return;
     }
 
-    if (import.meta.env?.DEV && typeof console !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.debug("[gojo-ws]", frame);
-    }
-
     if (frame.t === "hello") {
       this.setStatus("connected");
       void this.resubscribeAll();

@@ -29,7 +29,7 @@ describe("web/status-icons", () => {
       "expired",
     ]) {
       expect(approvalStatus(state).label.length).toBeGreaterThan(0);
-      expect(approvalStatus(state).icon).toBeTruthy();
+      expect(approvalStatus(state).tone).toBeTruthy();
     }
   });
 
@@ -44,7 +44,7 @@ describe("web/status-icons", () => {
     ]) {
       const spec = workKindStatus(kind);
       expect(spec.label.length).toBeGreaterThan(0);
-      expect(spec.icon).toBeTruthy();
+      expect(spec.tone).toBeTruthy();
     }
     expect(workKindStatus("unknown-kind").label).toBe("Unknown Kind");
   });
@@ -75,7 +75,7 @@ describe("web/status-icons", () => {
       expect(deliveryStatus(delivery).tone).toBeTruthy();
     }
     for (const attention of ["approval", "blocked", "stale", "sync-error", "none"]) {
-      expect(attentionStatus(attention).icon).toBeTruthy();
+      expect(attentionStatus(attention).tone).toBeTruthy();
     }
     for (const sync of [
       "pending",

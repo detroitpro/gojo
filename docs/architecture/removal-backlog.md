@@ -36,8 +36,8 @@ finds the same inventory.
 | — | Inline HTTP/CLI handlers for scheduling, operations, execution, notifications, delivery, work, access, catalog | Matching `*.use-cases` on the registry |
 | — | Fat SQLite under `infrastructure/persistence/{approval,work,dashboard,leases,outcomes,platform-events,migrate-vocab,paged-lists impl,repositories impl}` | Context-owned adapters + `platform/create-repositories` facade; shared module keeps `db` / `schema` / `sql-paging` / types |
 | W1–W4 | Legacy flat `web/src/{api,types,views,components}` tree | `web/src/{kernel,contexts,infrastructure,platform,ui}/` + `scripts/check-web-layout.sh` |
-| R12 | Per-view `useLiveRefresh` in `web/src/contexts/**` | `bindStoreRefresh` + Pinia `invalidate` via `LiveStoreBridge` |
-| W5 | Pinia refresh stubs / incomplete stores | Full `bindRefresh` / `invalidate` per context store |
+| R12 | Per-view `useLiveRefresh` in `web/src/contexts/**` | `useBindStoreRefresh` + Zustand `invalidate` via `LiveStoreBridge` |
+| W5 | Zustand refresh stubs / incomplete stores | Full `bindRefresh` / `invalidate` per context store |
 | W6 | Monolithic Settings / ProjectDetail / RunDetail views | Context `components/` section panels + thin route shells — **ProjectDetail done**: `ProjectShellView` + Overview / History / Impact / Health / Configuration nested routes |
 | S2 | `src/contexts/work/sources.ts` compatibility barrel | `@/contexts/work/contract` |
 | D1 | Inline `POST /api/v1/sources/{sourceId}/events` in `router.ts` | `work.sources.ingestWebhook` HTTP binding + `http-dispatch` raw body |

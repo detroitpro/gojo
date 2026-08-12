@@ -301,6 +301,18 @@ button {
   font-size: 11px;
 }
 
+.sidebar-footer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.shell.sidebar-collapsed .sidebar-footer-actions {
+  align-items: center;
+}
+
 .shell.sidebar-collapsed .brand,
 .shell.sidebar-collapsed .brand-mark,
 .shell.sidebar-collapsed .nav-label,
@@ -533,6 +545,11 @@ a.entity-name:hover {
   padding-right: 5px;
 }
 
+.app-button {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -547,24 +564,34 @@ a.entity-name:hover {
   letter-spacing: 0.06em;
 }
 
-.field input,
-.field textarea,
-.field select {
+/* Direct native controls only. Do not style descendant inputs — searchable
+   Atlaskit Select puts an <input> inside the control; padding/border there
+   paints a white box over the selected label. */
+.field > input,
+.field > textarea,
+.field > select {
   box-sizing: border-box;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 7px 9px;
+  padding: 8px 10px;
   border-radius: var(--radius);
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.field input,
-.field select {
-  min-height: 32px;
+.field > input,
+.field > select {
+  min-height: 2rem;
+  height: 2rem;
 }
+
+/*
+  Never target Atlaskit Select with [class$="-control"] — that matches inner
+  option/indicator chrome and stretches a tofu bar. Height comes from
+  AppSelect spacing="compact" (ADS gridSize * 4 = 32px).
+*/
 
 .field select {
   appearance: none;
@@ -1275,8 +1302,8 @@ table.data tr:hover td {
 .schedules-toolbar .input,
 .schedules-toolbar select {
   box-sizing: border-box;
-  height: 2.25rem;
-  min-height: 2.25rem;
+  height: 2rem;
+  min-height: 2rem;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -1402,20 +1429,14 @@ table.data tr:hover td {
   margin-bottom: var(--space-4);
 }
 
-.activity-sort {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
 .activity-filters .input,
 .activity-filters .select,
 .activity-filters input,
 .activity-filters select {
   min-width: 8.5rem;
   box-sizing: border-box;
-  height: 2.25rem;
-  min-height: 2.25rem;
+  height: 2rem;
+  min-height: 2rem;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -1516,11 +1537,11 @@ table.data tr:hover td {
 }
 
 .phase-validate {
-  background: color-mix(in srgb, #3d8b6e 40%, var(--bg));
+  background: color-mix(in srgb, var(--green) 40%, var(--bg));
 }
 
 .phase-integrate {
-  background: color-mix(in srgb, #8b6b3d 40%, var(--bg));
+  background: color-mix(in srgb, var(--amber) 40%, var(--bg));
 }
 
 .phase-bar-legend {
@@ -1568,15 +1589,15 @@ table.data tr:hover td {
 }
 
 .activity-row.kind-success .activity-title {
-  color: #6fbf8f;
+  color: var(--green);
 }
 
 .activity-row.kind-error .activity-title {
-  color: #e07070;
+  color: var(--red);
 }
 
 .activity-row.kind-warn .activity-title {
-  color: #d0a55a;
+  color: var(--amber);
 }
 
 .validation-output {
@@ -1586,7 +1607,7 @@ table.data tr:hover td {
 }
 
 .pre-stderr {
-  border-color: color-mix(in srgb, #e07070 40%, var(--border));
+  border-color: color-mix(in srgb, var(--red) 40%, var(--border));
 }
 
 .activity-assistant-body {
@@ -1616,7 +1637,7 @@ table.data tr:hover td {
 }
 
 .tool-phase.tool-done {
-  color: #6fbf8f;
+  color: var(--green);
 }
 
 .tool-summary {
@@ -1773,10 +1794,10 @@ table.data tr:hover td {
 .status-band {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
+  align-items: center;
   gap: var(--space-5);
   margin-bottom: var(--space-8);
-  padding: var(--space-6) var(--space-7);
+  padding: var(--space-4) var(--space-6);
   border: 1px solid color-mix(in srgb, var(--accent-line) 50%, var(--border));
   border-radius: var(--radius);
   background:
@@ -1821,14 +1842,17 @@ table.data tr:hover td {
 .status-band-secondary {
   flex: 2 1 18rem;
   align-content: center;
-}
-
-.status-band-secondary .stat-grid-wrap {
   margin-bottom: 0;
 }
 
 .status-band-secondary .stat-grid {
-  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  grid-template-columns: repeat(4, minmax(5.5rem, 1fr));
+}
+
+@media (max-width: 900px) {
+  .status-band-secondary .stat-grid {
+    grid-template-columns: repeat(2, minmax(5.5rem, 1fr));
+  }
 }
 
 .status-band-secondary .stat-tile {
@@ -1876,6 +1900,77 @@ table.data tr:hover td {
   }
 }
 
+.dashboard-project-filter {
+  min-width: 14rem;
+  max-width: min(22rem, 40vw);
+}
+
+.segmented {
+  display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 2rem;
+  min-height: 2rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0.75rem;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmented__item:last-child {
+  border-right: 0;
+}
+
+.segmented__item:hover:not(.is-selected) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.segmented__item.is-selected {
+  color: var(--text);
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+
+.segmented__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.segmented__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.segmented__count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented__item.is-selected .segmented__count {
+  color: var(--text);
+}
+
 .status-dot {
   display: inline-block;
   width: 7px;
@@ -1912,8 +2007,8 @@ table.data tr:hover td {
 }
 
 .alert-success {
-  background: color-mix(in srgb, var(--success, #3d8b5c) 16%, var(--bg-elevated));
-  border: 1px solid color-mix(in srgb, var(--success, #3d8b5c) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 16%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
   color: var(--text);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius);
@@ -1930,11 +2025,11 @@ table.data tr:hover td {
 }
 
 .health-checklist .ok {
-  color: var(--success, #3d8b5c);
+  color: var(--success);
 }
 
 .health-checklist .bad {
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .health-dirty-files {
@@ -2075,7 +2170,7 @@ table.data tr:hover td {
 }
 
 .action-menu-item.danger {
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .action-menu-item.disabled,
@@ -2450,5 +2545,541 @@ table.data tr:hover td {
   .panel-body .toolbar > a.btn {
     flex: 1 1 auto;
     min-width: min(100%, 9.5rem);
+  }
+}
+
+
+/* --- Run history strip (was Vue scoped in RunHistoryStrip.vue) --- */
+.run-history-strip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.run-history-strip.is-live {
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 40%, transparent);
+}
+
+.run-strip-cell {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 18%, transparent);
+  transition:
+    width 0.15s ease,
+    height 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.run-strip-cell.badge-success {
+  background: var(--green);
+  border-color: color-mix(in srgb, var(--green) 70%, #000);
+  color: var(--green);
+}
+
+.run-strip-cell.badge-failed {
+  background: var(--red);
+  border-color: color-mix(in srgb, var(--red) 70%, #000);
+  color: var(--red);
+}
+
+.run-strip-cell.badge-running {
+  background: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 70%, #000);
+  color: var(--blue);
+}
+
+.run-strip-cell.badge-queued {
+  background: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 70%, #000);
+  color: var(--amber);
+}
+
+.run-strip-cell.badge-warn {
+  background: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 70%, #000);
+  color: var(--warn);
+}
+
+.run-strip-cell.badge-neutral {
+  background: color-mix(in srgb, var(--text-muted) 55%, var(--bg));
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.run-strip-cell.is-live {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--blue) 55%, #fff);
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--blue) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--blue) 65%, transparent);
+  animation: run-strip-live-pulse 1.15s ease-out infinite;
+  z-index: 1;
+}
+
+.run-strip-empty {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+a.run-strip-cell:hover,
+a.run-strip-cell:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+@keyframes run-strip-live-pulse {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--blue) 60%, transparent),
+      0 0 12px color-mix(in srgb, var(--blue) 45%, transparent);
+    transform: scale(1);
+  }
+  55% {
+    box-shadow:
+      0 0 0 12px color-mix(in srgb, var(--blue) 0%, transparent),
+      0 0 22px color-mix(in srgb, var(--blue) 60%, transparent);
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--blue) 0%, transparent),
+      0 0 12px color-mix(in srgb, var(--blue) 40%, transparent);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-strip-cell.is-live {
+    animation: none;
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+}
+
+.run-strip-floating-tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 320px;
+  transform: translate(-50%, calc(-100% - 8px));
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dashboard-task-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.dashboard-task-table th.dashboard-col-task,
+.dashboard-task-table td.dashboard-col-task {
+  text-align: left;
+}
+
+.dashboard-task-table .dashboard-col-runs {
+  width: 12rem;
+  min-width: 12rem;
+  text-align: right;
+}
+
+.dashboard-task-table .dashboard-col-rate {
+  width: 5.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Prefer OS scrollbar; avoid Atlaskit DST scrollbar experiments in non-Atlassian apps. */
+html {
+  scrollbar-gutter: auto;
+}
+
+
+/* --- Shell live status (was Vue scoped in AppShell.vue) --- */
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0;
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.live-dot-connected {
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.live-dot-connecting {
+  background: var(--amber);
+}
+
+.live-dot-degraded {
+  background: var(--red);
+}
+
+.live-status-mobile {
+  margin-left: auto;
+}
+
+.shell.sidebar-collapsed .live-label {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  .live-status-mobile {
+    display: none;
+  }
+}
+
+/* Project overview — recent changes feed (table layout) */
+.recent-activity__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.recent-activity__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.recent-activity__heading h2 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.recent-activity__counts {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.change-feed__empty {
+  padding: 0.5rem 0 0.25rem;
+}
+
+.change-feed__table td.change-row__status {
+  width: 7.5rem;
+  white-space: nowrap;
+}
+
+.change-feed__table td.change-row__chips {
+  width: 14rem;
+}
+
+.change-feed--compact .change-feed__table td.change-row__time {
+  width: 4.75rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.change-feed--detailed .change-feed__table td.change-row__kind {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+.change-feed--detailed .change-feed__table td.change-row__source {
+  width: 9rem;
+}
+
+.change-feed--detailed .change-feed__table td.change-row__time {
+  width: 11rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.change-feed__day-row th {
+  position: static;
+  background: color-mix(in srgb, var(--bg-table-header) 55%, var(--bg-elevated));
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.change-row__main {
+  min-width: 0;
+}
+
+.change-row__title {
+  display: block;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.change-row__title:hover {
+  color: var(--accent-hover);
+}
+
+.change-row__secondary {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-row__chips-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.change-row__pr {
+  text-decoration: none;
+}
+
+a.change-row__pr:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.change-feed__footer {
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Project shell header metadata */
+.project-shell-subtitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: min(42rem, 100%);
+  white-space: normal;
+}
+
+.project-shell-subtitle__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  min-width: 0;
+}
+
+.project-shell-subtitle__repo {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.project-shell-subtitle__health {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.project-shell-subtitle__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.project-shell-subtitle__id {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Attention list on project overview */
+.attention-summary {
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  padding: var(--space-4) var(--space-5);
+}
+
+.attention-summary__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.attention-summary__header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.attention-summary__icon {
+  color: var(--amber);
+}
+
+.attention-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.attention-summary__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.attention-summary__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.attention-summary__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.attention-summary__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.attention-summary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Project overview — impact brief (Backlog | Delivery) */
+.impact-brief__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.impact-brief__header h2 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.impact-brief__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.impact-categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.impact-category h3 {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.impact-category__note {
+  margin: -0.35rem 0 0.65rem;
+}
+
+.impact-category__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.impact-category__metrics--delivery {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .impact-categories {
+    grid-template-columns: 1fr;
+  }
+
+  .impact-category__metrics--delivery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .impact-category__metrics,
+  .impact-category__metrics--delivery {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .change-feed--compact .change-feed__table th:nth-child(3),
+  .change-feed--compact .change-feed__table td.change-row__chips,
+  .change-feed--detailed .change-feed__table th:nth-child(4),
+  .change-feed--detailed .change-feed__table td.change-row__chips,
+  .change-feed--detailed .change-feed__table th:nth-child(5),
+  .change-feed--detailed .change-feed__table td.change-row__source {
+    display: none;
   }
 }

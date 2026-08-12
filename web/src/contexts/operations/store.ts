@@ -1,6 +1,6 @@
-import { defineStore } from "pinia";
-import { ref } from "vue";
+import { create } from "zustand";
 
+import { createRefreshRegistry } from "@/platform/create-refresh-store";
 import {
   getDashboard,
   getDashboardImpact,
@@ -12,66 +12,50 @@ import type {
   DashboardStats,
 } from "./types";
 
-export const useOperationsStore = defineStore("operations", () => {
-  const stats = ref<DashboardStats | null>(null);
-  const overview = ref<DashboardOverview | null>(null);
-  const impact = ref<DashboardImpact | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+type OperationsState = {
+  stats: DashboardStats | null;
+  overview: DashboardOverview | null;
+  impact: DashboardImpact | null;
+  loading: boolean;
+  error: string | null;
+  loadStats: () => Promise<void>;
+  loadOverview: () => Promise<void>;
+  loadImpact: () => Promise<void>;
+  loadAll: () => Promise<void>;
+  bindRefresh: (fn: () => void | Promise<void>) => void;
+  unbindRefresh: (fn: () => void | Promise<void>) => void;
+  invalidate: (topics?: readonly string[]) => Promise<void>;
+};
 
-  const refreshers = new Set<() => void | Promise<void>>();
-
-  function bindRefresh(fn: () => void | Promise<void>) {
-    refreshers.add(fn);
-  }
-
-  function unbindRefresh(fn: () => void | Promise<void>) {
-    refreshers.delete(fn);
-  }
-
-  async function invalidate(_topics?: readonly string[]) {
-    await Promise.all([...refreshers].map((fn) => Promise.resolve(fn())));
-  }
-
-  async function loadStats() {
-    stats.value = await getDashboard();
-  }
-
-  async function loadOverview() {
-    overview.value = await getDashboardOverview();
-  }
-
-  async function loadImpact() {
-    impact.value = await getDashboardImpact();
-  }
-
-  async function loadAll() {
-    loading.value = true;
-    error.value = null;
-    try {
-      await Promise.all([loadStats(), loadOverview(), loadImpact()]);
-    } catch (caught) {
-      error.value = caught instanceof Error ? caught.message : String(caught);
-    } finally {
-      loading.value = false;
-    }
-  }
-
+export const useOperationsStore = create<OperationsState>((set, get) => {
+  const { slice } = createRefreshRegistry();
   return {
-    stats,
-    overview,
-    impact,
-    loading,
-    error,
-    loadStats,
-    loadOverview,
-    loadImpact,
-    loadAll,
-    bindRefresh,
-    unbindRefresh,
-    invalidate,
+    stats: null,
+    overview: null,
+    impact: null,
+    loading: false,
+    error: null,
+    ...slice,
+    async loadStats() {
+      set({ stats: await getDashboard() });
+    },
+    async loadOverview() {
+      set({ overview: await getDashboardOverview() });
+    },
+    async loadImpact() {
+      set({ impact: await getDashboardImpact() });
+    },
+    async loadAll() {
+      set({ loading: true, error: null });
+      try {
+        await Promise.all([get().loadStats(), get().loadOverview(), get().loadImpact()]);
+      } catch (caught) {
+        set({ error: caught instanceof Error ? caught.message : String(caught) });
+      } finally {
+        set({ loading: false });
+      }
+    },
   };
 });
 
-/** @deprecated Use useOperationsStore */
 export const useDashboardStore = useOperationsStore;

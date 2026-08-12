@@ -17,9 +17,10 @@ CLI / HTTP API / scheduler tick (one process)
         └─ transports (http + ws, cli)
 ```
 
-Admin UI: Vue app in `web/`, served as static assets (see `src/transports/http/web-dist.ts`).
-Browser clients use one authenticated WebSocket at `/api/v1/ws` for live events
-and RPC; REST remains for agents, webhooks, and CLI health.
+Admin UI: React + Atlassian Design System app in `web/`, served as static assets
+(see `src/transports/http/web-dist.ts`). Browser clients use one authenticated
+WebSocket at `/api/v1/ws` for live events and RPC; REST remains for agents,
+webhooks, and CLI health.
 
 ### `web/src/` layers
 
@@ -27,19 +28,23 @@ and RPC; REST remains for agents, webhooks, and CLI health.
 web/src/
   kernel/         pure TS helpers (format, pagination, status-icons)
   contexts/       8 bounded contexts — api, types, store, views, components
-  platform/       app host: router, LiveStoreBridge, bind-store-refresh
+  platform/       app host: router, LiveStoreBridge, useBindStoreRefresh
   infrastructure/ HTTP transport, WebSocket client, platform-events
-  ui/             shared Vue chrome (AppButton, AppShell, badges)
+  ui/             Atlaskit wrappers (AppButton, AppShell, StatusBadge / lozenges)
 ```
 
-Live updates: `LiveStoreBridge` maps each `PlatformEventTopic` (non-overlapping) to Pinia
-`invalidate()` on the owning context store; views bind their `load` handlers
-via `bindStoreRefresh(store, refresh)` on mount. Cross-context imports go
+Live updates: `LiveStoreBridge` maps each `PlatformEventTopic` (non-overlapping) to
+Zustand `invalidate()` on the owning context store; views bind their `load` handlers
+via `useBindStoreRefresh(store, refresh)` on mount. Cross-context imports go
 through `contexts/<name>/contract.ts` (enforced by `.dependency-cruiser.cjs`).
 
 User docs site: Astro in `site/` (not served by the daemon).
 
-Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared CSS variables in `theme/tokens.css` (Six Eyes cyan / midnight navy, DM Sans + JetBrains Mono). Brand wordmarks use mono; titles use sans with normal tracking. The admin “ops console” look is CSS composition on those tokens, not a separate component library.
+Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared
+CSS variables in `theme/tokens.css` mapped to Atlassian Design System light and dark
+theme values (dark keyed off `html[data-color-mode]`), plus Atlaskit components in
+the admin UI with a Light / Dark / Auto toggle. Brand wordmarks use mono; body
+type uses the ADS system stack.
 
 ## `src/` layers (current)
 

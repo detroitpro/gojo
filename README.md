@@ -235,7 +235,7 @@ make check             # full CI gate (required before PR / push)
 make help              # categorized targets
 
 bun run build          # compile bin/gojo for the current platform
-bun run build:web      # Vue admin UI → web/dist (embedded by the server)
+bun run build:web      # React admin UI → web/dist (embedded by the server)
 bun run install:cli    # copy binary to ~/.local/bin (+ web assets to ~/.gojo)
 ```
 
@@ -249,6 +249,6 @@ Engineering docs (boundaries, modules): [`docs/`](./docs/). Product spec: [`PRD.
 
 - **Runtime:** Bun + TypeScript (CLI, API, scheduler, adapters)
 - **Persistence:** SQLite via `bun:sqlite`
-- **Web UI:** Vue app in `web/`, embedded as static assets
+- **Web UI:** React + Atlaskit app in `web/`, embedded as static assets
 - **Distribution:** `bun build --compile` native binaries; optional Node launcher in `packages/npx-bootstrap`
 - **Maintainer map:** [`docs/architecture/overview.md`](./docs/architecture/overview.md)
