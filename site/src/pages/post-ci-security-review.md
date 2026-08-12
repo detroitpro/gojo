@@ -58,6 +58,7 @@ Minimal project: one nightly quality agent and one security reviewer. Sync after
 editing (`gojo project sync <project-id>` or **Projects → Sync**).
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 
 project:

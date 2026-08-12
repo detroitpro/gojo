@@ -31,9 +31,10 @@ Canonical public URL (always available from `main`):
 
 `https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json`
 
-The same file is also copied to `site/public/schemas/` for the docs site when
-GitHub Pages deploys. Schema Store catalog registration should point at the
-raw URL with `fileMatch` patterns `gojo.yaml` and `**/.gojo/project.yaml` (see
+The same file is also copied to `site/public/schemas/` and served on GitHub Pages at
+`https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json`. Schema Store
+catalog registration should point at the raw URL with `fileMatch` patterns
+`gojo.yaml` and `**/.gojo/project.yaml` (see
 [`packages/contracts/schemas/schemastore-catalog-entry.json`](../packages/contracts/schemas/schemastore-catalog-entry.json)).
 
 ## Associating the schema in an editor (Option 1)

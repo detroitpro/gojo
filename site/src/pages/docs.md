@@ -17,7 +17,8 @@ description: Guides and reference for operating gojo — from first shell agent 
 
 ## Reference
 
-- [Settings](/settings) — instance, schedules, validation, integration
+- [Settings](/settings) — instance, schedules, validation, integration, **`gojo.yaml` schema**
+- [gojo.yaml JSON Schema](https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json) — editor autocomplete / validation (also at [`/schemas/gojo.project.schema.json`](/schemas/gojo.project.schema.json))
 - [Notifications](/notifications) — channels, routing, delivery
 - [Concepts](/concepts) — success ownership, worktrees, runs, handoffs
 - [Project visibility and sources](/project-visibility) — current work, provenance, freshness, and connectors

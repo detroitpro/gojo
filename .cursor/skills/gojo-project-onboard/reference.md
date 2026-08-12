@@ -1,6 +1,12 @@
 # gojo-project-onboard reference
 
-Condensed contract for scaffolding. Source of truth: `packages/contracts/src/manifest.ts`, dogfood `gojo.yaml`, and `docs/agent-prompts.md` / site agent-prompts page.
+Condensed contract for scaffolding. Source of truth:
+
+- Zod: [`packages/contracts/src/manifest.ts`](../../../packages/contracts/src/manifest.ts) `ProjectManifestSchema`
+- JSON Schema (editors): https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
+- Docs site copy: https://detroitpro.github.io/gojo/schemas/gojo.project.schema.json
+- How-to: [Settings](https://detroitpro.github.io/gojo/settings) · [`docs/manifest-json-schema.md`](../../../docs/manifest-json-schema.md)
+- Dogfood: `gojo.yaml`, `.gojo/`, `docs/agent-prompts.md` / site [agent-prompts](https://detroitpro.github.io/gojo/agent-prompts)
 
 ## Vocabulary
 
@@ -10,9 +16,7 @@ Condensed contract for scaffolding. Source of truth: `packages/contracts/src/man
 
 ## Manifest shape
 
-Prefer a yaml-language-server modeline on line 1 so editors autocomplete against
-`https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json` (see
-`docs/manifest-json-schema.md`).
+Always put the yaml-language-server modeline on line 1:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
@@ -54,6 +58,11 @@ validationProfiles:
   #   scripts/verify.sh / yarn verify / make verify
   #   then profile = that command + handoff-exists for PR agents.
   # Do not hand-enumerate lint/test/build per agent — they drift from CI.
+  handoff:
+    steps:
+      - name: handoff-exists
+        command: test -f .gojo/handoff.json
+        timeout: 30s
 
 agents: {}
 schedules: {}
@@ -70,6 +79,18 @@ Sync path: `gojo.yaml` then `.gojo/project.yaml`. Keys are durable identities; r
 | Schedule | `agent`, `cron`, `timezone` |
 | Profile | `adapter` (`shell` / `cursor` / `claude-code`) |
 | Validation profile | `steps[]` with `name` + `command` (prefer the repo’s canonical verify script, same as CI) |
+| Integration (when present) | `mode`, `targetBranch` |
+
+## Integration (schema-valid only)
+
+Allowed `integration` keys (see JSON Schema / Zod — **no extras**):
+
+`mode`, `targetBranch`, `requireAllValidations`, `postApprovalMode`, `approval`,
+`autonomyLabels`, `fixRounds`, `prTool`, `prLogin`, `prRemote`, `prApiUrl`,
+`prRepo`, `prMergeStyle`, `prAutoMerge`.
+
+**Not allowed:** `commitMessage` (and any other undeclared property). gojo builds
+the commit / PR title at run time (`gojo: <agent> (<run-id>)`).
 
 ## Recommended agent defaults
 
@@ -101,6 +122,15 @@ Shell ops / digests (no Git integration):
 ```yaml
 # omit integration, or commit-only only when the agent truly owns commits
 validationProfile: noop   # or a light smoke profile
+```
+
+Commit-only smoke (first agent / repo-brief):
+
+```yaml
+integration:
+  mode: commit-only
+  targetBranch: main
+  requireAllValidations: true
 ```
 
 When a shell/AI agent needs project secrets from a gitignored dotenv file (absent from run worktrees), declare an allowlist — never load the whole file into the daemon:
@@ -201,17 +231,19 @@ make actions
 
 Prefer existing Make/scripts over inventing new automation. Use a `noop` or light validation profile; set a short profile `timeout`.
 
-## Register / sync
+## Register / sync / enable
 
 ```bash
-gojo project add <name> <abs-repo-path>
+gojo project add <name> <abs-repo-path> --branch <default-branch>
 gojo project list
 gojo project sync <id>
+gojo project enable <id>
 gojo agent list --project <id>
-gojo schedule list
+gojo schedule list --project <id>
+gojo project doctor <id>
 ```
 
-Manifest sync upserts by name and soft-disables missing keys. Schedules are created via sync, not REST create.
+Manifest sync upserts by name and soft-disables missing keys. Schedules are created via sync, not REST create. Optional YAML `enabled` on `project` / `agents.*` / `schedules.*` is reapplied on Sync (YAML wins over prior ops toggles).
 
 ## Adapters
 

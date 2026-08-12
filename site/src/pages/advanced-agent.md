@@ -19,9 +19,12 @@ You need the **Claude Code** or **Cursor Agent** CLI installed and authenticated
 
 ## Manifest sketch
 
-Add (or merge) into `gojo.yaml`:
+Add (or merge) into `gojo.yaml`. The modeline on line 1 associates the file with
+the [published JSON Schema](https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json)
+(see [Settings](/settings)).
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 
 project:

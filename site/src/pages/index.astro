@@ -40,10 +40,12 @@ Create these files in the current repository (the user's project, not the gojo c
 Vocabulary reminder for \`gojo.yaml\`:
 - \`profiles:\` — reusable adapter configuration (shell / cursor / claude-code, timeout, model).
 - \`agents:\` — the work units. Each agent picks a profile and points at a promptFile.
+- Put the schema modeline on line 1 of \`gojo.yaml\` (see [Settings](https://detroitpro.github.io/gojo/settings) / [Your first agent](https://detroitpro.github.io/gojo/first-agent)). Do not invent fields outside the published schema (e.g. no \`integration.commitMessage\`).
 
 A) \`gojo.yaml\` at the repo root:
 
 \`\`\`yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json
 version: 1
 
 project:
@@ -88,7 +90,6 @@ agents:
       mode: commit-only
       targetBranch: DEFAULT_BRANCH
       requireAllValidations: true
-      commitMessage: "gojo: add repository brief"
 
 schedules: {}
 notifications: {}

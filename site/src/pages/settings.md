@@ -53,7 +53,8 @@ The optional **`gojo.yaml`** (or `.gojo/project.yaml`) describes desired behavio
 
 A JSON Schema is published from `main` at
 `https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json`
-(generated from the same Zod contract Sync uses). With the Red Hat YAML
+(generated from the same Zod contract Sync uses; also served from this site at
+[`/schemas/gojo.project.schema.json`](/schemas/gojo.project.schema.json)). With the Red Hat YAML
 extension (or any YAML Language Server client):
 
 1. **Modeline** — first line of the file:
@@ -62,6 +63,10 @@ extension (or any YAML Language Server client):
    `.gojo/project.yaml`.
 3. **Schema Store** — when the catalog entry is live, matching `gojo.yaml` by
    filename needs no per-repo setup (`yaml.schemaStore.enable` defaults to on).
+
+The schema rejects unknown properties (`additionalProperties: false`). Do not add
+fields that are not documented here — for example `integration.commitMessage` is
+**not** a manifest key; gojo builds commit/PR titles at run time.
 
 Cross-field rules (for example `prAutoMerge` only with pull-request mode) remain
 enforced at Sync time, not only in the editor.
