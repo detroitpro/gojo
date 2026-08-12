@@ -6,6 +6,10 @@ description: Install gojo, create an admin account, add your first Git project, 
 
 Prefer an agent? Use the install prompt on the [home page](/#ask-your-agent). Source: [github.com/detroitpro/gojo](https://github.com/detroitpro/gojo).
 
+When you add a `gojo.yaml`, put the schema modeline on line 1 so editors validate against the
+[published JSON Schema](https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json)
+(details in [Settings](/settings) and [Your first agent](/first-agent)).
+
 ## What you’ll need
 
 - Linux or macOS
@@ -96,8 +100,8 @@ gojo project list
 
 Adding a project only registers the repo path. Next:
 
-1. **Add a `gojo.yaml`** (or `.gojo/project.yaml`) in the repository if you don't have one yet — see [Your first agent](/first-agent).
-2. Click **Sync** on the list or project detail (or `gojo project sync <project-id>`). Sync reads the manifest and upserts profiles, agents, schedules, and optional `enabled` flags by name; removed entries are soft-disabled. It does not change git. To pause a project without unregistering it, use **Disable** (or `gojo project disable <id>`).
+1. **Add a `gojo.yaml`** (or `.gojo/project.yaml`) in the repository if you don't have one yet — see [Your first agent](/first-agent). Start the file with the yaml-language-server `$schema` modeline pointing at the [published schema](https://raw.githubusercontent.com/detroitpro/gojo/main/packages/contracts/schemas/gojo.project.schema.json).
+2. Click **Sync** on the list or project detail (or `gojo project sync <project-id>`). Sync reads the manifest and upserts profiles, agents, schedules, and optional `enabled` flags by name; removed entries are soft-disabled. It does not change git. To pause a project without unregistering it, use **Disable** (or `gojo project disable <id>`). To resume, use **Enable** (or `gojo project enable <id>`).
 3. **Open** the project to see health (path, manifest, dirty checkout, ignored gojo run files, validation tools) and a structured config view.
 4. Open **Adapters** and confirm at least **shell** is installed (always available).
 5. Run an agent from **Agents** / CLI, or wait for a schedule to fire.
