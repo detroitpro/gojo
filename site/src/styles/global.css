@@ -17,11 +17,7 @@ body {
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.55;
-  background:
-    radial-gradient(1200px 600px at 80% -10%, var(--glow-primary), transparent 55%),
-    radial-gradient(900px 500px at -10% 20%, var(--glow-secondary), transparent 50%),
-    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 40%, var(--bg-deeper) 100%);
-  background-attachment: fixed;
+  background: var(--bg-soft);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -253,19 +249,12 @@ pre code {
   background:
     linear-gradient(
       105deg,
-      rgba(6, 10, 18, 0.94) 0%,
-      rgba(6, 10, 18, 0.88) 34%,
-      rgba(6, 10, 18, 0.45) 62%,
-      rgba(6, 10, 18, 0.22) 100%
+      rgba(255, 255, 255, 0.96) 0%,
+      rgba(255, 255, 255, 0.9) 36%,
+      rgba(247, 248, 249, 0.55) 62%,
+      rgba(247, 248, 249, 0.2) 100%
     ),
-    linear-gradient(180deg, rgba(6, 10, 18, 0.35) 0%, transparent 28%, rgba(6, 10, 18, 0.55) 100%),
-    repeating-linear-gradient(
-      -18deg,
-      transparent,
-      transparent 28px,
-      var(--hero-hatch) 28px,
-      var(--hero-hatch) 29px
-    );
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, transparent 40%, rgba(247, 248, 249, 0.7) 100%);
 }
 
 .hero-inner {

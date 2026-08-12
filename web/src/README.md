@@ -6,9 +6,9 @@
 web/src/
   kernel/            pure TS helpers (format, pagination, status-icons, work-*, run-*)
   contexts/          8 bounded contexts — API clients, types, stores, views
-  platform/          app host: main, App, router, LiveStoreBridge, composables
+  platform/          app host: main, App, router, LiveStoreBridge, hooks
   infrastructure/    HTTP transport, WebSocket client, platform-events, ApiError
-  ui/                shared Vue chrome (AppButton, AppShell, badges, styles.css)
+  ui/                shared Atlaskit wrappers (AppButton, AppSelect, AppTextfield, SegmentedControl, AppShell, ChangeFeed, badges, styles.css)
 ```
 
 ```text
@@ -26,16 +26,16 @@ Enforced by:
 
 | If the change is… | Put it in… |
 |-------------------|------------|
-| A pure formatter/helper with no Vue or fetch | `kernel/` |
+| A pure formatter/helper with no React or fetch | `kernel/` |
 | API calls for one product capability | `contexts/<name>/api.ts` |
 | UI-enriched DTOs for one capability | `contexts/<name>/types.ts` |
 | Public exports other layers may import | `contexts/<name>/contract.ts` |
-| Pinia store for one capability | `contexts/<name>/store.ts` |
+| Zustand store for one capability | `contexts/<name>/store.ts` |
 | A route-level page | `contexts/<name>/views/` |
 | Context-specific component | `contexts/<name>/components/` |
 | Shared button, shell, table chrome | `ui/` |
 | `fetch` / WS / `ApiError` | `infrastructure/` |
-| Router, composables, app entry | `platform/` |
+| Router, hooks, app entry | `platform/` |
 
 ## Bounded contexts
 
@@ -59,34 +59,35 @@ import { listProjects } from "@/contexts/catalog/contract";
 import type { Project } from "@/contexts/catalog/types";
 import { request } from "@/infrastructure/http";
 import { fmtTime } from "@/kernel/format";
-import AppButton from "@/ui/AppButton.vue";
-import router from "@/platform/router";
+import { AppButton } from "@/ui/AppButton";
+import { useBindStoreRefresh } from "@/platform/bind-store-refresh";
 ```
 
-## Pinia stores and live refresh
+## Zustand stores and live refresh
 
 Each context has `store.ts` with `bindRefresh`, `unbindRefresh`, and `invalidate`.
 Views register their load handlers on mount:
 
 ```ts
-import { bindStoreRefresh } from "@/platform/bind-store-refresh";
+import { useCallback } from "react";
+import { useBindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useCatalogStore } from "@/contexts/catalog/contract";
 
-const catalog = useCatalogStore();
-bindStoreRefresh(catalog, load); // registers + hydrates once on mount
+const load = useCallback(async () => { /* … */ }, []);
+useBindStoreRefresh(useCatalogStore.getState(), load);
 ```
 
-`platform/LiveStoreBridge.vue` owns one `platformEventHub` subscription and maps
+`platform/LiveStoreBridge.tsx` owns one `platformEventHub` subscription and maps
 each `PlatformEventTopic` to a non-overlapping set of store `invalidate()` calls
 (coalesced). Views must not call `useLiveRefresh` directly.
 
-Primary store exports (aliases kept for compat): `useCatalogStore`, `useOperationsStore`,
+Primary store exports (aliases kept): `useCatalogStore`, `useOperationsStore`,
 `useSchedulingStore`, `useExecutionStore`, `useDeliveryStore`, `useWorkStore`,
 `useNotificationsStore`, `useAccessStore`.
 
 ## Tests
 
-UI unit and smoke tests live under `web/tests/` (Vitest + `@vue/test-utils`).
+UI unit and smoke tests live under `web/tests/` (Vitest + React Testing Library).
 Daemon-side web helper tests may remain under `tests/unit/web/` when they
 exercise shared kernel helpers only.
 

@@ -42,7 +42,7 @@ append targeted invalidations after their durable mutation.
 
 ## Browser behavior
 
-The Vue shell owns one shared `GojoSocket` (`web/src/infrastructure/ws-client.ts`). Views
+The React shell owns one shared `GojoSocket` (`web/src/infrastructure/ws-client.ts`). Views
 subscribe by topic and optionally project through `PlatformEventHub`, coalesce
 bursts, and serialize refreshes. The last valid platform sequence is kept in
 session storage. Disconnects use exponential reconnect, focus/online repair, and

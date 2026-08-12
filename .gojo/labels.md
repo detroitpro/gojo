@@ -26,7 +26,7 @@ Also leave alone: `duplicate`, `good first issue`, `help wanted`, `invalid`, `wo
 | `area:daemon` | `src/` (bulk; not cli/api-only) | `maintain-quality` (architecture), `maintain-tests` |
 | `area:cli` | `src/transports/cli/` | quality/tests when CLI-scoped |
 | `area:api` | `src/transports/http/` | quality/tests when API-scoped |
-| `area:web` | `web/` | — |
+| `area:web` | `web/` | `maintain-ui` (ADS / Atlaskit) |
 | `area:site` | `site/` | `maintain-docs` |
 | `area:docs` | `docs/`, eng-facing README | `maintain-docs` |
 | `area:tests` | `tests/` | `maintain-tests` |

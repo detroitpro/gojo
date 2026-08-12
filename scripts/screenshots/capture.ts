@@ -29,15 +29,19 @@ const SHOTS: { file: string; path: string }[] = [
   { file: "ui-adapters.png", path: "/adapters" },
   { file: "ui-runs.png", path: "/runs" },
   { file: "ui-schedules.png", path: "/schedules" },
-  { file: "ui-integrations.png", path: "/integrations?status=merged" },
+  { file: "ui-integrations.png", path: "/integrations" },
   { file: "ui-impact.png", path: "/impact" },
 ];
 
 async function waitForShell(page: Page) {
-  await page.waitForSelector(".page-header h1", { timeout: 20_000 });
+  // Prefer authenticated shell; fall back to any main landmark after navigation.
+  await Promise.race([
+    page.waitForSelector(".app-shell", { timeout: 20_000 }),
+    page.waitForSelector(".auth-page", { timeout: 20_000 }),
+    page.waitForSelector("nav", { timeout: 20_000 }),
+  ]).catch(() => undefined);
   await page.waitForLoadState("networkidle").catch(() => undefined);
-  // Let font/CSS settle and avoid mid-fetch empty tables.
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 800));
 }
 
 async function main() {
@@ -78,7 +82,7 @@ async function main() {
   await page.goto("/runs", { waitUntil: "domcontentloaded" });
   await waitForShell(page);
   const detailHref = await page
-    .locator('table.data tbody a[href^="/runs/"]')
+    .locator('a[href^="/runs/"]')
     .first()
     .getAttribute("href");
   if (!detailHref) {

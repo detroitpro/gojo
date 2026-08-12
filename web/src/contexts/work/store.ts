@@ -1,19 +1,8 @@
-import { defineStore } from "pinia";
+import { create } from "zustand";
 
-export const useWorkStore = defineStore("work", () => {
-  const refreshers = new Set<() => void | Promise<void>>();
+import { createRefreshRegistry } from "@/platform/create-refresh-store";
 
-  function bindRefresh(fn: () => void | Promise<void>) {
-    refreshers.add(fn);
-  }
-
-  function unbindRefresh(fn: () => void | Promise<void>) {
-    refreshers.delete(fn);
-  }
-
-  async function invalidate(_topics?: readonly string[]) {
-    await Promise.all([...refreshers].map((fn) => Promise.resolve(fn())));
-  }
-
-  return { bindRefresh, unbindRefresh, invalidate };
+export const useWorkStore = create(() => {
+  const { slice } = createRefreshRegistry();
+  return { ...slice };
 });

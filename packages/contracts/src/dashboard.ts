@@ -52,6 +52,8 @@ export interface DashboardOverviewAgent {
 export interface DashboardOverviewProject {
   id: string;
   name: string;
+  /** When false, schedules/API for this project are blocked. */
+  enabled: boolean;
   agents: DashboardOverviewAgent[];
 }
 

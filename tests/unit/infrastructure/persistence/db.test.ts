@@ -41,6 +41,15 @@ describe("storage/db", () => {
     expect(database.connection()).toBeDefined();
   });
 
+  test("sets WAL journal and busy_timeout on open", () => {
+    const database = openTempFile();
+    const sqlite = database.connection();
+    const journal = sqlite.query<{ journal_mode: string }, []>("PRAGMA journal_mode;").get();
+    const busy = sqlite.query<{ timeout: number }, []>("PRAGMA busy_timeout;").get();
+    expect(journal?.journal_mode.toLowerCase()).toBe("wal");
+    expect(busy?.timeout).toBeGreaterThanOrEqual(5_000);
+  });
+
   test("opens temp file database under os.tmpdir()", () => {
     const database = openTempFile();
     expect(tempDir).toStartWith(tmpdir());

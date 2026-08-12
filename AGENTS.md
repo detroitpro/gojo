@@ -3,9 +3,9 @@
 Instructions for AI agents and developers working in this repository.
 
 gojo is a Bun + TypeScript agent-orchestration platform: a CLI + embedded API daemon
-(`src/`), a Vue admin UI (`web/`), and a static Astro docs site (`site/`). Standard
-commands live in `README.md`, `Makefile` (`make help`), and `package.json` — reference
-those instead of re-deriving them.
+(`src/`), a React + Atlaskit admin UI (`web/`), and a static Astro docs site (`site/`).
+Standard commands live in `README.md`, `Makefile` (`make help`), and `package.json` —
+reference those instead of re-deriving them.
 
 ## Non-negotiables
 
@@ -56,11 +56,13 @@ gojo is a **layered modular monolith packaged by bounded context**, with hexagon
 ### Admin UI (`web/src/`) — must follow
 
 - Layers: `kernel/`, `contexts/`, `platform/`, `infrastructure/`, `ui/`.
-- Per-context `api` + `types` + Pinia `store` + `views` (+ optional `components`).
+- Per-context `api` + `types` + Zustand `store` + `views` (+ optional `components`).
 - Cross-context imports via `contexts/<name>/contract.ts` only.
 - Live data: platform events **invalidate**; WebSocket/HTTP reads **hydrate**. One
-  `LiveStoreBridge` topic map; views use `bindStoreRefresh(store, load)` (hydrate on
+  `LiveStoreBridge` topic map; views use `useBindStoreRefresh(store, load)` (hydrate on
   mount). Do **not** add per-view `useLiveRefresh`.
+- UI chrome: Atlaskit via thin wrappers in `ui/` (`AppButton`, lozenges as
+  `StatusBadge`, etc.). Do not add shadcn or Tailwind.
 - Enforced by `scripts/check-web-layout.sh` and depcruise (via `make check`).
 
 ### Docs hygiene

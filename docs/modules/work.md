@@ -106,7 +106,7 @@ The project Overview briefing consumes these contracts for **Recent changes**
 Needs attention / In progress lists.
 Repository and manifest details live on the Configuration tab. Needs attention
 rows expose reason-specific actions (review run, retry source, recheck item,
-mark resolved). The Vue UI renders work kind, result, execution, delivery,
+mark resolved). The React UI renders work kind, result, execution, delivery,
 attention, and sync enums as shared icon badges (`web/src/ui/status/*`) with
 accessible labels. Specialist run/integration views remain compatibility
 surfaces.

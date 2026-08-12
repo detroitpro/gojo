@@ -1,108 +1,221 @@
 /**
  * Shared Gojo theme tokens — single source of truth for admin web + docs site.
- * Palette inspired by JJK Gojo: midnight navy, Six Eyes cyan, cool silver type.
+ * Mapped to Atlassian Design System light/dark theme values.
+ * Dark map keys off `html[data-color-mode]` (set by Atlaskit AppProvider).
+ * @see https://atlassian.design/foundations/tokens
  */
 :root {
-  /* Surfaces */
-  --bg: #0b1220;
-  --bg-elevated: #121a2b;
-  --bg-soft: #1a2438;
-  --bg-hover: #1a2438;
-  --bg-sidebar: #0a101c;
-  --bg-code: #070d18;
-  --bg-table-header: #152033;
-  --bg-deep: #08101c;
-  --bg-deeper: #060b14;
+  /* Surfaces (ADS light) */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-soft: #f7f8f9;
+  --bg-hover: #f1f2f4;
+  --bg-sidebar: #f7f8f9;
+  --bg-code: #f7f8f9;
+  --bg-table-header: #f1f2f4;
+  --bg-deep: #f7f8f9;
+  --bg-deeper: #f1f2f4;
 
   /* Lines & overlays */
-  --border: #2a3550;
-  --border-strong: #3a4a6a;
-  --overlay: rgba(6, 11, 20, 0.72);
-  --shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-  --shadow-sm: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --row-hover: rgba(78, 196, 255, 0.04);
-  --inset-highlight: rgba(255, 255, 255, 0.03);
-  --band-fill: rgba(0, 0, 0, 0.18);
+  --border: #091e4224;
+  --border-strong: #091e424f;
+  --overlay: rgba(9, 30, 66, 0.54);
+  --shadow: 0px 8px 12px rgba(9, 30, 66, 0.15), 0px 0px 1px rgba(9, 30, 66, 0.31);
+  --shadow-sm: 0px 1px 1px rgba(9, 30, 66, 0.25), 0px 0px 1px rgba(9, 30, 66, 0.31);
+  --row-hover: #091e420f;
+  --inset-highlight: transparent;
+  --band-fill: #f1f2f4;
 
   /* Type */
-  --text: #f2f5fa;
-  --text-muted: #9aa6bd;
+  --text: #172b4d;
+  --text-muted: #44546f;
 
-  /* Brand — Six Eyes cyan */
-  --accent: #4ec4ff;
-  --accent-dim: #2a9fd4;
-  --accent-hover: #7ad4ff;
-  --accent-on: #0b1220;
-  --accent-soft: rgba(78, 196, 255, 0.14);
-  --accent-line: rgba(78, 196, 255, 0.35);
-  --accent-wash: rgba(78, 196, 255, 0.06);
-  --accent-selected: rgba(78, 196, 255, 0.12);
+  /* Brand — Atlassian blue */
+  --accent: #0c66e4;
+  --accent-dim: #0055cc;
+  --accent-hover: #1d7afc;
+  --accent-on: #ffffff;
+  --accent-soft: #e9f2ff;
+  --accent-line: #1d7afc;
+  --accent-wash: #f0f7ff;
+  --accent-selected: #e9f2ff;
 
-  /* Atmosphere (docs site body / hero + admin shell) */
-  --glow-primary: rgba(78, 196, 255, 0.14);
-  --glow-secondary: rgba(78, 120, 220, 0.1);
-  --hero-sheen: rgba(78, 196, 255, 0.05);
-  --hero-hatch: rgba(255, 255, 255, 0.015);
-  --header-bg: rgba(11, 18, 32, 0.82);
-  /* Soft cyan wash for admin main canvas — all-day ops friendly */
-  --shell-atmosphere: radial-gradient(
-      1200px 600px at 12% -10%,
-      var(--glow-primary),
-      transparent 55%
-    ),
-    radial-gradient(900px 480px at 88% 0%, var(--glow-secondary), transparent 50%),
-    linear-gradient(180deg, var(--hero-sheen), transparent 42%);
-  --shell-hatch: repeating-linear-gradient(
-    -12deg,
-    transparent,
-    transparent 11px,
-    var(--hero-hatch) 11px,
-    var(--hero-hatch) 12px
-  );
+  /* Atmosphere (light — minimal wash for docs/admin shell) */
+  --glow-primary: transparent;
+  --glow-secondary: transparent;
+  --hero-sheen: transparent;
+  --hero-hatch: transparent;
+  --header-bg: rgba(255, 255, 255, 0.9);
+  --shell-atmosphere: none;
+  --shell-hatch: none;
 
   /* Status */
-  --green: #4caf8a;
-  --green-soft: rgba(76, 175, 138, 0.1);
-  --green-line: rgba(76, 175, 138, 0.4);
-  --red: #e05555;
-  --red-soft: rgba(224, 85, 85, 0.08);
-  --red-line: rgba(224, 85, 85, 0.4);
-  --red-text: #ffb4b4;
-  --red-border: #7a3333;
-  --blue: #5bb8f0;
-  --blue-soft: rgba(91, 184, 240, 0.1);
-  --blue-line: rgba(91, 184, 240, 0.4);
-  --amber: #c4a574;
-  --amber-soft: rgba(196, 165, 116, 0.1);
-  --amber-line: rgba(196, 165, 116, 0.4);
-  --warn: #c4a574;
-  --warn-soft: rgba(196, 165, 116, 0.1);
-  --warn-line: rgba(196, 165, 116, 0.4);
+  --green: #22a06b;
+  --green-soft: #dcfff1;
+  --green-line: #22a06b;
+  --red: #c9372c;
+  --red-soft: #ffeceb;
+  --red-line: #c9372c;
+  --red-text: #ae2e24;
+  --red-border: #f87168;
+  --blue: #0c66e4;
+  --blue-soft: #e9f2ff;
+  --blue-line: #1d7afc;
+  --amber: #e56910;
+  --amber-soft: #fff7d6;
+  --amber-line: #e56910;
+  --warn: #e56910;
+  --warn-soft: #fff7d6;
+  --warn-line: #e56910;
+  --success: #22a06b;
+  --danger: #c9372c;
 
-  /* Typography stacks */
-  /* Display titles share the UI sans; brand wordmarks use --mono */
-  --display: "DM Sans", system-ui, sans-serif;
-  --sans: "DM Sans", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Typography — ADS-compatible system stack */
+  --display: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --mono: "SFMono-Medium", "SF Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono",
+    Menlo, Consolas, Courier, monospace;
 
   /* Layout */
-  --radius: 6px;
-  --radius-sm: 4px;
+  --radius: 3px;
+  --radius-sm: 3px;
   --gap: 12px;
   --max: 1080px;
   --doc: 720px;
-  /* Shared height so sidebar brand strip and page-header borders align */
-  --chrome-band-height: 6rem;
+  --chrome-band-height: 56px;
 
-  /* Spacing scale (used by utilities) */
+  /* Spacing scale (ADS-aligned 4px grid) */
   --space-1: 4px;
   --space-2: 6px;
   --space-3: 8px;
-  --space-4: 10px;
+  --space-4: 12px;
   --space-5: 12px;
-  --space-6: 14px;
+  --space-6: 16px;
   --space-7: 16px;
   --space-8: 20px;
   --space-9: 24px;
   --space-10: 32px;
+}
+
+/* ADS dark surfaces / text / brand — not the legacy “Six Eyes” palette */
+html[data-color-mode="dark"],
+html[data-theme~="dark:dark"][data-color-mode="dark"] {
+  color-scheme: dark;
+
+  --bg: #1d2125;
+  --surface: #22272b;
+  --bg-elevated: #22272b;
+  --bg-soft: #161a1d;
+  --bg-hover: #2c333a;
+  --bg-sidebar: #161a1d;
+  --bg-code: #161a1d;
+  --bg-table-header: #2c333a;
+  --bg-deep: #161a1d;
+  --bg-deeper: #101214;
+
+  --border: #a6c5e229;
+  --border-strong: #a6c5e24f;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow: 0px 8px 12px rgba(0, 0, 0, 0.35), 0px 0px 1px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(0, 0, 0, 0.5);
+  --row-hover: #a6c5e214;
+  --inset-highlight: transparent;
+  --band-fill: #2c333a;
+
+  --text: #c7d1db;
+  --text-muted: #9fadbc;
+
+  --accent: #579dff;
+  --accent-dim: #1d7afc;
+  --accent-hover: #85b8ff;
+  --accent-on: #1d2125;
+  --accent-soft: #1c2b41;
+  --accent-line: #85b8ff;
+  --accent-wash: #1c2b41;
+  --accent-selected: #1c2b41;
+
+  --header-bg: rgba(29, 33, 37, 0.92);
+
+  --green: #4bce97;
+  --green-soft: #216e4e;
+  --green-line: #4bce97;
+  --red: #f87462;
+  --red-soft: #5d1f1a;
+  --red-line: #f87462;
+  --red-text: #fd9891;
+  --red-border: #f87462;
+  --blue: #579dff;
+  --blue-soft: #1c2b41;
+  --blue-line: #85b8ff;
+  --amber: #fca700;
+  --amber-soft: #5f3811;
+  --amber-line: #fca700;
+  --warn: #fca700;
+  --warn-soft: #5f3811;
+  --warn-line: #fca700;
+  --success: #4bce97;
+  --danger: #f87462;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] {
+    color-scheme: dark;
+
+    --bg: #1d2125;
+    --surface: #22272b;
+    --bg-elevated: #22272b;
+    --bg-soft: #161a1d;
+    --bg-hover: #2c333a;
+    --bg-sidebar: #161a1d;
+    --bg-code: #161a1d;
+    --bg-table-header: #2c333a;
+    --bg-deep: #161a1d;
+    --bg-deeper: #101214;
+
+    --border: #a6c5e229;
+    --border-strong: #a6c5e24f;
+    --overlay: rgba(0, 0, 0, 0.6);
+    --shadow: 0px 8px 12px rgba(0, 0, 0, 0.35), 0px 0px 1px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(0, 0, 0, 0.5);
+    --row-hover: #a6c5e214;
+    --inset-highlight: transparent;
+    --band-fill: #2c333a;
+
+    --text: #c7d1db;
+    --text-muted: #9fadbc;
+
+    --accent: #579dff;
+    --accent-dim: #1d7afc;
+    --accent-hover: #85b8ff;
+    --accent-on: #1d2125;
+    --accent-soft: #1c2b41;
+    --accent-line: #85b8ff;
+    --accent-wash: #1c2b41;
+    --accent-selected: #1c2b41;
+
+    --header-bg: rgba(29, 33, 37, 0.92);
+
+    --green: #4bce97;
+    --green-soft: #216e4e;
+    --green-line: #4bce97;
+    --red: #f87462;
+    --red-soft: #5d1f1a;
+    --red-line: #f87462;
+    --red-text: #fd9891;
+    --red-border: #f87462;
+    --blue: #579dff;
+    --blue-soft: #1c2b41;
+    --blue-line: #85b8ff;
+    --amber: #fca700;
+    --amber-soft: #5f3811;
+    --amber-line: #fca700;
+    --warn: #fca700;
+    --warn-soft: #5f3811;
+    --warn-line: #fca700;
+    --success: #4bce97;
+    --danger: #f87462;
+  }
 }

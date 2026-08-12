@@ -1,11 +1,23 @@
 import { defineConfig } from "vitest/config";
-import vue from "@vitejs/plugin-vue";
+import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          ["@atlaskit/tokens/babel-plugin", { shouldUseAutoFallback: true }],
+          "@compiled/babel-plugin",
+        ],
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any),
+  ],
   test: {
-    include: ["tests/*.vitest.ts"],
+    environment: "happy-dom",
+    include: ["tests/*.vitest.ts", "tests/*.vitest.tsx"],
+    setupFiles: ["tests/setup.ts"],
   },
   base: "/",
   build: {

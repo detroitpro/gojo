@@ -1,144 +1,117 @@
-import { computed, ref, watch, type WatchSource } from "vue";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  DEFAULT_PAGE_LIMIT,
-  pageCount,
-  rangeLabel,
+  pageCount as calcPageCount,
+  rangeLabel as fmtRangeLabel,
   type PaginatedResult,
-  type SortOrder,
 } from "@/kernel/pagination";
+import type { Order } from "@/platform/useClientPager";
 
-export function useServerTable<T>(options: {
+export interface UseServerTableOptions<T> {
   pageSize?: number;
-  watchSources?: WatchSource[];
-  /** Debounce ms for refetch when watch sources change (search). Default 200. */
-  debounceMs?: number;
   defaultSort?: string;
-  defaultOrder?: SortOrder;
+  defaultOrder?: Order;
   fetchPage: (params: {
     limit: number;
     offset: number;
     sort: string;
-    order: SortOrder;
+    order: Order;
   }) => Promise<PaginatedResult<T>>;
-}) {
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_LIMIT;
-  const page = ref(1);
-  const items = ref<T[]>([]);
-  const total = ref(0);
-  const limit = ref(pageSize);
-  const offset = ref(0);
-  const loading = ref(false);
-  const error = ref("");
-  const sort = ref(options.defaultSort ?? "createdAt");
-  const order = ref<SortOrder>(options.defaultOrder ?? "asc");
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let seq = 0;
-  /** After first paint, live refreshes patch rows in place (no loading flash). */
-  let painted = false;
+  /** Values whose changes trigger a reload (e.g. filters, query strings). */
+  watchSources?: readonly unknown[];
+}
 
-  const pages = computed(() => pageCount(total.value, limit.value));
-  const label = computed(() => rangeLabel(total.value, limit.value, offset.value));
+export function useServerTable<T>(options: UseServerTableOptions<T>) {
+  const pageSize = options.pageSize ?? 25;
+  const [items, setItems] = useState<T[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPageState] = useState(1);
+  const [sort, setSortState] = useState(options.defaultSort ?? "");
+  const [order, setOrderState] = useState<Order>(options.defaultOrder ?? "asc");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Bumps when filters change so we reload even if page is already 1. */
+  const [filterEpoch, setFilterEpoch] = useState(0);
 
-  async function load() {
-    const my = ++seq;
-    const initial = !painted;
-    if (initial) loading.value = true;
-    error.value = "";
+  const fetchRef = useRef(options.fetchPage);
+  fetchRef.current = options.fetchPage;
+
+  const loadGen = useRef(0);
+
+  const load = useCallback(async () => {
+    const gen = ++loadGen.current;
+    setLoading(true);
+    setError(null);
     try {
-      const nextOffset = (page.value - 1) * pageSize;
-      const result = await options.fetchPage({
-        limit: pageSize,
-        offset: nextOffset,
-        sort: sort.value,
-        order: order.value,
-      });
-      if (my !== seq) {
-        return;
-      }
-      items.value = result.items;
-      total.value = result.total;
-      limit.value = result.limit;
-      offset.value = result.offset;
-      const maxPage = pageCount(result.total, result.limit);
-      if (page.value > maxPage) {
-        page.value = maxPage;
-      }
-      painted = true;
-    } catch (err) {
-      if (my !== seq) {
-        return;
-      }
-      error.value = err instanceof Error ? err.message : "Failed to load";
-      // Keep stale rows on refresh failure so the table does not blank out.
-      if (initial) {
-        items.value = [];
-        total.value = 0;
-      }
+      const offset = (page - 1) * pageSize;
+      const result = await fetchRef.current({ limit: pageSize, offset, sort, order });
+      if (gen !== loadGen.current) return;
+      setItems(result.items);
+      setTotal(result.total);
+    } catch (caught) {
+      if (gen !== loadGen.current) return;
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (my === seq && initial) {
-        loading.value = false;
+      if (gen === loadGen.current) setLoading(false);
+    }
+  }, [page, pageSize, sort, order, filterEpoch]);
+
+  const setSort = useCallback((column: string, firstOrder: Order = "asc") => {
+    setSortState((prev) => {
+      if (prev === column) {
+        setOrderState((o) => (o === "asc" ? "desc" : "asc"));
+        return prev;
       }
-    }
-  }
-
-  function scheduleLoad(immediate = false) {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    if (immediate) {
-      void load();
-      return;
-    }
-    timer = setTimeout(() => {
-      timer = null;
-      void load();
-    }, options.debounceMs ?? 200);
-  }
-
-  function setSort(column: string, firstOrder: SortOrder = "asc") {
-    if (sort.value === column) {
-      order.value = order.value === "asc" ? "desc" : "asc";
-    } else {
-      sort.value = column;
-      order.value = firstOrder;
-    }
-    if (page.value !== 1) {
-      page.value = 1;
-      return;
-    }
-    scheduleLoad(true);
-  }
-
-  watch(page, () => {
-    scheduleLoad(true);
-  });
-
-  if (options.watchSources?.length) {
-    watch(options.watchSources, () => {
-      if (page.value !== 1) {
-        page.value = 1;
-        return;
-      }
-      scheduleLoad(false);
+      setOrderState(firstOrder);
+      return column;
     });
-  }
+    setPageState(1);
+  }, []);
 
-  return {
-    page,
-    pages,
-    items,
-    total,
-    limit,
-    offset,
-    loading,
-    error,
-    sort,
-    order,
-    setSort,
-    rangeLabel: label,
-    reload: () => scheduleLoad(true),
-    load,
-  };
+  const setPage = useCallback((next: number) => {
+    setPageState(next);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Reload when the caller's tracked dependencies change (e.g. filters).
+  // Always bump filterEpoch after mount — setPage(1) alone is a no-op when
+  // already on page 1, which previously left stale rows until live refresh.
+  const watchSources = options.watchSources ?? [];
+  const filtersReady = useRef(false);
+  useEffect(() => {
+    setPageState(1);
+    if (!filtersReady.current) {
+      filtersReady.current = true;
+      return;
+    }
+    setFilterEpoch((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, watchSources);
+
+  const pages = calcPageCount(total, pageSize);
+  const offset = (page - 1) * pageSize;
+  const rangeLabel = fmtRangeLabel(total, pageSize, offset);
+
+  return useMemo(
+    () => ({
+      items,
+      total,
+      pages,
+      pageSize,
+      page,
+      offset,
+      sort,
+      order,
+      loading,
+      error,
+      rangeLabel,
+      setSort,
+      setPage,
+      load,
+    }),
+    [items, total, pages, pageSize, page, offset, sort, order, loading, error, rangeLabel, setSort, setPage, load],
+  );
 }

@@ -15,7 +15,7 @@ export type {
   DashboardOverviewRun,
 };
 
-type ProjectRow = { id: string; name: string };
+type ProjectRow = { id: string; name: string; enabled: number };
 type AgentRow = {
   id: string;
   project_id: string;
@@ -40,7 +40,9 @@ export function getDashboardOverview(db: Database): DashboardOverview {
   const sqlite = db.connection();
 
   const projects = sqlite
-    .query<ProjectRow, []>("SELECT id, name FROM projects ORDER BY name COLLATE NOCASE")
+    .query<ProjectRow, []>(
+      "SELECT id, name, enabled FROM projects ORDER BY name COLLATE NOCASE",
+    )
     .all();
 
   if (projects.length === 0) {
@@ -100,6 +102,7 @@ export function getDashboardOverview(db: Database): DashboardOverview {
     projects: projects.map((project) => ({
       id: project.id,
       name: project.name,
+      enabled: project.enabled === 1,
       agents: agentsByProject.get(project.id) ?? [],
     })),
   };

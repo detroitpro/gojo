@@ -88,11 +88,18 @@ export type CompletedWorkPresentation = {
   kind: string;
   kindLabel: string;
   resultItem: WorkResultSlice;
+  /** Platform / repo label for detailed history rows. */
+  sourceLabel: string | null;
+};
+
+export type PresentCompletedWorkOptions = {
+  sourceLabel?: string | null;
 };
 
 export function presentCompletedWork(
   item: WorkItem,
   nowMs = Date.now(),
+  options?: PresentCompletedWorkOptions,
 ): CompletedWorkPresentation {
   const secondary = workSecondaryLabel(item);
 
@@ -144,6 +151,7 @@ export function presentCompletedWork(
       delivery: item.delivery,
       outcome: item.outcome,
     },
+    sourceLabel: options?.sourceLabel ?? null,
   };
 }
 

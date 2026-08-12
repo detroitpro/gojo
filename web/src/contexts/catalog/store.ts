@@ -1,54 +1,41 @@
-import { defineStore } from "pinia";
-import { ref } from "vue";
+import { create } from "zustand";
 
+import { createRefreshRegistry } from "@/platform/create-refresh-store";
 import { listProjects } from "./api";
 import type { Project } from "./types";
 
-export const useCatalogStore = defineStore("catalog", () => {
-  const items = ref<Project[]>([]);
-  const total = ref(0);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+type CatalogState = {
+  items: Project[];
+  total: number;
+  loading: boolean;
+  error: string | null;
+  load: (opts?: { limit?: number; offset?: number; q?: string }) => Promise<void>;
+  bindRefresh: (fn: () => void | Promise<void>) => void;
+  unbindRefresh: (fn: () => void | Promise<void>) => void;
+  invalidate: (topics?: readonly string[]) => Promise<void>;
+};
 
-  const refreshers = new Set<() => void | Promise<void>>();
-
-  function bindRefresh(fn: () => void | Promise<void>) {
-    refreshers.add(fn);
-  }
-
-  function unbindRefresh(fn: () => void | Promise<void>) {
-    refreshers.delete(fn);
-  }
-
-  async function invalidate(_topics?: readonly string[]) {
-    await Promise.all([...refreshers].map((fn) => Promise.resolve(fn())));
-  }
-
-  async function load(opts?: { limit?: number; offset?: number; q?: string }) {
-    loading.value = true;
-    error.value = null;
-    try {
-      const page = await listProjects(opts);
-      items.value = page.items;
-      total.value = page.total;
-    } catch (caught) {
-      error.value = caught instanceof Error ? caught.message : String(caught);
-    } finally {
-      loading.value = false;
-    }
-  }
-
+export const useCatalogStore = create<CatalogState>((set) => {
+  const { slice } = createRefreshRegistry();
   return {
-    items,
-    total,
-    loading,
-    error,
-    load,
-    bindRefresh,
-    unbindRefresh,
-    invalidate,
+    items: [],
+    total: 0,
+    loading: false,
+    error: null,
+    ...slice,
+    async load(opts) {
+      set({ loading: true, error: null });
+      try {
+        const page = await listProjects(opts);
+        set({ items: page.items, total: page.total });
+      } catch (caught) {
+        set({ error: caught instanceof Error ? caught.message : String(caught) });
+      } finally {
+        set({ loading: false });
+      }
+    },
   };
 });
 
-/** @deprecated Use useCatalogStore — kept for LiveStoreBridge / queue compat during migration */
+/** Alias for LiveStoreBridge / queue compat */
 export const useProjectsStore = useCatalogStore;

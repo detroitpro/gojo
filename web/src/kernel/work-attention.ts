@@ -5,12 +5,12 @@ export type AttentionMenuItem = {
   label: string;
   danger?: boolean;
   disabled?: boolean;
-  to?: { name: string; params?: Record<string, string>; query?: Record<string, string> };
+  to?: string;
 };
 
 export type AttentionPrimaryAction =
-  | { id: "review-run"; label: string; kind: "route"; to: { name: string; params: { id: string } } }
-  | { id: "open-run"; label: string; kind: "route"; to: { name: string; params: { id: string } } }
+  | { id: "review-run"; label: string; kind: "route"; to: string }
+  | { id: "open-run"; label: string; kind: "route"; to: string }
   | { id: "recheck-item"; label: string; kind: "action" }
   | { id: "retry-source"; label: string; kind: "action" }
   | { id: "open-source"; label: string; kind: "href"; href: string }
@@ -34,7 +34,7 @@ export function attentionPrimaryAction(
       id: "review-run",
       label: "Review run",
       kind: "route",
-      to: { name: "run-detail", params: { id: item.nativeKey } },
+      to: `/runs/${item.nativeKey}`,
     };
   }
   if (item.attention === "blocked" && item.kind === "run" && item.nativeKey) {
@@ -42,7 +42,7 @@ export function attentionPrimaryAction(
       id: "open-run",
       label: "Open run",
       kind: "route",
-      to: { name: "run-detail", params: { id: item.nativeKey } },
+      to: `/runs/${item.nativeKey}`,
     };
   }
   if (item.attention === "stale" && item.sourceId && item.nativeKey) {
@@ -74,7 +74,7 @@ export function attentionMenuItems(
     items.push({
       id: "open-run",
       label: "Open run",
-      to: { name: "run-detail", params: { id: item.nativeKey } },
+      to: `/runs/${item.nativeKey}`,
     });
   }
   if (item.sourceId && item.nativeKey && item.attention === "stale") {

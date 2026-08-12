@@ -125,6 +125,14 @@ function isMutating(method: string): boolean {
   return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
 }
 
+/** Paths that look like static files — never SPA-fallback to index.html. */
+const STATIC_FILE_EXT =
+  /\.(?:ico|png|jpe?g|gif|svg|webp|css|js|mjs|cjs|map|woff2?|ttf|eot|txt|json|webmanifest)$/i;
+
+function hasStaticFileExtension(pathname: string): boolean {
+  return STATIC_FILE_EXT.test(pathname);
+}
+
 async function serveStatic(pathname: string): Promise<Response | null> {
   const root = resolveWebDistDir();
   if (root === null) {
@@ -140,6 +148,12 @@ async function serveStatic(pathname: string): Promise<Response | null> {
 
   if (existsSync(filePath) && statSync(filePath).isFile()) {
     return new Response(Bun.file(filePath));
+  }
+
+  // Missing .ico/.js/etc. must not become HTML — browsers treat that as a
+  // broken favicon/asset and keep retrying (favicon.ico spam in DevTools).
+  if (hasStaticFileExtension(safePath)) {
+    return new Response("Not found", { status: 404 });
   }
 
   const indexPath = join(root, "index.html");

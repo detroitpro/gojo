@@ -64,6 +64,7 @@ describe("storage/dashboard-overview", () => {
 
     const overview = getDashboardOverview(db);
     expect(overview.projects.map((p) => p.name)).toEqual(["alpha", "beta"]);
+    expect(overview.projects.every((p) => p.enabled)).toBe(true);
 
     const alphaAgents = overview.projects[0]?.agents ?? [];
     expect(alphaAgents).toHaveLength(1);
@@ -100,6 +101,24 @@ describe("storage/dashboard-overview", () => {
     const overview = getDashboardOverview(db);
     expect(overview.projects).toHaveLength(1);
     expect(overview.projects[0]?.agents).toEqual([]);
+    expect(overview.projects[0]?.enabled).toBe(true);
+
+    db.close();
+  });
+
+  test("reports enabled=false for disabled projects", () => {
+    const db = Database.open(":memory:");
+    db.migrate();
+    const repos = createRepositories(db);
+    const active = repos.projects.create({ name: "active", repoPath: "/tmp/active" });
+    const paused = repos.projects.create({ name: "paused", repoPath: "/tmp/paused" });
+    repos.projects.update(paused.id, { enabled: false });
+
+    const overview = getDashboardOverview(db);
+    expect(overview.projects).toEqual([
+      expect.objectContaining({ id: active.id, name: "active", enabled: true }),
+      expect.objectContaining({ id: paused.id, name: "paused", enabled: false }),
+    ]);
 
     db.close();
   });

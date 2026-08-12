@@ -10,7 +10,7 @@ Accepted — implemented on `src/` and mirrored on `web/src/`.
 ## Context
 
 gojo grew as a single-process Bun daemon with CLI, HTTP/WS API, scheduler, run
-coordinator, and Vue admin UI. Early packaging was by **technical layer**
+coordinator, and React admin UI. Early packaging was by **technical layer**
 (`runs/`, `storage/`, `api/`, flat `web/src/{api,types,views}`). That shape blocked
 parallel work:
 
@@ -19,7 +19,7 @@ parallel work:
 - Cross-cutting imports had no enforced ownership; “just import the repo” became
   the default.
 - Live UI refresh was wired per view (`useLiveRefresh`), which later multiplied
-  into overlapping invalidate storms after a Pinia bridge was introduced.
+  into overlapping invalidate storms after a Zustand bridge was introduced.
 - Shared wire types lived under `src/shared/` and drifted from the admin client.
 
 Product constraints from [`PRD.md`](../../PRD.md) still apply: one process, native
@@ -39,7 +39,7 @@ Adopt a **layered modular monolith packaged by bounded context**:
 4. **Wire contracts** live in `packages/contracts` (`@gojo/contracts`), shared by
    daemon and web.
 5. **Admin UI `web/src/`** mirrors the same layering and the same eight contexts
-   (`api` / `types` / Pinia `store` / `views`).
+   (`api` / `types` / Zustand `store` / `views`).
 6. **Live updates**: one `LiveStoreBridge` maps each `PlatformEventTopic` to a
    non-overlapping set of store `invalidate()` calls; views hydrate via
    `bindStoreRefresh` (register + load on mount). Events invalidate; RPC/HTTP reads

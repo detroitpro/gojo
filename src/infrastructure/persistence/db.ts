@@ -19,6 +19,9 @@ export class Database {
     const sqlite = new SQLiteDatabase(path);
     sqlite.exec("PRAGMA journal_mode=WAL;");
     sqlite.exec("PRAGMA foreign_keys=ON;");
+    // Concurrent writers (scheduler lease refresh, source sync, API) otherwise
+    // fail immediately with SQLITE_BUSY under WAL. Wait briefly instead.
+    sqlite.exec("PRAGMA busy_timeout = 5000;");
     return new Database(sqlite);
   }
 
