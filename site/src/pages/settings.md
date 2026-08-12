@@ -204,6 +204,7 @@ merge-when-checks-succeed (skips the checks-settled reviewer). See
 - Injected only at execution time; redacted from logs and handoffs
 - Prefer project-scoped secrets for repo-specific tokens
 - Store source write tokens with `gojo source token set <source-id>`; Gojo strips its managed forge-token environment keys from agent and validation processes
+- New private GitHub projects still need a project-scoped token even when a shared `github.com` connection already uses `tokenSecretName: source-github`. Use `GOJO_SOURCE_TOKEN="$(gh auth token)" gojo source token set <source-id> --secret-name source-github`. Keep that secret name so other GitHub projects keep working; doctor/`gh` alone is not enough until the secret exists (sync can fall back to env/`gh`, but storing the project secret is the durable fix)
 
 ## Notification channels
 

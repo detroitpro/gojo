@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { describeUnlessCloud } from "../../../support/cloud";
 
 import {
+  assessSourceWriteCredential,
   firstCommandToken,
   primaryValidationTool,
   projectDoctor,
@@ -41,6 +42,73 @@ describe("diagnostics/doctor helpers", () => {
       binary: "bun",
       shellBuiltin: false,
     });
+  });
+
+  test("assessSourceWriteCredential warns when named secret is missing even if gh works", () => {
+    const result = assessSourceWriteCredential({
+      displayName: "acme/private",
+      adapter: "github",
+      secretName: "source-github",
+      hasNamedSecret: false,
+      env: {},
+      githubCliTokenAvailable: () => true,
+    });
+    expect(result.available).toBe(true);
+    expect(result.warnings).toEqual([
+      'source acme/private: configured secret "source-github" is missing for this project; sync falls back to provider env/CLI credentials when available',
+    ]);
+  });
+
+  test("assessSourceWriteCredential reports unavailable when no secret or fallback exists", () => {
+    const result = assessSourceWriteCredential({
+      displayName: "acme/app",
+      adapter: "gitlab",
+      secretName: "source-gitlab",
+      hasNamedSecret: false,
+      env: {},
+    });
+    expect(result.available).toBe(false);
+    expect(result.warnings).toContain(
+      'source acme/app: configured secret "source-gitlab" is missing for this project; sync falls back to provider env/CLI credentials when available',
+    );
+    expect(result.warnings).toContain(
+      "source acme/app (gitlab) has no platform write credential",
+    );
+  });
+
+  test("assessSourceWriteCredential stays quiet when named secret exists", () => {
+    const result = assessSourceWriteCredential({
+      displayName: "acme/app",
+      adapter: "github",
+      secretName: "source-github",
+      hasNamedSecret: true,
+      env: {},
+      githubCliTokenAvailable: () => false,
+    });
+    expect(result.available).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  test("assessSourceWriteCredential uses provider env tokens before CLI", () => {
+    expect(
+      assessSourceWriteCredential({
+        displayName: "acme/app",
+        adapter: "github",
+        secretName: null,
+        hasNamedSecret: false,
+        env: { GH_TOKEN: "from-env" },
+        githubCliTokenAvailable: () => false,
+      }),
+    ).toMatchObject({ available: true, warnings: [] });
+    expect(
+      assessSourceWriteCredential({
+        displayName: "acme/app",
+        adapter: "forgejo",
+        secretName: null,
+        hasNamedSecret: false,
+        env: { FORGEJO_TOKEN: "forgejo" },
+      }),
+    ).toMatchObject({ available: true, warnings: [] });
   });
 
   test("resolveTool finds bun on PATH and relative scripts in cwd", () => {

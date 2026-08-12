@@ -202,12 +202,7 @@ export class SourceSyncService {
       syncState: "syncing",
       lastError: null,
     });
-    const config = parseConfig(connection);
-    const tokenSecretName =
-      typeof config["tokenSecretName"] === "string" ? config["tokenSecretName"] : null;
-    const token = tokenSecretName
-      ? this.resolveSecret?.(tokenSecretName, source.projectId) ?? null
-      : this.resolveDefaultToken(adapter.type);
+    const token = this.resolveConnectionToken(connection, source.projectId, adapter.type);
     const cursor = this.work.sync.cursor(source.id);
 
     try {
@@ -322,7 +317,10 @@ export class SourceSyncService {
         observedAt: observedAt ?? completedAt,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      let message = error instanceof Error ? error.message : String(error);
+      if (!token && /\bHTTP 404\b/.test(message)) {
+        message = `${message}; missing source credentials (private repos require a token)`;
+      }
       this.recordFailure(source, message, now);
       return { sourceId, upserted: 0, errors: 1, observedAt: source.observedAt };
     }
@@ -366,12 +364,7 @@ export class SourceSyncService {
         detail: `Source adapter does not support item verification: ${connection.adapter}`,
       };
     }
-    const config = parseConfig(connection);
-    const tokenSecretName =
-      typeof config["tokenSecretName"] === "string" ? config["tokenSecretName"] : null;
-    const token = tokenSecretName
-      ? this.resolveSecret?.(tokenSecretName, source.projectId) ?? null
-      : this.resolveDefaultToken(adapter.type);
+    const token = this.resolveConnectionToken(connection, source.projectId, adapter.type);
     const lookup = await adapter.getItem({
       baseUrl: connection.baseUrl ?? "",
       externalKey: source.externalKey,
@@ -386,6 +379,21 @@ export class SourceSyncService {
       now,
       eventSource: adapter.type,
     });
+  }
+
+  private resolveConnectionToken(
+    connection: SourceConnection,
+    projectId: string,
+    adapterType: string,
+  ): string | null {
+    const config = parseConfig(connection);
+    const tokenSecretName =
+      typeof config["tokenSecretName"] === "string" ? config["tokenSecretName"] : null;
+    if (tokenSecretName) {
+      const named = this.resolveSecret?.(tokenSecretName, projectId) ?? null;
+      if (named) return named;
+    }
+    return this.resolveDefaultToken(adapterType);
   }
 
   resolveWorkItem(workItemId: string, input: WorkResolveInput = {}): WorkItem {
