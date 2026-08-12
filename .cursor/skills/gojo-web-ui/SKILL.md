@@ -11,7 +11,8 @@ description: >-
 
 Ops UI under `web/` is React 18 + react-router-dom + Zustand + Vite + Atlaskit,
 with shared CSS in `web/src/ui/styles.css` and theme tokens from `theme/tokens.css`
-(ADS light + dark maps). Prefer `@atlaskit/*` components via thin wrappers in `ui/`. Icons may
+(ADS light + dark maps; Atlaskit `--ds-*` surfaces bridged onto the same ramp).
+Prefer `@atlaskit/*` components via thin wrappers in `ui/`. Icons may
 use `lucide-react` or `@atlaskit/icon` when an Atlaskit glyph exists. Do not add
 shadcn, Tailwind, Phosphor, or Heroicons for this app.
 
@@ -86,8 +87,15 @@ compact fields instead (see below).
 
 ## Status — always `StatusBadge` / domain badges
 
-Domain enums map through `web/src/kernel/status-icons.ts` (`tone` + `label`) and
-render as Atlaskit lozenges via `StatusBadge` or `ui/status/*Badge.tsx`.
+Domain enums map through `web/src/kernel/status-icons.ts` (`tone` + `label` +
+`toneIcon`) and render via `StatusBadge` or `ui/status/*Badge.tsx`.
+
+`StatusBadge` is deliberately **not** `@atlaskit/lozenge`: the legacy lozenge
+hardcodes theme-blind fills (e.g. success `#b3df72`), and the newer lozenge ties
+icon color to the pill tint. Gojo badges are a **neutral pill** (`.badge-neutral`)
+with a **tone-colored lucide icon** only — green success, amber/orange queued
+(PR open), red failed, blue running. Do not reintroduce Atlaskit Lozenge for
+status chrome.
 
 ## Live data
 
@@ -102,11 +110,14 @@ every render (that loop floods the network). Prefer depending on `soft.run`
 
 ## Theme
 
-Shared ADS tokens in `theme/tokens.css`: light on `:root`, dark under
-`html[data-color-mode="dark"]` and `html[data-color-mode="auto"]` +
-`prefers-color-scheme: dark`. Admin mounts `@atlaskit/css-reset` and
-`AppProvider` with `defaultColorMode` from `localStorage` key `gojo.colorMode`
-(`light` | `dark` | `auto`; default `light`). Shell toggle:
-[`ColorModeMenu`](web/src/ui/ColorModeMenu.tsx) via `useSetColorMode`. Prefer
-CSS vars (`--bg`, `--text`, `--accent`, status tokens) over hard-coded hex so
-both modes stay coherent. Do not reintroduce the old dark “Six Eyes” palette.
+Shared ADS-aligned tokens in `theme/tokens.css`: light on `:root`, dark under
+`html[data-color-mode="dark"]` (Atlaskit resolves preference `auto` to a concrete
+`light`/`dark` attribute — there is no `data-color-mode="auto"` CSS branch).
+`:root[data-color-mode][data-theme~=…]` blocks bridge Atlaskit `--ds-surface*`,
+`--ds-text*`, `--ds-border*`, and `--ds-background-input` onto the gojo ramp so
+Select/Modal/Textfield share the same blue-black (dark) / ink (light) surfaces.
+Admin mounts `@atlaskit/css-reset` and `AppProvider` with `defaultColorMode` from
+`localStorage` key `gojo.colorMode` (`light` | `dark` | `auto`; default `light`).
+Shell toggle: [`ColorModeMenu`](web/src/ui/ColorModeMenu.tsx) via `useSetColorMode`.
+Prefer CSS vars (`--bg`, `--text`, `--accent`, status tokens) over hard-coded hex
+so both modes stay coherent. Do not reintroduce the old dark “Six Eyes” palette.

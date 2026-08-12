@@ -69,6 +69,14 @@ async function main() {
   ]);
 
   const page = await context.newPage();
+  // Match marketing site + preferred ops dark ramp for screenshots.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("gojo.colorMode", "dark");
+    } catch {
+      /* ignore */
+    }
+  });
 
   for (const shot of SHOTS) {
     const dest = join(outDir, shot.file);

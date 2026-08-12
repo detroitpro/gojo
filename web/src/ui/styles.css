@@ -128,9 +128,7 @@ button {
 
 .sidebar {
   border-right: 1px solid var(--border);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--bg-sidebar)), var(--bg-sidebar) 28%),
-    var(--bg-sidebar);
+  background: var(--bg-sidebar);
   padding: 0 0 var(--space-5);
   display: flex;
   flex-direction: column;
@@ -216,11 +214,16 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 8px 10px;
   color: color-mix(in srgb, var(--text-muted) 88%, transparent);
   text-decoration: none;
+  text-align: left;
   border: 0;
   border-radius: var(--radius);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
   transition:
     color 120ms ease,
     background 120ms ease;
@@ -293,30 +296,28 @@ button {
   display: none;
 }
 
-.sidebar-footer {
-  margin-top: auto;
-  padding: var(--space-5) var(--space-4) 0;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.sidebar-footer-actions {
+.sidebar-tools {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
+  gap: 2px;
   margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
-.shell.sidebar-collapsed .sidebar-footer-actions {
+.live-status-nav .live-status-icon {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+}
+
+.live-status-nav .live-dot {
+  flex-shrink: 0;
 }
 
 .shell.sidebar-collapsed .brand,
 .shell.sidebar-collapsed .brand-mark,
-.shell.sidebar-collapsed .nav-label,
-.shell.sidebar-collapsed .sidebar-footer .btn {
+.shell.sidebar-collapsed .nav-label {
   display: none;
 }
 
@@ -329,12 +330,6 @@ button {
 .shell.sidebar-collapsed .nav-link {
   justify-content: center;
   padding-inline: 10px;
-}
-
-.shell.sidebar-collapsed .sidebar-footer {
-  display: flex;
-  justify-content: center;
-  padding-inline: var(--space-2);
 }
 
 .main {
@@ -746,13 +741,10 @@ a.stat-tile:focus-visible {
   line-height: 1.15;
   margin-block: var(--space-3);
   text-align: center;
+  color: var(--text);
 }
 
 .stat-tile--running .stat-tile__icon {
-  color: var(--blue);
-}
-
-.stat-tile--running .stat-tile__value {
   color: var(--blue);
 }
 
@@ -760,15 +752,7 @@ a.stat-tile:focus-visible {
   color: var(--amber);
 }
 
-.stat-tile--queued .stat-tile__value {
-  color: var(--amber);
-}
-
 .stat-tile--success .stat-tile__icon {
-  color: var(--green);
-}
-
-.stat-tile--success .stat-tile__value {
   color: var(--green);
 }
 
@@ -776,24 +760,12 @@ a.stat-tile:focus-visible {
   color: var(--red);
 }
 
-.stat-tile--failed .stat-tile__value {
-  color: var(--red);
-}
-
 .stat-tile--warn .stat-tile__icon {
-  color: var(--warn);
-}
-
-.stat-tile--warn .stat-tile__value {
   color: var(--warn);
 }
 
 .stat-tile--neutral .stat-tile__icon {
   color: var(--text-muted);
-}
-
-.stat-tile--neutral .stat-tile__value {
-  color: var(--accent);
 }
 
 .stat-tile__value.compact,
@@ -829,26 +801,26 @@ a.stat-tile:focus-visible {
 
 .metric-delta.badge-success {
   color: var(--green);
-  border-color: var(--green-line);
-  background: var(--green-soft);
+  border-color: var(--border);
+  background: transparent;
 }
 
 .metric-delta.badge-failed {
   color: var(--red);
-  border-color: var(--red-line);
-  background: var(--red-soft);
+  border-color: var(--border);
+  background: transparent;
 }
 
 .metric-delta.badge-warn {
   color: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: var(--border);
+  background: transparent;
 }
 
 .metric-delta.badge-neutral {
   color: var(--text-muted);
   border-color: var(--border);
-  background: var(--bg);
+  background: transparent;
 }
 
 .metric-delta__value {
@@ -1004,15 +976,39 @@ table.data tr:hover td {
 }
 
 .badge-neutral {
-  color: var(--text-muted);
+  color: var(--text);
   border-color: var(--border);
-  background: var(--bg);
+  background: var(--bg-soft);
 }
 
 .badge-warn {
   color: var(--warn);
   border-color: var(--warn-line);
   background: var(--warn-soft);
+}
+
+.badge--tone-success .badge__icon {
+  color: var(--green);
+}
+
+.badge--tone-failed .badge__icon {
+  color: var(--red);
+}
+
+.badge--tone-warn .badge__icon {
+  color: var(--warn);
+}
+
+.badge--tone-running .badge__icon {
+  color: var(--blue);
+}
+
+.badge--tone-queued .badge__icon {
+  color: var(--amber);
+}
+
+.badge--tone-neutral .badge__icon {
+  color: var(--text-muted);
 }
 
 /*
@@ -1861,7 +1857,6 @@ table.data tr:hover td {
 
 .status-band-secondary .stat-tile__value {
   font-size: 1.25rem;
-  color: var(--text);
 }
 
 .status-band-secondary .metric .label {
@@ -2166,7 +2161,7 @@ table.data tr:hover td {
 }
 
 .action-menu-item:hover:not(.disabled) {
-  background: var(--bg);
+  background: var(--bg-hover);
 }
 
 .action-menu-item.danger {
@@ -2177,6 +2172,25 @@ table.data tr:hover td {
 .action-menu-item:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.action-menu-item.selected {
+  background: var(--accent-selected);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.color-mode-menu {
+  width: 100%;
+}
+
+.color-mode-menu-title {
+  padding: 0.35rem 0.65rem 0.25rem;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .confirm-dialog {
@@ -2437,18 +2451,12 @@ table.data tr:hover td {
 
   .shell.sidebar-collapsed .brand,
   .shell.sidebar-collapsed .brand-mark,
-  .shell.sidebar-collapsed .nav-label,
-  .shell.sidebar-collapsed .sidebar-footer .btn {
+  .shell.sidebar-collapsed .nav-label {
     display: initial;
   }
 
   .shell.sidebar-collapsed .nav-link {
     justify-content: flex-start;
-  }
-
-  .shell.sidebar-collapsed .sidebar-footer {
-    display: block;
-    padding-inline: var(--space-4);
   }
 
   .main {
@@ -2575,7 +2583,7 @@ table.data tr:hover td {
   border: 1px solid transparent;
   flex-shrink: 0;
   text-decoration: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bg-deeper) 18%, transparent);
   transition:
     width 0.15s ease,
     height 0.15s ease,
@@ -2583,32 +2591,32 @@ table.data tr:hover td {
 }
 
 .run-strip-cell.badge-success {
-  background: var(--green);
-  border-color: color-mix(in srgb, var(--green) 70%, #000);
+  background: color-mix(in srgb, var(--green) 40%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--green) 70%, var(--bg-deeper));
   color: var(--green);
 }
 
 .run-strip-cell.badge-failed {
   background: var(--red);
-  border-color: color-mix(in srgb, var(--red) 70%, #000);
+  border-color: color-mix(in srgb, var(--red) 70%, var(--bg-deeper));
   color: var(--red);
 }
 
 .run-strip-cell.badge-running {
   background: var(--blue);
-  border-color: color-mix(in srgb, var(--blue) 70%, #000);
+  border-color: color-mix(in srgb, var(--blue) 70%, var(--bg-deeper));
   color: var(--blue);
 }
 
 .run-strip-cell.badge-queued {
-  background: var(--amber);
-  border-color: color-mix(in srgb, var(--amber) 70%, #000);
+  background: color-mix(in srgb, var(--amber) 70%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--amber) 70%, var(--bg-deeper));
   color: var(--amber);
 }
 
 .run-strip-cell.badge-warn {
-  background: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 70%, #000);
+  background: color-mix(in srgb, var(--amber) 70%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--warn) 70%, var(--bg-deeper));
   color: var(--warn);
 }
 
@@ -2623,7 +2631,7 @@ table.data tr:hover td {
   height: 28px;
   border-radius: 6px;
   border-width: 2px;
-  border-color: color-mix(in srgb, var(--blue) 55%, #fff);
+  border-color: color-mix(in srgb, var(--blue) 55%, var(--text));
   box-shadow:
     0 0 0 0 color-mix(in srgb, var(--blue) 70%, transparent),
     0 0 16px color-mix(in srgb, var(--blue) 65%, transparent);

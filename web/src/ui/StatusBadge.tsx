@@ -1,31 +1,25 @@
-import Lozenge from "@atlaskit/lozenge";
-
-import type { BadgeTone } from "@/kernel/status-icons";
+import { toneIcon, type BadgeTone } from "@/kernel/status-icons";
+import { UiIcon } from "@/ui/UiIcon";
 
 export type StatusBadgeProps = {
   tone: BadgeTone;
   label: string;
 };
 
-function appearanceFor(
-  tone: BadgeTone,
-): "default" | "success" | "removed" | "inprogress" | "new" | "moved" {
-  switch (tone) {
-    case "success":
-      return "success";
-    case "failed":
-      return "removed";
-    case "warn":
-      return "moved";
-    case "running":
-      return "inprogress";
-    case "queued":
-      return "new";
-    default:
-      return "default";
-  }
-}
-
+/**
+ * Neutral pill with a tone-colored icon.
+ *
+ * Deliberately not `@atlaskit/lozenge`: the legacy lozenge hardcodes theme-blind
+ * fills (e.g. success `#b3df72`), and the newer lozenge ties icon color to the
+ * pill tint — neither can render “neutral surface + semantic icon.”
+ */
 export function StatusBadge({ tone, label }: StatusBadgeProps) {
-  return <Lozenge appearance={appearanceFor(tone)}>{label}</Lozenge>;
+  return (
+    <span className={`badge badge-neutral badge--tone-${tone}`}>
+      <span className="badge__icon" aria-hidden="true">
+        <UiIcon icon={toneIcon(tone)} size={12} />
+      </span>
+      <span className="badge__label">{label}</span>
+    </span>
+  );
 }

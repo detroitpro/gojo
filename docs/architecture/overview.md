@@ -42,9 +42,11 @@ User docs site: Astro in `site/` (not served by the daemon).
 
 Visual identity (admin + docs) is token-driven from [`theme/`](../../theme/) — shared
 CSS variables in `theme/tokens.css` mapped to Atlassian Design System light and dark
-theme values (dark keyed off `html[data-color-mode]`), plus Atlaskit components in
-the admin UI with a Light / Dark / Auto toggle. Brand wordmarks use mono; body
-type uses the ADS system stack.
+theme values (dark keyed off `html[data-color-mode="dark"]`; Atlaskit `--ds-*`
+surfaces bridged onto the same ramp), plus Atlaskit components in the admin UI with
+a Light / Dark / Auto toggle. Brand wordmarks use mono; body type uses the ADS
+system stack. Status chrome uses a custom neutral `StatusBadge` (not Atlaskit
+Lozenge) so only icons carry semantic color.
 
 ## `src/` layers (current)
 
