@@ -27,22 +27,15 @@ export function writeStoredColorMode(mode: ColorModePreference): void {
 }
 
 /**
- * Fire when Atlaskit updates `data-color-mode` or OS preference changes under `auto`,
- * so canvas charts that bake CSS vars into uPlot can rebuild.
+ * Fire when Atlaskit updates `data-color-mode` / `data-theme` (including when
+ * preference is `auto` and the OS flips — Atlaskit writes a concrete light/dark
+ * attribute), so canvas charts that bake CSS vars into uPlot can rebuild.
  */
 export function subscribeColorMode(onChange: () => void): () => void {
   const el = document.documentElement;
   const mo = new MutationObserver(() => onChange());
   mo.observe(el, { attributes: true, attributeFilter: ["data-color-mode", "data-theme"] });
-
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  const onMql = () => {
-    if (el.getAttribute("data-color-mode") === "auto") onChange();
-  };
-  mql.addEventListener("change", onMql);
-
   return () => {
     mo.disconnect();
-    mql.removeEventListener("change", onMql);
   };
 }

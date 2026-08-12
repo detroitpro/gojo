@@ -2,6 +2,8 @@
  * Shared Gojo theme tokens — single source of truth for admin web + docs site.
  * Mapped to Atlassian Design System light/dark theme values.
  * Dark map keys off `html[data-color-mode]` (set by Atlaskit AppProvider).
+ * Atlaskit resolves `auto` to a concrete `light`/`dark` attribute, so there is
+ * no `data-color-mode="auto"` CSS branch.
  * @see https://atlassian.design/foundations/tokens
  */
 :root {
@@ -100,21 +102,25 @@
   --space-10: 32px;
 }
 
-/* ADS dark surfaces / text / brand — not the legacy “Six Eyes” palette */
+/*
+ * Dark neutrals are color-mix(in srgb, #579dff 5%, <classic ADS dark>) —
+ * precomputed so cards/tables share the nav’s blue-black cast.
+ * Not the legacy “Six Eyes” palette.
+ */
 html[data-color-mode="dark"],
 html[data-theme~="dark:dark"][data-color-mode="dark"] {
   color-scheme: dark;
 
-  --bg: #1d2125;
-  --surface: #22272b;
-  --bg-elevated: #22272b;
-  --bg-soft: #161a1d;
-  --bg-hover: #2c333a;
-  --bg-sidebar: #161a1d;
-  --bg-code: #161a1d;
-  --bg-table-header: #2c333a;
-  --bg-deep: #161a1d;
-  --bg-deeper: #101214;
+  --bg: #192128;
+  --surface: #252d36;
+  --bg-elevated: #252d36;
+  --bg-soft: #192128;
+  --bg-hover: #2e3844;
+  --bg-sidebar: #192128;
+  --bg-code: #192128;
+  --bg-table-header: #2e3844;
+  --bg-deep: #192128;
+  --bg-deeper: #141920;
 
   --border: #a6c5e229;
   --border-strong: #a6c5e24f;
@@ -123,7 +129,7 @@ html[data-theme~="dark:dark"][data-color-mode="dark"] {
   --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(0, 0, 0, 0.5);
   --row-hover: #a6c5e214;
   --inset-highlight: transparent;
-  --band-fill: #2c333a;
+  --band-fill: #2e3844;
 
   --text: #c7d1db;
   --text-muted: #9fadbc;
@@ -131,19 +137,19 @@ html[data-theme~="dark:dark"][data-color-mode="dark"] {
   --accent: #579dff;
   --accent-dim: #1d7afc;
   --accent-hover: #85b8ff;
-  --accent-on: #1d2125;
+  --accent-on: #192128;
   --accent-soft: #1c2b41;
   --accent-line: #85b8ff;
   --accent-wash: #1c2b41;
   --accent-selected: #1c2b41;
 
-  --header-bg: rgba(29, 33, 37, 0.92);
+  --header-bg: rgba(25, 33, 40, 0.92);
 
   --green: #4bce97;
-  --green-soft: #216e4e;
+  --green-soft: #164b35;
   --green-line: #4bce97;
   --red: #f87462;
-  --red-soft: #5d1f1a;
+  --red-soft: #42221f;
   --red-line: #f87462;
   --red-text: #fd9891;
   --red-border: #f87462;
@@ -151,71 +157,42 @@ html[data-theme~="dark:dark"][data-color-mode="dark"] {
   --blue-soft: #1c2b41;
   --blue-line: #85b8ff;
   --amber: #fca700;
-  --amber-soft: #5f3811;
+  --amber-soft: #533f04;
   --amber-line: #fca700;
   --warn: #fca700;
-  --warn-soft: #5f3811;
+  --warn-soft: #533f04;
   --warn-line: #fca700;
   --success: #4bce97;
   --danger: #f87462;
 }
 
-@media (prefers-color-scheme: dark) {
-  html[data-color-mode="auto"] {
-    color-scheme: dark;
+/*
+ * Bridge Atlaskit --ds-* onto the gojo ramp.
+ * Atlaskit injects theme CSS at html[data-color-mode][data-theme~=...] (0,2,1).
+ * :root raises specificity to (0,3,0) so these win without !important.
+ */
+:root[data-color-mode="dark"][data-theme~="dark:dark"] {
+  --ds-surface-sunken: var(--bg);
+  --ds-surface: var(--bg-elevated);
+  --ds-surface-raised: var(--bg-elevated);
+  --ds-surface-overlay: var(--bg-hover);
+  --ds-background-input: var(--bg);
+  --ds-text: var(--text);
+  --ds-text-subtle: var(--text-muted);
+  --ds-text-subtlest: var(--text-muted);
+  --ds-border: var(--border);
+  --ds-border-input: var(--border-strong);
+}
 
-    --bg: #1d2125;
-    --surface: #22272b;
-    --bg-elevated: #22272b;
-    --bg-soft: #161a1d;
-    --bg-hover: #2c333a;
-    --bg-sidebar: #161a1d;
-    --bg-code: #161a1d;
-    --bg-table-header: #2c333a;
-    --bg-deep: #161a1d;
-    --bg-deeper: #101214;
-
-    --border: #a6c5e229;
-    --border-strong: #a6c5e24f;
-    --overlay: rgba(0, 0, 0, 0.6);
-    --shadow: 0px 8px 12px rgba(0, 0, 0, 0.35), 0px 0px 1px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(0, 0, 0, 0.5);
-    --row-hover: #a6c5e214;
-    --inset-highlight: transparent;
-    --band-fill: #2c333a;
-
-    --text: #c7d1db;
-    --text-muted: #9fadbc;
-
-    --accent: #579dff;
-    --accent-dim: #1d7afc;
-    --accent-hover: #85b8ff;
-    --accent-on: #1d2125;
-    --accent-soft: #1c2b41;
-    --accent-line: #85b8ff;
-    --accent-wash: #1c2b41;
-    --accent-selected: #1c2b41;
-
-    --header-bg: rgba(29, 33, 37, 0.92);
-
-    --green: #4bce97;
-    --green-soft: #216e4e;
-    --green-line: #4bce97;
-    --red: #f87462;
-    --red-soft: #5d1f1a;
-    --red-line: #f87462;
-    --red-text: #fd9891;
-    --red-border: #f87462;
-    --blue: #579dff;
-    --blue-soft: #1c2b41;
-    --blue-line: #85b8ff;
-    --amber: #fca700;
-    --amber-soft: #5f3811;
-    --amber-line: #fca700;
-    --warn: #fca700;
-    --warn-soft: #5f3811;
-    --warn-line: #fca700;
-    --success: #4bce97;
-    --danger: #f87462;
-  }
+:root[data-color-mode="light"][data-theme~="light:light"] {
+  --ds-surface-sunken: var(--bg-soft);
+  --ds-surface: var(--bg-elevated);
+  --ds-surface-raised: var(--bg-elevated);
+  --ds-surface-overlay: var(--bg-elevated);
+  --ds-background-input: var(--bg);
+  --ds-text: var(--text);
+  --ds-text-subtle: var(--text-muted);
+  --ds-text-subtlest: var(--text-muted);
+  --ds-border: var(--border);
+  --ds-border-input: var(--border-strong);
 }

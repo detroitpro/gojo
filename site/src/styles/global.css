@@ -1,5 +1,68 @@
 @import "@theme/index.css";
 
+/*
+ * Marketing/docs site is dark-only and shares the admin ops UI blue-black ramp.
+ * Shared tokens default to light on :root (admin toggles via data-color-mode);
+ * re-apply the dark map here so the site matches without Astro/HTML changes.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #192128;
+  --surface: #252d36;
+  --bg-elevated: #252d36;
+  --bg-soft: #192128;
+  --bg-hover: #2e3844;
+  --bg-sidebar: #192128;
+  --bg-code: #192128;
+  --bg-table-header: #2e3844;
+  --bg-deep: #192128;
+  --bg-deeper: #141920;
+
+  --border: #a6c5e229;
+  --border-strong: #a6c5e24f;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow: 0px 8px 12px rgba(0, 0, 0, 0.35), 0px 0px 1px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(0, 0, 0, 0.5);
+  --row-hover: #a6c5e214;
+  --inset-highlight: transparent;
+  --band-fill: #2e3844;
+
+  --text: #c7d1db;
+  --text-muted: #9fadbc;
+
+  --accent: #579dff;
+  --accent-dim: #1d7afc;
+  --accent-hover: #85b8ff;
+  --accent-on: #192128;
+  --accent-soft: #1c2b41;
+  --accent-line: #85b8ff;
+  --accent-wash: #1c2b41;
+  --accent-selected: #1c2b41;
+
+  --header-bg: rgba(25, 33, 40, 0.92);
+
+  --green: #4bce97;
+  --green-soft: #164b35;
+  --green-line: #4bce97;
+  --red: #f87462;
+  --red-soft: #42221f;
+  --red-line: #f87462;
+  --red-text: #fd9891;
+  --red-border: #f87462;
+  --blue: #579dff;
+  --blue-soft: #1c2b41;
+  --blue-line: #85b8ff;
+  --amber: #fca700;
+  --amber-soft: #533f04;
+  --amber-line: #fca700;
+  --warn: #fca700;
+  --warn-soft: #533f04;
+  --warn-line: #fca700;
+  --success: #4bce97;
+  --danger: #f87462;
+}
+
 *,
 *::before,
 *::after {
@@ -8,6 +71,7 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 body {
@@ -249,12 +313,17 @@ pre code {
   background:
     linear-gradient(
       105deg,
-      rgba(255, 255, 255, 0.96) 0%,
-      rgba(255, 255, 255, 0.9) 36%,
-      rgba(247, 248, 249, 0.55) 62%,
-      rgba(247, 248, 249, 0.2) 100%
+      color-mix(in srgb, var(--bg) 96%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 90%, transparent) 36%,
+      color-mix(in srgb, var(--bg) 55%, transparent) 62%,
+      color-mix(in srgb, var(--bg) 20%, transparent) 100%
     ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, transparent 40%, rgba(247, 248, 249, 0.7) 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 35%, transparent) 0%,
+      transparent 40%,
+      color-mix(in srgb, var(--bg) 70%, transparent) 100%
+    );
 }
 
 .hero-inner {
@@ -383,7 +452,7 @@ pre code {
   height: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow);
   background: var(--bg-elevated);
 }
 
@@ -607,9 +676,9 @@ pre code {
     background:
       linear-gradient(
         180deg,
-        rgba(6, 10, 18, 0.94) 0%,
-        rgba(6, 10, 18, 0.9) 48%,
-        rgba(6, 10, 18, 0.82) 100%
+        color-mix(in srgb, var(--bg) 94%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 90%, transparent) 48%,
+        color-mix(in srgb, var(--bg) 82%, transparent) 100%
       ),
       repeating-linear-gradient(
         -18deg,

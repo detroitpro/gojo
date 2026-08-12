@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { LogOut, ShieldCheck } from "lucide-react";
 
 import { logout } from "@/contexts/access/contract";
-import { AppButton } from "@/ui/AppButton";
 import { ColorModeMenu } from "@/ui/ColorModeMenu";
 import { LiveStoreBridge } from "@/platform/LiveStoreBridge";
 import { usePlatformEvents } from "@/platform/usePlatformEvents";
@@ -235,25 +234,31 @@ export function AppShell() {
               <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
-        </nav>
 
-        <div className="sidebar-footer">
-          <button
-            className="live-status"
-            type="button"
-            title={`Updates: ${eventStatusLabel}`}
-            onClick={() => reconnect()}
-          >
-            <span className={`live-dot live-dot-${eventStatus}`} />
-            <span className="live-label">{eventStatusLabel}</span>
-          </button>
-          <div className="sidebar-footer-actions">
+          <div className="sidebar-tools" role="group" aria-label="Account">
             <ColorModeMenu />
-            <AppButton size="sm" iconBefore={<LogOut size={14} aria-hidden="true" />} onClick={() => void onLogout()}>
-              Sign out
-            </AppButton>
+            <button
+              type="button"
+              className="nav-link"
+              title="Sign out"
+              onClick={() => void onLogout()}
+            >
+              <LogOut className="nav-icon" size={18} aria-hidden="true" />
+              <span className="nav-label">Sign out</span>
+            </button>
+            <button
+              className="nav-link live-status-nav"
+              type="button"
+              title={`Updates: ${eventStatusLabel}`}
+              onClick={() => reconnect()}
+            >
+              <span className="nav-icon live-status-icon" aria-hidden="true">
+                <span className={`live-dot live-dot-${eventStatus}`} />
+              </span>
+              <span className="nav-label live-label">{eventStatusLabel}</span>
+            </button>
           </div>
-        </div>
+        </nav>
       </aside>
 
       <main className="main">

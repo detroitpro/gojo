@@ -1,4 +1,14 @@
 import {
+  Circle,
+  CircleCheck,
+  CircleX,
+  Clock,
+  LoaderCircle,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
+
+import {
   integrationStatusBadgeClass,
   verificationBadgeClass,
 } from "./impact-format";
@@ -32,6 +42,24 @@ function toneClass(tone: BadgeTone): string {
 
 export function badgeToneClass(tone: BadgeTone): string {
   return toneClass(tone);
+}
+
+/** Lucide glyph for a status tone — color comes from `.badge--tone-*` CSS. */
+export function toneIcon(tone: BadgeTone): LucideIcon {
+  switch (tone) {
+    case "success":
+      return CircleCheck;
+    case "failed":
+      return CircleX;
+    case "warn":
+      return TriangleAlert;
+    case "running":
+      return LoaderCircle;
+    case "queued":
+      return Clock;
+    default:
+      return Circle;
+  }
 }
 
 /** Map legacy badge-* class strings to BadgeTone. */

@@ -29,6 +29,9 @@ day** — one theme, small diff, clear value.
 3. **Wrappers first** — `AppButton`, `AppSelect`, `StatusBadge` / domain badges,
    `ConfirmDialog`, `ModalDialog`, `ActionMenu`, `PageHeader`, table/pager chrome.
    Do not import raw `@atlaskit/*` in views when a wrapper already covers the case.
+   **Sanctioned deviation:** `StatusBadge` is a token-driven neutral pill with a
+   tone-colored lucide icon — **not** `@atlaskit/lozenge` (legacy lozenge fills are
+   theme-blind hardcoded hex). Do not “fix” badges by wrapping Lozenge again.
 
 ## Scope
 
@@ -55,7 +58,8 @@ day** — one theme, small diff, clear value.
 
 ## What to hunt (priority order)
 
-1. Views bypassing wrappers (raw Atlaskit Button/Select/Lozenge, ad-hoc status pills).
+1. Views bypassing wrappers (raw Atlaskit Button/Select, ad-hoc status pills —
+   status must go through `StatusBadge`, not Lozenge).
 2. Missing or thin wrappers that would remove repeated ADS wiring.
 3. Token / spacing / typography drift vs ADS + `theme/tokens.css`.
 4. Duplicate classes or copy-pasted chrome that should live in `ui/` or kernel helpers.

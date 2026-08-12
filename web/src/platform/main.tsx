@@ -13,9 +13,14 @@ import "@/ui/styles.css";
 /**
  * Atlaskit components call FeatureGates for internal experiments (e.g.
  * platform_dst_scrollbar_harmonisation). Outside Atlassian we have no Statsig
- * client — resolve every boolean flag to false so checks never throw.
+ * client — default boolean flags to false so unknown gates never throw.
+ *
+ * Opt in to the Popup trigger-ref fix: without it, @atlaskit/popup only attaches
+ * the Popper reference while open, so menus first paint at (0,0) under React 18.
+ * @see @atlaskit/popup use-get-memoized-merged-trigger-ref.js
  */
-setBooleanFeatureFlagResolver(() => false);
+const ATLASKIT_ENABLED_FLAGS = new Set(["platform-design-system-popup-ref"]);
+setBooleanFeatureFlagResolver((flag) => ATLASKIT_ENABLED_FLAGS.has(flag));
 
 const initialColorMode = readStoredColorMode();
 
