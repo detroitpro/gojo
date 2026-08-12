@@ -57,6 +57,7 @@ class MemoryWorkStore implements WorkStore {
   details = new Map<string, WorkItemDetail>();
   createdSources: CreateProjectSourceCommand[] = [];
   refreshCalls: Array<{ sourceId: string; projectId: string }> = [];
+  refreshError: Error | string | null = null;
   recheckCalls: string[] = [];
   recheckError: Error | null = null;
   diffById = new Map<string, string>();
@@ -108,6 +109,9 @@ class MemoryWorkStore implements WorkStore {
 
   async refreshSource(sourceId: string, projectId: string): Promise<unknown> {
     this.refreshCalls.push({ sourceId, projectId });
+    if (this.refreshError) {
+      throw this.refreshError;
+    }
     return { synced: true };
   }
 
@@ -286,6 +290,44 @@ describe("contexts/work use cases", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.status).toBe(404);
+  });
+
+  test("refreshProjectSourceCommand syncs source and maps refresh failures", async () => {
+    const store = new MemoryWorkStore();
+    store.projects.add("proj-1");
+
+    const ok = await refreshProjectSourceCommand(
+      { store },
+      { projectId: "proj-1", sourceId: "src-1" },
+    );
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.value.sync).toEqual({ synced: true });
+    }
+    expect(store.refreshCalls).toEqual([{ sourceId: "src-1", projectId: "proj-1" }]);
+
+    store.refreshError = new Error("Project source not found: src-missing");
+    const missing = await refreshProjectSourceCommand(
+      { store },
+      { projectId: "proj-1", sourceId: "src-missing" },
+    );
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.error.code).toBe("not_found");
+      expect(missing.error.status).toBe(404);
+    }
+
+    store.refreshError = new Error("adapter rate limited");
+    const validation = await refreshProjectSourceCommand(
+      { store },
+      { projectId: "proj-1", sourceId: "src-1" },
+    );
+    expect(validation.ok).toBe(false);
+    if (!validation.ok) {
+      expect(validation.error.code).toBe("validation_error");
+      expect(validation.error.status).toBe(400);
+      expect(validation.error.message).toBe("adapter rate limited");
+    }
   });
 
   test("getWorkItemQuery returns 404 when missing", async () => {
