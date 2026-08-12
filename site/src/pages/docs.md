@@ -36,7 +36,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo projects](/images/ui-projects.png)
 
-**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts. Open a project for sub-pages: **Overview** (activity briefing and needs-attention queue), **History**, **Impact**, **Health**, and **Configuration** (synced manifest). Sync, enable/disable, and remove from the project shell header.
+**Projects** — register Git repos via **Add project** (header → dialog), see **Open PRs** counts. Open a project for sub-pages: **Overview** (needs-attention queue, in-progress work, and a day-grouped **Recent changes** feed with copyable digest), **History**, **Impact**, **Health**, and **Configuration** (synced manifest). Sync, enable/disable, and remove from the project shell header.
 
 ![gojo agents](/images/ui-agents.png)
 
@@ -56,7 +56,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo integrations](/images/ui-integrations.png)
 
-**Integrations** — Open / Merged / Commits tabs over `run_integrations`, with project filters and links into run detail. Dashboard Merged / Commits / Merge rate tiles land here.
+**Integrations** — All / Open / Merged / Commits tabs over `run_integrations` (default **All** = open+merged; each tab shows a live count), with project and date filters and links into run detail. Dashboard Merged / Commits / Merge rate tiles land here.
 
 **Approvals** — mobile-friendly evidence cards for checks, independent reviewer verdict, repair count, source or mirrored diff, and platform-owned Approve / Hold / Reject controls.
 

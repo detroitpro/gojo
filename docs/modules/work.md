@@ -101,8 +101,9 @@ Kind vocabulary is unchanged: `run` still denotes a gojo agent execution row; th
 - `gojo project recheck-work <id> <workItemId>`
 - `gojo project resolve-work <id> <workItemId> [--by <actor>] [--note <text>]`
 
-The project Overview briefing consumes these contracts for recent completed
-work (history + time range) and conditional Needs attention / In progress lists.
+The project Overview briefing consumes these contracts for **Recent changes**
+(day-grouped completed work from `history=1`, copyable digest) and conditional
+Needs attention / In progress lists.
 Repository and manifest details live on the Configuration tab. Needs attention
 rows expose reason-specific actions (review run, retry source, recheck item,
 mark resolved). The Vue UI renders work kind, result, execution, delivery,
