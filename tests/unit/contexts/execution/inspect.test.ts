@@ -6,7 +6,8 @@ import { join } from "node:path";
 import type { AppContext } from "@/platform/app-context";
 import { resolvePaths } from "@/platform/config/paths";
 import { commitAll, configLocal, getHead, initRepo } from "@/infrastructure/git/git";
-import { getRunArtifacts, getRunDiff, resolveRunHandoffSummary } from "@/contexts/execution/application/inspect";
+import { getRunArtifacts, resolveRunHandoffSummary } from "@/contexts/execution/application/inspect";
+import { getRunDiff } from "@/contexts/execution/infrastructure/run-workspace-diff";
 import { createRepositories } from "@/platform/create-repositories";
 import {
   Database

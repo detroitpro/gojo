@@ -1,5 +1,6 @@
 import type { AppContext } from "@/platform/app-context";
-import { getRunArtifacts, getRunDiff } from "@/contexts/execution/application/inspect";
+import { getRunArtifacts } from "@/contexts/execution/application/inspect";
+import { getRunDiff } from "@/contexts/execution/infrastructure/run-workspace-diff";
 import { listRunsPage } from "@/contexts/execution/infrastructure/run-paged-lists";
 
 import type {

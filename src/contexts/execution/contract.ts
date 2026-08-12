@@ -73,12 +73,14 @@ export {
 } from "./infrastructure/events";
 export {
   getRunArtifacts,
-  getRunDiff,
   resolveRunHandoffSummary,
   type RunArtifactsResult,
-  type RunDiffResult,
   type RunHandoffSummary,
 } from "./application/inspect";
+export {
+  getRunDiff,
+  type RunDiffResult,
+} from "./infrastructure/run-workspace-diff";
 
 export {
   replayRunEvents,
