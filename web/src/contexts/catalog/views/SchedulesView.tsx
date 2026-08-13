@@ -14,6 +14,7 @@ import {
 import { listSchedulesUpcoming } from "@/contexts/scheduling/contract";
 import { AppButton } from "@/ui/AppButton";
 import { PageHeader } from "@/ui/PageHeader";
+import { SegmentedControl } from "@/ui/SegmentedControl";
 import { EnabledBadge } from "@/ui/status/EnabledBadge";
 import { SchedulesTimelineChart } from "@/ui/SchedulesTimelineChart";
 import { SortableTh } from "@/ui/SortableTh";
@@ -69,7 +70,7 @@ export function SchedulesView() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectFilter, setProjectFilter] = useState(searchParams.get("projectId") ?? "");
-  const [agentFilter, setAgentFilter] = useState(searchParams.get("agentId") ?? "");
+  const [agentFilter] = useState(searchParams.get("agentId") ?? "");
   const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>(initialEnabled);
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -205,16 +206,12 @@ export function SchedulesView() {
                 isSearchable={false}
               />
             </div>
-            <div style={{ minWidth: 140 }}>
-              <Select
-                inputId="sched-chart-enabled"
-                aria-label="Enabled"
-                value={ENABLED_OPTIONS.find((o) => o.value === enabledFilter)}
-                options={ENABLED_OPTIONS}
-                onChange={(opt) => opt && setEnabledFilter(opt.value as EnabledFilter)}
-                isSearchable={false}
-              />
-            </div>
+            <SegmentedControl
+              ariaLabel="Schedule enabled status"
+              items={ENABLED_OPTIONS}
+              value={enabledFilter}
+              onChange={setEnabledFilter}
+            />
             <Textfield
               id="sched-chart-search"
               type="search"
@@ -264,16 +261,12 @@ export function SchedulesView() {
             isSearchable={false}
           />
         </div>
-        <div style={{ minWidth: 140 }}>
-          <Select
-            inputId="sched-table-enabled"
-            aria-label="Enabled"
-            value={ENABLED_OPTIONS.find((o) => o.value === enabledFilter)}
-            options={ENABLED_OPTIONS}
-            onChange={(opt) => opt && setEnabledFilter(opt.value as EnabledFilter)}
-            isSearchable={false}
-          />
-        </div>
+        <SegmentedControl
+          ariaLabel="Schedule enabled status"
+          items={ENABLED_OPTIONS}
+          value={enabledFilter}
+          onChange={setEnabledFilter}
+        />
         <Textfield
           id="sched-table-search"
           type="search"
@@ -415,9 +408,6 @@ export function SchedulesView() {
         </>
       )}
 
-      {/* silence unused */}
-      <span style={{ display: "none" }}>{agentFilter}</span>
-      <button style={{ display: "none" }} onClick={() => setAgentFilter("")} />
     </div>
   );
 }
