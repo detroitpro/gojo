@@ -267,6 +267,48 @@ describe("contexts/delivery approval use cases", () => {
     }
   });
 
+  test("submitControlIntentCommand maps applied vs duplicate intent status", async () => {
+    const store = new MemoryApprovalStore();
+    const payload = {
+      projectId: "proj-1",
+      kind: "approve" as const,
+      targetType: "run",
+      targetId: "run-1",
+      actor: "alice",
+      surface: "api" as const,
+    };
+
+    const applied = await submitControlIntentCommand({ store }, payload);
+    expect(applied.ok).toBe(true);
+    if (applied.ok) {
+      expect(applied.value.successStatus).toBe(201);
+      expect(applied.value.intent.state).toBe("applied");
+    }
+
+    store.submitIntentImpl = async (input) => ({
+      id: "intent-dup",
+      projectId: input.projectId,
+      kind: input.kind,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      actor: input.actor,
+      surface: input.surface,
+      surfaceRef: input.surfaceRef ?? null,
+      note: input.note ?? null,
+      state: "duplicate",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      error: null,
+    } as unknown as ControlIntent);
+
+    const duplicate = await submitControlIntentCommand({ store }, payload);
+    expect(duplicate.ok).toBe(true);
+    if (duplicate.ok) {
+      expect(duplicate.value.successStatus).toBe(409);
+      expect(duplicate.value.intent.state).toBe("duplicate");
+    }
+  });
+
   test("listIntegrationsQuery rejects unknown status", async () => {
     const store = new MemoryApprovalStore();
     const result = await listIntegrationsQuery(
