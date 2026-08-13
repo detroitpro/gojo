@@ -69,7 +69,7 @@ From a checkout without installing, you can still use `bun run gojo …`.
 
 ### Add a project
 
-In the UI: **Projects → Browse… → Add project**. Or from the CLI:
+In the UI: **Projects → Add project → Browse** (pick a checkout, then confirm). Or from the CLI:
 
 ```bash
 gojo project add demo /path/to/repo --branch main
