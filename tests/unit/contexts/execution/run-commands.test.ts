@@ -2,7 +2,11 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { approveRunCommand, rejectRunCommand } from "@/contexts/execution/application/approve-run";
 import { cancelRunCommand } from "@/contexts/execution/application/cancel-run";
-import { getRunDiffQuery, getRunQuery } from "@/contexts/execution/application/get-run";
+import {
+  getRunArtifactsQuery,
+  getRunDiffQuery,
+  getRunQuery,
+} from "@/contexts/execution/application/get-run";
 import {
   detailQuery,
   updateRunProgressCommand,
@@ -409,6 +413,28 @@ describe("execution run commands", () => {
     expect(diff.ok).toBe(false);
     if (!diff.ok) {
       expect(diff.error).toBe("workspace missing");
+    }
+  });
+
+  test("getRunArtifactsQuery returns artifacts from read model", async () => {
+    const artifacts = {
+      path: "/tmp/run_1/.gojo",
+      exists: true,
+      handoff: { status: "completed" },
+      validation: { passed: true },
+      failure: null,
+    };
+    const reads = stubReads({
+      artifacts: (runId) =>
+        runId === "run_1"
+          ? artifacts
+          : { path: "", exists: false, handoff: null, validation: null, failure: null },
+    });
+
+    const found = await getRunArtifactsQuery({ reads }, { runId: "run_1" });
+    expect(found.ok).toBe(true);
+    if (found.ok) {
+      expect(found.value).toEqual(artifacts);
     }
   });
 });

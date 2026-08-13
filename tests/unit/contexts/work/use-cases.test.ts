@@ -127,7 +127,12 @@ class MemoryWorkStore implements WorkStore {
   async recheckWorkItem(id: string): Promise<WorkRecheckResult> {
     this.recheckCalls.push(id);
     if (this.recheckError) throw this.recheckError;
-    return { status: "recheck_scheduled" } as unknown as WorkRecheckResult;
+    const detail = this.details.get(id);
+    return {
+      status: "active",
+      work: detail?.work ?? ({ id } as WorkItem),
+      detail: "recheck scheduled",
+    };
   }
 
   resolveWorkItem(id: string, input: WorkResolveInput): WorkItem {
@@ -399,6 +404,70 @@ describe("contexts/work use cases", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("not_found");
       expect(result.error.status).toBe(404);
+    }
+  });
+
+  test("recheckWorkItemCommand schedules recheck and maps store failures", async () => {
+    const store = new MemoryWorkStore();
+    store.details.set("work-1", {
+      work: { id: "work-1", projectId: "proj-1" } as WorkItem,
+      links: [],
+      events: [],
+      runContext: null,
+    });
+
+    const ok = await recheckWorkItemCommand({ store }, { id: "work-1" });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.value.result.status).toBe("active");
+      expect(ok.value.result.detail).toBe("recheck scheduled");
+    }
+    expect(store.recheckCalls).toEqual(["work-1"]);
+
+    store.recheckError = new Error("adapter unavailable");
+    const failed = await recheckWorkItemCommand({ store }, { id: "work-1" });
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error.code).toBe("validation_error");
+      expect(failed.error.status).toBe(400);
+      expect(failed.error.message).toBe("adapter unavailable");
+    }
+  });
+
+  test("resolveWorkItemCommand resolves work and maps store failures", async () => {
+    const store = new MemoryWorkStore();
+    store.details.set("work-1", {
+      work: { id: "work-1", projectId: "proj-1" } as WorkItem,
+      links: [],
+      events: [],
+      runContext: null,
+    });
+
+    const ok = await resolveWorkItemCommand(
+      { store },
+      { id: "work-1", resolvedBy: "alice", note: "fixed upstream" },
+    );
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.value.work.resolvedAt).toBe("2026-01-01T00:00:00.000Z");
+    }
+    expect(store.resolveCalls).toEqual([
+      {
+        id: "work-1",
+        input: { resolvedBy: "alice", note: "fixed upstream" },
+      },
+    ]);
+
+    store.resolveCalls = [];
+    store.resolveWorkItem = () => {
+      throw new Error("already resolved");
+    };
+    const failed = await resolveWorkItemCommand({ store }, { id: "work-1" });
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error.code).toBe("validation_error");
+      expect(failed.error.status).toBe(400);
+      expect(failed.error.message).toBe("already resolved");
     }
   });
 });
