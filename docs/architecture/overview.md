@@ -30,7 +30,7 @@ web/src/
   contexts/       8 bounded contexts — api, types, store, views, components
   platform/       app host: router, LiveStoreBridge, useBindStoreRefresh
   infrastructure/ HTTP transport, WebSocket client, platform-events
-  ui/             Atlaskit wrappers (AppButton, AppShell, StatusBadge / lozenges)
+  ui/             Atlaskit wrappers (AppButton, AppShell, StatusBadge)
 ```
 
 Live updates: `LiveStoreBridge` maps each `PlatformEventTopic` (non-overlapping) to
@@ -56,8 +56,9 @@ Lozenge) so only icons carry semantic color.
 | `contexts/` | Eight bounded contexts — product capabilities (see table below) |
 | `platform/` | Host: registry, HTTP/CLI dispatch, composition root, `app-context`, config, events, telemetry |
 | `transports/` | `http/` (router, WS hub/RPC, server, web static) and `cli/` |
-| `infrastructure/` | Shared adapters: `persistence/` (SQLite), `git/`, `process/`, `filesystem/`, `agent-adapters/`, `merge-queue` |
-| `packages/contracts/` | Shared wire contracts (Zod + types); import via `@shared/*` or `@gojo/contracts` |
+| `infrastructure/` | Shared adapters: `persistence/` (SQLite), `git/`, `process/`, `filesystem/`, `agent-adapters/`, `merge-queue.ts` |
+
+**Shared wire contracts** live at repo-root `packages/contracts/` (`@gojo/contracts`), not under `src/`.
 
 ### Bounded contexts
 
@@ -79,7 +80,7 @@ Cross-context imports go through `contexts/<name>/contract.ts` only. Layout is e
 Outside-in characterization suites under [`tests/contract/`](../../tests/contract/)
 pin the HTTP API, CLI, and shell commit-only pipeline so structural refactors cannot
 drift the product surface unnoticed. Admin view mount smoke lives in
-`web/tests/views-smoke.vitest.ts`. See `tests/contract/README.md`.
+`web/tests/views-smoke.vitest.tsx`. See `tests/contract/README.md`.
 
 ## Related
 

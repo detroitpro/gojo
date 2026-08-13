@@ -13,7 +13,7 @@ This page is a consumer-facing map of the knobs that matter day to day. Defaults
 | **Adapter** | Installed CLI (shell / cursor / claude-code) — surfaced under **Adapters** (`gojo adapter detect`) | How gojo invokes an underlying coding-agent process |
 | **Profile** | `profiles:` in `gojo.yaml` | A named `adapter` + timeout + model + permissions |
 | **Agent** | `agents:` in `gojo.yaml` | A work unit: prompt, validation, integration, failure policy |
-| **Schedule** | `schedules:` in `gojo.yaml` | When an agent runs (cron + timezone + overlap policy) |
+| **Schedule** | `schedules:` in `gojo.yaml` | When an agent runs (cron + timezone; overlap policy is per-schedule in SQLite, not manifest) |
 
 ## Instance
 

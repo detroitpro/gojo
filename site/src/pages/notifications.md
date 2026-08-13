@@ -139,7 +139,7 @@ characters and gojo truncates past that.
 
 ## Auto-disable notifications
 
-In the agent/schedule failure policy you can set `disableAfterConsecutiveFailedRuns`. When that threshold is hit:
+In the agent `failurePolicy` (`agents.<name>.failurePolicy` in `gojo.yaml`; copied onto the schedule on sync) you can set `disableAfterConsecutiveFailedRuns`. When that threshold is hit:
 
 1. The schedule is disabled.
 2. Channels listed under `notifications.onDisabled` receive a notification.
