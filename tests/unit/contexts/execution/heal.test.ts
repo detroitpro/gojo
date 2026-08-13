@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decideHealEnqueue } from '@/contexts/execution/domain/heal';
+import { decideHealEnqueueFromRepos } from '@/contexts/execution/application/heal-decision';
 import { createRepositories } from "@/platform/create-repositories";
 import {
   Database
 } from '@/infrastructure/persistence';
 import { RunState } from '@shared/run-states';
 
-describe('decideHealEnqueue', () => {
+describe('decideHealEnqueueFromRepos', () => {
   test('enqueues healer after failed run when configured', () => {
     const db = Database.open(':memory:');
     db.migrate();
@@ -42,7 +42,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -85,7 +85,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: healer,
@@ -129,7 +129,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -166,7 +166,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const missingHealer = decideHealEnqueue({
+    const missingHealer = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -181,7 +181,7 @@ describe('decideHealEnqueue', () => {
       prompt: 'heal',
     });
 
-    const belowThreshold = decideHealEnqueue({
+    const belowThreshold = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -223,7 +223,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Invalid run transition: Scheduled -> Preparing',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -266,7 +266,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Invalid run transition: Scheduled -> Preparing',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -320,7 +320,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,
@@ -363,7 +363,7 @@ describe('decideHealEnqueue', () => {
         errorMessage: 'Agent exited with code 1',
       }) ?? created;
 
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos,
       failedRun: run,
       failedAgent: failing,

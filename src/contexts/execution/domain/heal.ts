@@ -1,10 +1,27 @@
-import type { Repositories } from '@/infrastructure/persistence/repositories';
-import type { Agent, Run } from '@/infrastructure/persistence/types';
-
 import type { ParsedFailurePolicy } from './failure-policy';
 
 const HEAL_WINDOW_MS = 60 * 60 * 1000;
 const HEAL_MAX_PER_PROJECT = 3;
+
+export interface HealRunSnapshot {
+  trigger: string;
+  startedAt: string | null;
+  errorMessage: string | null;
+}
+
+export interface HealAgentSnapshot {
+  id: string;
+  projectId: string;
+  name: string;
+}
+
+/** Pre-fetched facts the heal policy needs; loaded outside domain. */
+export interface HealEnqueueFacts {
+  projectEnabled: boolean;
+  healerAgentId: string | null;
+  consecutiveFailures: number;
+  healRunsInWindow: number;
+}
 
 export interface HealEnqueueDecision {
   shouldEnqueue: boolean;
@@ -19,12 +36,12 @@ export interface HealEnqueueDecision {
  * cap heal runs per project per hour.
  */
 export function decideHealEnqueue(opts: {
-  repos: Repositories;
-  failedRun: Run;
-  failedAgent: Agent;
+  failedRun: HealRunSnapshot;
+  failedAgent: HealAgentSnapshot;
   policy: ParsedFailurePolicy;
+  facts: HealEnqueueFacts;
 }): HealEnqueueDecision {
-  const { repos, failedRun, failedAgent, policy } = opts;
+  const { failedRun, failedAgent, policy, facts } = opts;
   const selfHeal = policy.selfHeal;
   if (!selfHeal) {
     return { shouldEnqueue: false, reason: 'no selfHeal configured' };
@@ -46,29 +63,23 @@ export function decideHealEnqueue(opts: {
     return { shouldEnqueue: false, reason: 'healer agent excluded from healing' };
   }
 
-  const project = repos.projects.findById(failedAgent.projectId);
-  if (!project?.enabled) {
+  if (!facts.projectEnabled) {
     return { shouldEnqueue: false, reason: 'project is disabled' };
   }
 
-  const healer = repos.agents.findEnabledByProjectAndName(failedAgent.projectId, selfHeal.agent);
-
-  if (!healer) {
+  if (!facts.healerAgentId) {
     return { shouldEnqueue: false, reason: `healer agent not found: ${selfHeal.agent}` };
   }
 
   const threshold = selfHeal.afterConsecutiveFailedRuns ?? 1;
-  const recentFailed = repos.runs.countConsecutiveFailuresForAgent(failedAgent.id, threshold);
-  if (recentFailed < threshold) {
+  if (facts.consecutiveFailures < threshold) {
     return {
       shouldEnqueue: false,
-      reason: `consecutive failures ${recentFailed} < threshold ${threshold}`,
+      reason: `consecutive failures ${facts.consecutiveFailures} < threshold ${threshold}`,
     };
   }
 
-  const since = new Date(Date.now() - HEAL_WINDOW_MS).toISOString();
-  const healCount = repos.runs.countByProjectTriggerSince(failedAgent.projectId, 'heal', since);
-  if (healCount >= HEAL_MAX_PER_PROJECT) {
+  if (facts.healRunsInWindow >= HEAL_MAX_PER_PROJECT) {
     return {
       shouldEnqueue: false,
       reason: `heal cap reached (${HEAL_MAX_PER_PROJECT}/${HEAL_WINDOW_MS}ms)`,
@@ -77,7 +88,9 @@ export function decideHealEnqueue(opts: {
 
   return {
     shouldEnqueue: true,
-    healerAgentId: healer.id,
+    healerAgentId: facts.healerAgentId,
     reason: 'enqueue healer',
   };
 }
+
+export { HEAL_MAX_PER_PROJECT, HEAL_WINDOW_MS };

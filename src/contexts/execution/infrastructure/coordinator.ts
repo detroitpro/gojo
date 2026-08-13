@@ -77,7 +77,7 @@ import {
   sleep,
   type ParsedFailurePolicy,
 } from '@/contexts/execution/domain/failure-policy';
-import { decideHealEnqueue } from '@/contexts/execution/domain/heal';
+import { decideHealEnqueueFromRepos } from '@/contexts/execution/application/heal-decision';
 import { buildRunImpactRecords } from '@/contexts/execution/domain/impact';
 import {
   formatMergeScopePrompt,
@@ -1421,7 +1421,7 @@ export class RunCoordinator {
     failedAgent: Agent,
     policy: ParsedFailurePolicy,
   ): void {
-    const decision = decideHealEnqueue({
+    const decision = decideHealEnqueueFromRepos({
       repos: this.repos,
       failedRun,
       failedAgent,
