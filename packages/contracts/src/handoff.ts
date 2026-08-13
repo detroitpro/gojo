@@ -79,7 +79,7 @@ export const HandoffSubjectActionsSchema = z.object({
   addLabels: z.array(z.string().min(1)).optional(),
   removeLabels: z.array(z.string().min(1)).optional(),
   comment: z.string().min(1).optional(),
-  verdict: z.enum(['pass', 'changes-requested', 'reject']).optional(),
+  verdict: z.enum(['pass', 'changes-requested', 'reject', 'hold']).optional(),
 });
 
 export type HandoffSubjectActions = z.infer<typeof HandoffSubjectActionsSchema>;

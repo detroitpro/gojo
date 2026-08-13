@@ -175,7 +175,7 @@ Report-only and issue-driven agents must not call forge APIs with write tokens. 
 }
 ```
 
-Review agents return a single `verdict`: `pass`, `changes-requested`, or `reject` (optionally with a `comment`). Triage agents use labels + comments; implementation agents usually omit `subjectActions` and rely on `pull-request` integration. v2 `impact.items` and v3 `subjectActions` can coexist. The platform drops invalid optional `impact` so a valid review verdict still applies. Full workflow: [Issue-driven agents](/issue-driven-agents). Golden review example in the gojo dogfood repo: `.gojo/examples/handoff.review.v3.json`.
+Review agents return a single `verdict`: `pass`, `changes-requested`, `reject`, or `hold` (optionally with a `comment`). `hold` parks the PR in Approvals for a human. Triage agents use labels + comments; implementation agents usually omit `subjectActions` and rely on `pull-request` integration. v2 `impact.items` and v3 `subjectActions` can coexist. The platform drops invalid optional `impact` so a valid review verdict still applies. Full workflow: [Issue-driven agents](/issue-driven-agents). Golden review example in the gojo dogfood repo: `.gojo/examples/handoff.review.v3.json`.
 
 ### Minimal Hard rules sketch
 

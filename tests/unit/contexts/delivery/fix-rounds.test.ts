@@ -5,6 +5,8 @@ import {
   fixRoundEscalateReason,
   formatChecksSummary,
   isRetryableFixRoundStall,
+  isRetryableMissingReviewer,
+  MISSING_REVIEWER_ERROR,
   resolveApprovalForIntegration,
   resolveFixRoundSubject,
 } from '@/contexts/delivery/domain/fix-rounds';
@@ -210,6 +212,54 @@ describe('isRetryableFixRoundStall', () => {
         reviewVerdict: 'pass',
         lastError: 'Fix-round subject is unavailable',
         evidence: { resumeBranch: 'gojo/x', fixRounds: 2 },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isRetryableMissingReviewer', () => {
+  test('matches escalated green awaiting-human once', () => {
+    expect(
+      isRetryableMissingReviewer({
+        state: 'awaiting-human',
+        checksState: 'success',
+        lastError: MISSING_REVIEWER_ERROR,
+        evidence: { implementingAgentName: 'maintain-docs' },
+      }),
+    ).toBe(true);
+  });
+
+  test('skips when already retried, checks are not green, or wrong error', () => {
+    expect(
+      isRetryableMissingReviewer({
+        state: 'awaiting-human',
+        checksState: 'success',
+        lastError: MISSING_REVIEWER_ERROR,
+        evidence: { missingReviewerRetried: true },
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableMissingReviewer({
+        state: 'awaiting-human',
+        checksState: 'failure',
+        lastError: MISSING_REVIEWER_ERROR,
+        evidence: {},
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableMissingReviewer({
+        state: 'awaiting-human',
+        checksState: 'success',
+        lastError: 'Reviewer held for human review',
+        evidence: {},
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableMissingReviewer({
+        state: 'pending-review',
+        checksState: 'success',
+        lastError: MISSING_REVIEWER_ERROR,
+        evidence: {},
       }),
     ).toBe(false);
   });

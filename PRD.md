@@ -913,7 +913,7 @@ and enforce a bounded open-claim count. An implementation run opens a pull
 request and terminates; no agent or worktree waits for CI.
 
 Source checks are reconciled asynchronously. After checks settle, an independent
-reviewer supplies `pass`, `changes-requested`, or `reject`. Red checks or
+reviewer supplies `pass`, `changes-requested`, `reject`, or `hold`. Red checks or
 requested changes may enqueue a bounded repair run on the existing PR branch.
 The approval row owns loop count, authority, evidence, and escalation. Merge
 requires live green checks, the required reviewer verdict, current-base

@@ -28,6 +28,8 @@ import {
   fixRoundEscalateReason,
   formatChecksSummary,
   isRetryableFixRoundStall,
+  isRetryableMissingReviewer,
+  MISSING_REVIEWER_ERROR,
   resolveApprovalForIntegration,
   resolveFixRoundSubject,
 } from "@/contexts/delivery/domain/fix-rounds";
@@ -504,7 +506,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
           );
         });
       if (!reviewer || !approval.workItemId) {
-        approvals.escalate(approval.id, "No checks-settled reviewer agent is configured");
+        approvals.escalate(approval.id, MISSING_REVIEWER_ERROR);
         return;
       }
       await coordinator.enqueueRun({
@@ -647,6 +649,14 @@ export async function createAppContext(home?: string): Promise<AppContext> {
         await applySubjectActions(subject.workItemId, subjectActions);
       }
       if (trigger.data.on !== "pull-request-checks-settled") return;
+      if (
+        approval.state === "applied" ||
+        approval.state === "rejected" ||
+        approval.state === "failed" ||
+        approval.state === "expired"
+      ) {
+        return;
+      }
       if (!subjectActions?.verdict) {
         approvals.escalate(
           approval.id,
@@ -720,6 +730,78 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     }
   };
 
+  const recoverMissingReviewers = async (): Promise<void> => {
+    const stuck = approvals.list({
+      state: "awaiting-human",
+      limit: 50,
+      offset: 0,
+    });
+    for (const approval of stuck.items) {
+      if (
+        !isRetryableMissingReviewer({
+          state: approval.state,
+          checksState: approval.checksState,
+          lastError: approval.lastError,
+          evidence: approval.evidence,
+        })
+      ) {
+        continue;
+      }
+      const marked = approvals.patchEvidence(approval.id, {
+        missingReviewerRetried: true,
+      });
+      const implementingRun = marked.runId
+        ? repos.runs.findById(marked.runId)
+        : null;
+      const evidenceAgentId =
+        typeof marked.evidence["implementingAgentId"] === "string"
+          ? marked.evidence["implementingAgentId"]
+          : null;
+      const evidenceAgentName =
+        typeof marked.evidence["implementingAgentName"] === "string"
+          ? marked.evidence["implementingAgentName"]
+          : null;
+      const implementingAgent = implementingRun
+        ? repos.agents.findById(implementingRun.agentId)
+        : evidenceAgentId
+          ? repos.agents.findById(evidenceAgentId)
+          : evidenceAgentName
+            ? repos.agents
+                .listByProject(marked.projectId)
+                .find((agent) => agent.name === evidenceAgentName) ?? null
+            : null;
+      if (!implementingAgent || !marked.workItemId) continue;
+      const reviewer = repos.agents.listByProject(marked.projectId).find((agent) => {
+        const parsed = AgentTriggerSchema.safeParse(
+          (() => {
+            try {
+              return JSON.parse(agent.triggerJson) as unknown;
+            } catch {
+              return {};
+            }
+          })(),
+        );
+        return (
+          agent.enabled &&
+          parsed.success &&
+          parsed.data.on === "pull-request-checks-settled" &&
+          parsed.data.fromAgents.includes(implementingAgent.name)
+        );
+      });
+      if (!reviewer) continue;
+      await coordinator.enqueueRun({
+        projectId: marked.projectId,
+        agentId: reviewer.id,
+        trigger: "work",
+        idempotencyKey: `review:${marked.id}:${marked.attempts}`,
+        subjectWorkItemId: marked.workItemId,
+        ...(typeof marked.evidence["resumeBranch"] === "string"
+          ? { resumeBranch: marked.evidence["resumeBranch"] }
+          : {}),
+      });
+    }
+  };
+
   const scheduler = new Scheduler({
     db,
     leaseHolderId,
@@ -727,6 +809,7 @@ export async function createAppContext(home?: string): Promise<AppContext> {
     reconcileIntegrations: async (now) => {
       const summary = await integrationReconciler.reconcile(now);
       await recoverStuckFixRounds();
+      await recoverMissingReviewers();
       return summary;
     },
     onCancelActive: async (scheduleId) => {

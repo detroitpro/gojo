@@ -18,16 +18,22 @@ It separates agent judgment from merge authority:
   from trusted actors.
 
 No coding or reviewer agent receives a forge write token. Reviewer handoff
-schema v3 supplies judgment (`pass`, `changes-requested`, `reject`) and bounded
-label/comment requests; the platform validates and executes those requests.
+schema v3 supplies judgment (`pass`, `changes-requested`, `reject`, `hold`) and
+bounded label/comment requests; the platform validates and executes those
+requests. `hold` parks the approval in `awaiting-human` (green checks, no
+merge); an operator Approve then merges. Approvals left `awaiting-human` because
+no checks-settled reviewer was configured are retried once on the next reconcile
+tick when a matching reviewer now exists (`evidence.missingReviewerRetried`).
 
 ## State flow
 
 An agent-created PR starts `pending-review`. Settled red checks enter a repair
 round or escalate. Settled green checks enqueue the configured independent
 reviewer. A passing verdict either applies immediately under reviewer/auto
-authority or enters `awaiting-human` under manual authority. Merge revalidates
-live checks; failures remain durable with evidence and never silently drop.
+authority or enters `awaiting-human` under manual authority. A `hold` verdict
+always enters `awaiting-human` so an operator can Approve or Reject. Merge
+revalidates live checks; failures remain durable with evidence and never
+silently drop.
 
 Autonomy is **snapshotted** when the PR opens from `integration.approval`.
 Changing the agent manifest later does not rewrite open rows — use

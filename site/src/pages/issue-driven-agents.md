@@ -242,8 +242,8 @@ from commits.
 - Do not edit, push, or merge.
 - Review the full diff, relevant surrounding code, CI evidence, regressions,
   security, and test quality.
-- Return exactly one handoff verdict: `pass`, `changes-requested`, or `reject`.
-- Green CI alone is not enough for `pass`.
+- Return exactly one handoff verdict: `pass`, `changes-requested`, `reject`, or `hold`.
+- Green CI alone is not enough for `pass`. `hold` waits for an operator in Approvals.
 
 The Gojo repository dogfoods these prompts in
 [`.gojo/agents/`](https://github.com/detroitpro/gojo/tree/main/.gojo/agents).

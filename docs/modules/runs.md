@@ -102,7 +102,8 @@ approval autonomy `auto`, and skips the checks-settled reviewer. Otherwise,
 once checks settle, a configured `pull-request-checks-settled` reviewer runs
 against the PR branch. Red checks or
 `changes-requested` can resume the implementing agent on that exact branch up to
-`integration.fixRounds`.
+`integration.fixRounds`. A reviewer `hold` verdict waits for an operator in
+Approvals (does not merge and does not start a repair round).
 
 Repair rounds are **PR-native**: the fix run checks out `resumeBranch` (mode
 becomes `update-pull-request` — push only, no second PR) and takes as subject

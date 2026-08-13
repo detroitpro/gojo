@@ -163,15 +163,20 @@ export class ApprovalService {
     const updated = this.approvals.update(approval.id, {
       reviewVerdict: verdict,
       evidence: { ...approval.evidence, review: evidence },
-      ...(verdict !== 'pass'
+      ...(verdict === 'hold'
         ? {
-            state: 'failed' as const,
-            lastError:
-              verdict === 'changes-requested'
-                ? 'Reviewer requested changes'
-                : 'Reviewer rejected the change',
+            state: 'awaiting-human' as const,
+            lastError: 'Reviewer held for human review',
           }
-        : {}),
+        : verdict !== 'pass'
+          ? {
+              state: 'failed' as const,
+              lastError:
+                verdict === 'changes-requested'
+                  ? 'Reviewer requested changes'
+                  : 'Reviewer rejected the change',
+            }
+          : {}),
     })!;
     const advanced = await this.advance(updated);
     this.onChange?.(advanced);
@@ -221,7 +226,16 @@ export class ApprovalService {
         error: `Unsupported approval intent: ${input.kind}`,
       });
     }
-    if (approval.checksState !== 'success' || approval.reviewVerdict !== 'pass') {
+    if (approval.checksState !== 'success') {
+      return this.intents.create({
+        ...input,
+        state: 'rejected',
+        error: 'Approval requires green checks and a passing review',
+      });
+    }
+    const operatorMayApprove =
+      approval.reviewVerdict === 'pass' || approval.state === 'awaiting-human';
+    if (!operatorMayApprove) {
       return this.intents.create({
         ...input,
         state: 'rejected',
@@ -260,6 +274,13 @@ export class ApprovalService {
 
   private readyToAdvance(approval: Approval): boolean {
     if (approval.checksState !== 'success') {
+      return false;
+    }
+    // Operator already authorized merge (hold / escalation / explicit approve).
+    if (approval.state === 'approved') {
+      return true;
+    }
+    if (approval.reviewVerdict === 'hold') {
       return false;
     }
     // Native / policy auto-merge: green checks are enough (no reviewer).

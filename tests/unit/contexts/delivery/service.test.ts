@@ -147,6 +147,104 @@ describe('control approval service', () => {
     expect(merges).toHaveLength(1);
   });
 
+  test('hold verdict waits for a human and does not merge', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-hold',
+      autonomy: 'reviewer',
+      checksState: 'pending',
+    });
+
+    await service.recordChecks(approval.id, 'success');
+    await service.recordReview(approval.id, 'hold', { summary: 'impact 8' });
+    expect(merges).toHaveLength(0);
+    expect(service.findById(approval.id)).toMatchObject({
+      state: 'awaiting-human',
+      checksState: 'success',
+      reviewVerdict: 'hold',
+      lastError: 'Reviewer held for human review',
+    });
+  });
+
+  test('operator can approve an awaiting-human hold when checks are green', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-hold-approve',
+      autonomy: 'reviewer',
+      checksState: 'success',
+      reviewVerdict: 'hold',
+      state: 'awaiting-human',
+    });
+
+    const intent = await service.submitIntent({
+      projectId: project.id,
+      kind: 'approve',
+      targetType: 'approval',
+      targetId: approval.id,
+      actor: 'detroitpro',
+      surface: 'ui',
+      surfaceRef: 'hold-approve-1',
+    });
+    expect(intent.state).toBe('applied');
+    expect(merges).toEqual([approval.id]);
+    expect(service.findById(approval.id)?.state).toBe('applied');
+  });
+
+  test('operator can approve escalated awaiting-human without a review verdict', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-escalated',
+      autonomy: 'reviewer',
+      checksState: 'success',
+      state: 'awaiting-human',
+    });
+    service.escalate(approval.id, 'No checks-settled reviewer agent is configured');
+
+    const intent = await service.submitIntent({
+      projectId: project.id,
+      kind: 'approve',
+      targetType: 'approval',
+      targetId: approval.id,
+      actor: 'detroitpro',
+      surface: 'ui',
+      surfaceRef: 'escalate-approve-1',
+    });
+    expect(intent.state).toBe('applied');
+    expect(merges).toEqual([approval.id]);
+  });
+
+  test('operator cannot approve a failed review even with green checks', async () => {
+    const { project, service, merges } = setup({ status: 'merged' });
+    const approval = service.create({
+      projectId: project.id,
+      subjectType: 'pull-request',
+      subjectId: 'pr-failed-review',
+      autonomy: 'reviewer',
+      checksState: 'success',
+      reviewVerdict: 'reject',
+      state: 'failed',
+    });
+
+    const intent = await service.submitIntent({
+      projectId: project.id,
+      kind: 'approve',
+      targetType: 'approval',
+      targetId: approval.id,
+      actor: 'detroitpro',
+      surface: 'ui',
+      surfaceRef: 'failed-approve-1',
+    });
+    expect(intent.state).toBe('rejected');
+    expect(intent.error).toContain('green checks');
+    expect(merges).toHaveLength(0);
+  });
+
   test('never merges failed checks or changes-requested reviews', async () => {
     const { project, service, merges } = setup({ status: 'merged' });
     const approval = service.create({

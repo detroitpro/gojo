@@ -49,6 +49,25 @@ export function fixRoundEscalateReason(input: FixRoundGateInput): string | null 
   return null;
 }
 
+export const MISSING_REVIEWER_ERROR =
+  'No checks-settled reviewer agent is configured';
+
+/**
+ * True when checks settled, no reviewer agent was configured, and a later
+ * sync may have added one. Retries at most once (`evidence.missingReviewerRetried`).
+ */
+export function isRetryableMissingReviewer(input: {
+  state: string;
+  checksState: string | null;
+  lastError: string | null;
+  evidence: Record<string, unknown>;
+}): boolean {
+  if (input.state !== 'awaiting-human') return false;
+  if (input.checksState !== 'success') return false;
+  if (input.evidence['missingReviewerRetried'] === true) return false;
+  return (input.lastError?.trim() ?? '') === MISSING_REVIEWER_ERROR;
+}
+
 const RETRYABLE_FIX_ROUND_STALL_ERRORS = [
   'Fix-round subject is unavailable',
   'Pull request branch is unavailable',

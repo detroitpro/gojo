@@ -36,6 +36,33 @@ describe('shared approvals', () => {
     expect(approval.checksState).toBe('pending');
   });
 
+  test('accepts a hold review verdict', () => {
+    const approval = ApprovalSchema.parse({
+      id: 'approval-hold',
+      projectId: 'project-1',
+      subjectType: 'pull-request',
+      subjectId: 'work-1',
+      runId: 'run-1',
+      workItemId: 'work-1',
+      reason: 'High-impact reviewer hold',
+      autonomy: 'reviewer',
+      state: 'awaiting-human',
+      reviewVerdict: 'hold',
+      checksState: 'success',
+      evidence: {},
+      decidedBy: null,
+      decidedVia: null,
+      note: null,
+      attempts: 0,
+      nextAttemptAt: null,
+      lastError: 'Reviewer held for human review',
+      createdAt: '2026-08-13T00:00:00.000Z',
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    });
+    expect(approval.reviewVerdict).toBe('hold');
+    expect(approval.state).toBe('awaiting-human');
+  });
+
   test('rejects negative repair attempts and invalid approval states', () => {
     expect(
       CreateApprovalSchema.safeParse({

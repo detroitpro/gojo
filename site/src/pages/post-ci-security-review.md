@@ -25,12 +25,13 @@ For the full issue → implement → review product flow, see
    `pull-request-checks-settled` and whose `fromAgents` list includes the
    implementer name.
 4. That security agent reviews the diff and writes a handoff with exactly one
-   `subjectActions.verdict`: `pass`, `changes-requested`, or `reject`.
+   `subjectActions.verdict`: `pass`, `changes-requested`, `reject`, or `hold`.
 5. Platform outcome:
    - **`pass`** (+ green checks) → platform merges.
    - **`changes-requested`** → if the implementer still has `fixRounds` left,
      Gojo re-enqueues that implementer for a repair round; otherwise the PR stays
      blocked.
+   - **`hold`** → wait in Approvals for an operator (no merge, no repair round).
    - **`reject`** → stop; no merge.
 
 `approval: reviewer` means the **reviewer agent’s verdict** authorizes merge —

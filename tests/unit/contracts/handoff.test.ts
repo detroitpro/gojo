@@ -305,6 +305,18 @@ describe('extractHandoffSubjectActions', () => {
     expect(actions?.comment).toBe('Fix tests');
   });
 
+  test('extracts hold verdict', () => {
+    const actions = extractHandoffSubjectActions({
+      subjectActions: {
+        verdict: 'hold',
+        comment: 'Impact 8 — API contract change',
+        addLabels: ['gojo:impact:8'],
+      },
+    });
+    expect(actions?.verdict).toBe('hold');
+    expect(actions?.addLabels).toEqual(['gojo:impact:8']);
+  });
+
   test('returns null for invalid subjectActions', () => {
     expect(
       extractHandoffSubjectActions({

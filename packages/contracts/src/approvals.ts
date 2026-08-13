@@ -18,7 +18,12 @@ export const ApprovalStateSchema = z.enum([
   'failed',
   'expired',
 ]);
-export const ReviewVerdictSchema = z.enum(['pass', 'changes-requested', 'reject']);
+export const ReviewVerdictSchema = z.enum([
+  'pass',
+  'changes-requested',
+  'reject',
+  'hold',
+]);
 export const ChecksStateSchema = z.enum(['pending', 'success', 'failure', 'unknown']);
 
 export const CreateApprovalSchema = z.object({
