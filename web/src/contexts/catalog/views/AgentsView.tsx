@@ -13,6 +13,7 @@ import {
 } from "@/contexts/catalog/contract";
 import { ActionMenu, type ActionMenuItem } from "@/ui/ActionMenu";
 import { PageHeader } from "@/ui/PageHeader";
+import { SegmentedControl } from "@/ui/SegmentedControl";
 import { EnabledBadge } from "@/ui/status/EnabledBadge";
 import { RunHistoryStrip } from "@/ui/RunHistoryStrip";
 import { SortableTh } from "@/ui/SortableTh";
@@ -197,13 +198,12 @@ export function AgentsView() {
           />
         </div>
         <div className="field">
-          <label htmlFor="enabled-filter">Enabled</label>
-          <Select
-            inputId="enabled-filter"
-            value={ENABLED_OPTIONS.find((o) => o.value === enabledFilter) ?? ENABLED_OPTIONS[0]}
-            options={ENABLED_OPTIONS}
-            onChange={(opt) => opt && setEnabledFilter(opt.value as EnabledFilter)}
-            isSearchable={false}
+          <label>Enabled</label>
+          <SegmentedControl
+            ariaLabel="Enabled"
+            items={ENABLED_OPTIONS}
+            value={enabledFilter}
+            onChange={setEnabledFilter}
           />
         </div>
         <div className="field flex-2">
