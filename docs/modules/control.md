@@ -29,6 +29,17 @@ reviewer. A passing verdict either applies immediately under reviewer/auto
 authority or enters `awaiting-human` under manual authority. Merge revalidates
 live checks; failures remain durable with evidence and never silently drop.
 
+## Approval links
+
+When a durable PR approval enters `awaiting-human` and `publicBaseUrl` is set,
+the delivery subscriber mints a 24-hour API token scoped to
+`control:approve:{approvalId}` and emits `approveUrl` on `run.awaiting_approval`.
+The URL targets `GET /api/v1/approvals/{id}/approve-link?token=…`, which renders
+a confirmation page; `POST` submits the token, applies the approval intent, and
+revokes the token. This path is separate from the JSON
+`POST /api/v1/approvals/{id}/approve` route (which accepts the same scope on a
+Bearer token).
+
 Autonomy is **snapshotted** when the PR opens from `integration.approval`.
 Changing the agent manifest later does not rewrite open rows — use
 `gojo approval set-autonomy <id> <manual|reviewer|auto>` (or

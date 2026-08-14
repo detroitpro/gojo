@@ -134,7 +134,7 @@ An **agent** is the unit of work: prompt, profile, validation profile, concurren
 
 ### Agents UI
 
-In the web UI, **Agents** lists synced agents with success rate and last run. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency/environment policy JSON (environment shows file path and variable **names** only), linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting). Runtime Enable/Disable lasts until the next Sync if `agents.<name>.enabled` in YAML disagrees.
+In the web UI, **Agents** lists synced agents with success rate and last run. Filter **All / Enabled / Disabled** (and by project) before opening a row. **Open** an agent for read-only inspect: last-synced prompt, validation/integration/failure/concurrency/environment policy JSON (environment shows file path and variable **names** only), linked schedules, run-history strip, and manifest source paths (`repoPath`, `manifestPath`, `promptFile`). **Run now**, **Enable/Disable**, and links to filtered Runs/Schedules are ops shortcuts — edit `gojo.yaml` and the `promptFile` in the repo, then **Project Sync** to change agent config (`gojo agent inspect <id>` mirrors the API for scripting). Runtime Enable/Disable lasts until the next Sync if `agents.<name>.enabled` in YAML disagrees.
 
 | Field | Role |
 | --- | --- |
@@ -158,6 +158,8 @@ runs snapshot the issue or PR as untrusted context instead of treating its body
 as instructions.
 
 ## Schedules
+
+In the web UI, **Schedules** shows cron schedules with relative next fire and an upcoming timeline. Use the same **All / Enabled / Disabled** filter (plus project and agent filters) to focus on active timers.
 
 | Setting | Role |
 | --- | --- |

@@ -55,9 +55,12 @@ The adapter/agent owns this text. The platform delivers it verbatim and only pre
 test sends add `test: true`.
 
 Approval-needed payloads use `state: "approval-needed"` and include
-`approvalId`. They are emitted for manual PR approvals as well as
-`await-approval` runs; delivery remains asynchronous and cannot alter approval
-or run state.
+`approvalId`, `prUrl`, `reviewerVerdict`, and `checksState`. When
+`publicBaseUrl` and an admin user exist, `approveUrl` points at the HTML
+confirm page (`GET /api/v1/approvals/{id}/approve-link?token=…`) backed by a
+24-hour `control:approve:{approvalId}` token that is revoked after a successful
+POST. They are emitted for manual PR approvals as well as `await-approval`
+runs; delivery remains asynchronous and cannot alter approval or run state.
 
 ## Delivery
 

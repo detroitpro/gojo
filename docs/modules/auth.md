@@ -60,6 +60,28 @@ credential.
 Resolution order in [`src/transports/http/auth.ts`](../../src/transports/http/auth.ts): Bearer token,
 then session cookie.
 
+## Scoped bearer tokens
+
+API tokens with **non-empty** `scopes` are restricted to explicit POST actions
+(`scopedTokenAllows` in `auth.ts`). Unscoped tokens behave like full admin
+credentials for HTTP (still subject to IP allowlist and CSRF rules on cookie
+mutations).
+
+| Scope | Allowed route |
+|-------|----------------|
+| `run:progress:{runId}` | `POST /api/v1/runs/{runId}/progress` |
+| `run:approve:{runId}` | `POST /api/v1/runs/{runId}/approve` |
+| `control:approve:{approvalId}` | `POST /api/v1/approvals/{approvalId}/approve` |
+
+Scoped tokens are rejected at WebSocket upgrade (`isScopedAgentToken`). The HTML
+approve-link flow (`GET|POST /api/v1/approvals/{id}/approve-link`) verifies
+`control:approve:{id}` directly and revokes the token after a successful POST.
+
+Run adapters receive short-lived `run:progress:{runId}` tokens as `GOJO_API_TOKEN`
+(see [runs](./runs.md)). Approval-needed notifications mint 24-hour
+`control:approve:{approvalId}` tokens for single-use operator links (see
+[control](./control.md) and [notifications](./notifications.md)).
+
 ## CLI
 
 ```text
