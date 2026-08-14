@@ -12,6 +12,7 @@ import {
   useOperationsStore,
 } from "@/contexts/operations/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader, PageHeaderActions } from "@/ui/PageHeader";
 import { StatGrid } from "@/ui/StatGrid";
 import { StatTile } from "@/ui/StatTile";
@@ -245,7 +246,7 @@ export function DashboardView() {
         }
       />
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
       {loading ? <div className="empty">Loading ops overview…</div> : null}
 
       {!loading && !error ? (
