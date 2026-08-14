@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
-import { setSchedulingPolicy } from "@/infrastructure/persistence/instance-settings";
+import { writeSchedulingPolicy } from "@/contexts/scheduling/contract";
 import { RunDispatcher } from "@/contexts/execution/application/dispatcher";
 import type { RunCoordinatorPort } from "@/contexts/execution/ports/run-coordinator";
 import { createRepositories } from "@/platform/create-repositories";
@@ -21,7 +21,7 @@ describe("runs/dispatcher", () => {
     db = Database.open(":memory:");
     db.migrate();
     const repos = createRepositories(db);
-    setSchedulingPolicy(db, {
+    writeSchedulingPolicy(db, {
       maxConcurrentRuns: 2,
       maxConcurrentRunsPerProject: 1,
       minStartIntervalMs: 0,

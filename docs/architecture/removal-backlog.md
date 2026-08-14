@@ -25,7 +25,7 @@ finds the same inventory.
 | R7 | Direct `getSchedulingPolicy` in router queue/dashboard | `operations.*` use cases |
 | R9–R11 | Web type mirrors / terminal-state duplicates | `@gojo/contracts/types` |
 | R14 | `src/shared/` shim dir | `packages/contracts` |
-| R15 | Raw `getSchedulingPolicy` in dispatcher / ops dashboard | `readSchedulingPolicy` / `SchedulingPolicyStore` via scheduling contract |
+| R15 | `getSchedulingPolicy` / `setSchedulingPolicy` in `instance-settings` | `SqliteSchedulingPolicyStore` + `readSchedulingPolicy` / `writeSchedulingPolicy` on scheduling contract |
 | R16 | `src/app/instance-settings.ts` re-export barrel | Direct persistence / scheduling port |
 | R17 | Policy re-exports from `src/scheduler/index.ts` | `@/contexts/scheduling/contract` |
 | R18 | Top-level `src/auth/` | `contexts/access/infrastructure/auth/` |

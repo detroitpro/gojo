@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { setSchedulingPolicy } from '@/infrastructure/persistence/instance-settings';
+import { writeSchedulingPolicy } from '@/contexts/scheduling/contract';
 import { resolvePaths } from '@/platform/config/paths';
 import { PlatformChangeFeed } from '@/platform/events/platform-change-feed';
 import { commitAll, configLocal, execGit, initRepo } from '@/infrastructure/git/git';
@@ -431,7 +431,7 @@ describe('integration/run-coordinator', () => {
     db = Database.open(':memory:');
     db.migrate();
     const repos = createRepositories(db);
-    setSchedulingPolicy(db, {
+    writeSchedulingPolicy(db, {
       maxConcurrentRuns: 2,
       maxConcurrentRunsPerProject: 1,
       minStartIntervalMs: 0,
