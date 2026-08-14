@@ -10,6 +10,7 @@ import {
 } from "@/contexts/operations/components/SettingsInstanceSection";
 import { SettingsSchedulingSection } from "@/contexts/scheduling/components/SettingsSchedulingSection";
 import { SettingsTokensSection } from "@/contexts/access/components/SettingsTokensSection";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { StatGrid } from "@/ui/StatGrid";
 import { StatTile } from "@/ui/StatTile";
@@ -57,8 +58,8 @@ export function SettingsView() {
     <div>
       <PageHeader title="Settings" subtitle="Instance configuration" />
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      {message ? <div className="alert alert-info">{message}</div> : null}
+      {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
+      {message ? <AppSectionMessage appearance="info">{message}</AppSectionMessage> : null}
       {loading ? (
         <div className="empty">Loading…</div>
       ) : (

@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import { listIntegrations, useDeliveryStore } from "@/contexts/delivery/contract";
 import { listProjects } from "@/contexts/catalog/contract";
 import { PageHeader } from "@/ui/PageHeader";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { IntegrationStatusBadge } from "@/ui/status/IntegrationStatusBadge";
 import { SortableTh } from "@/ui/SortableTh";
@@ -195,7 +196,9 @@ export function IntegrationsView() {
         subtitle="Recent open and merged PRs from automation runs"
       />
 
-      {table.error ? <div className="alert alert-error">{table.error}</div> : null}
+      {table.error ? (
+        <AppSectionMessage appearance="error">{table.error}</AppSectionMessage>
+      ) : null}
 
       <div className="filter-bar mb-7">
         <SegmentedControl

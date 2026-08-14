@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppTextfield as Textfield } from "@/ui/AppTextfield";
-import SectionMessage from "@atlaskit/section-message";
-import Spinner from "@atlaskit/spinner";
 import { KeyRound as KeyIcon } from "lucide-react";
 
 import { checkSession, login, probeSetupNeeded, setup } from "@/contexts/access/contract";
 import { getHealth } from "@/contexts/operations/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
+import { AppSpinner } from "@/ui/AppSpinner";
 import { ApiError } from "@/infrastructure/api-error";
 
 export function LoginView() {
@@ -77,14 +77,10 @@ export function LoginView() {
 
         {version ? <div className="mono muted text-sm mb-6">v{version}</div> : null}
 
-        {error ? (
-          <SectionMessage appearance="error">
-            <p>{error}</p>
-          </SectionMessage>
-        ) : null}
+        {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
 
         {mode === "loading" ? (
-          <Spinner size="large" />
+          <AppSpinner size="large" />
         ) : (
           <form onSubmit={(e) => void submit(e)}>
             <div className="field">
