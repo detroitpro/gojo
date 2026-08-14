@@ -31,7 +31,10 @@ export type { SetSchedulingPolicyDeps } from "./application/set-scheduling-polic
 export { getSchedulingPolicyQuery } from "./application/get-scheduling-policy";
 export { setSchedulingPolicyCommand } from "./application/set-scheduling-policy";
 
-export { readSchedulingPolicy } from "./infrastructure/read-policy";
+export {
+  readSchedulingPolicy,
+  writeSchedulingPolicy,
+} from "./infrastructure/read-policy";
 
 export {
   recordRunOutcome,
