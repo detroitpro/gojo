@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { resolveWebDistDir } from "./web-dist";
 
-import { UserService } from "@/contexts/access/infrastructure/auth/users";
+import { UserService } from "@/contexts/access/contract";
 import type { AppContext } from "@/platform/app-context";
 import { WS_PATH } from "@shared/ws";
 import {

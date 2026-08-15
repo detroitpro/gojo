@@ -2,7 +2,7 @@ import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AppContext } from "@/platform/app-context";
-import { UserService } from "@/contexts/access/infrastructure/auth/users";
+import { UserService } from "@/contexts/access/contract";
 import { checkNetworkStartGates, resolveApiBaseUrl } from "@/platform/config/instance";
 
 import { createRouter } from "./router";
