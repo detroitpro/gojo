@@ -73,10 +73,19 @@ Then sync the project (`gojo project sync` or **Projects → Sync** in the UI) s
 | `onDisabled` | After a scheduled run, the schedule was auto-disabled for consecutive failures |
 | `onApprovalNeeded` | An `await-approval` run commits and pauses for operator sign-off, or a durable PR approval enters `awaiting-human` (manual authority after checks/review) |
 
-Approval-needed payloads include the approval id, PR URL when available, checks
-state, reviewer verdict, and a short-lived single-use confirmation URL when
-`publicBaseUrl` and an admin user are configured. The confirmation page performs
-no action until you press **Approve**; a successful attempt revokes its token.
+Approval-needed payloads always use `state: "approval-needed"`. Two paths emit
+`onApprovalNeeded`:
+
+- **`integration.mode: await-approval`** — the run commits and pauses in
+  `AwaitingApproval`. Notifications include project, agent, and run id only
+  (no `approvalId`, `prUrl`, or `approveUrl`). Approve or reject in the Runs UI
+  or with `gojo run approve|reject`.
+- **Durable PR approval (`awaiting-human`)** — after checks/review, the
+  delivery control plane may add `approvalId`, `prUrl`, `reviewerVerdict`, and
+  `checksState`. When `publicBaseUrl` and an admin user exist, `approveUrl`
+  points at the HTML confirm page (`GET /api/v1/approvals/{id}/approve-link?token=…`).
+  The page performs no action until you press **Approve**; a successful attempt
+  revokes its token.
 
 ## Route a single agent
 
@@ -134,7 +143,7 @@ characters and gojo truncates past that.
 
 - **Test sends** include `"test": true`.
 - **Auto-disable** payloads also include `reason`, `scheduleId`, and `consecutiveFailures`.
-- **Approval-needed** payloads also include `approvalId`, `approveUrl`, `prUrl`, `reviewerVerdict`, and `checksState`.
+- **Approval-needed** payloads always include `state: "approval-needed"`. Durable PR approvals may also include `approvalId`, `approveUrl`, `prUrl`, `reviewerVerdict`, and `checksState`; `await-approval` runs omit those fields.
 - Webhook URLs and Telegram bot tokens are **redacted** from error logs (`***`).
 
 ## Auto-disable notifications

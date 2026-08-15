@@ -95,15 +95,15 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 
 | Command | Purpose |
 | --- | --- |
-| `gojo agent list --project <id>\|inspect\|run\|enable\|disable` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced) |
-| `gojo agent cancel\|retry <runId>` | Cancel or re-enqueue a run by **run** id (not agent id) |
+| `gojo agent list --project <id>\|inspect\|run\|enable\|disable` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced; `run` enqueues then **blocks** until the run reaches a terminal state) |
+| `gojo agent cancel\|retry <runId>` | Cancel or re-enqueue a run by **run** id (not agent id); `retry` also blocks until terminal |
 | `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
 
 ## Runs
 
 | Command | Purpose |
 | --- | --- |
-| `gojo run list [--project <id>] [--limit <n>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` defaults to all projects; `logs` accepts `--follow`; `artifacts` returns handoff, validation, and failure JSON) |
+| `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` returns the full unpaged set — all projects or one `--project`; `logs` dumps stored event history; for live tail use the Runs UI; `artifacts` returns handoff, validation, and failure JSON) |
 | `gojo integration list [--all\|--open\|--merged\|--committed] [--project <id>]` | List gojo-tracked integrations (default: open+merged) |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |

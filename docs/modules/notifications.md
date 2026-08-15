@@ -54,13 +54,20 @@ The adapter/agent owns this text. The platform delivers it verbatim and only pre
 (project, agent, run id). Auto-disable payloads add `reason`, `scheduleId`, and `consecutiveFailures`;
 test sends add `test: true`.
 
-Approval-needed payloads use `state: "approval-needed"` and include
-`approvalId`, `prUrl`, `reviewerVerdict`, and `checksState`. When
-`publicBaseUrl` and an admin user exist, `approveUrl` points at the HTML
-confirm page (`GET /api/v1/approvals/{id}/approve-link?token=…`) backed by a
-24-hour `control:approve:{approvalId}` token that is revoked after a successful
-POST. They are emitted for manual PR approvals as well as `await-approval`
-runs; delivery remains asynchronous and cannot alter approval or run state.
+Approval-needed payloads use `state: "approval-needed"`. Two emitters share
+`run.awaiting_approval`:
+
+- **`await-approval` integration** (`coordinator.ts`) — emits with run id only;
+  `run-lifecycle` enqueues `onApprovalNeeded` with project/agent/run fields and
+  null `approvalId` / `approveUrl` / `prUrl`.
+- **Durable PR approval** (`delivery/subscribers/approval-change.ts`) — when
+  state is `awaiting-human`, includes `approvalId`, `prUrl`, `reviewerVerdict`,
+  and `checksState`. When `publicBaseUrl` and an admin user exist, `approveUrl`
+  points at the HTML confirm page (`GET /api/v1/approvals/{id}/approve-link?token=…`)
+  backed by a 24-hour `control:approve:{approvalId}` token revoked after a
+  successful POST.
+
+Delivery remains asynchronous and cannot alter approval or run state.
 
 ## Delivery
 

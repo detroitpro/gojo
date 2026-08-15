@@ -134,7 +134,7 @@ bun run gojo agent run <agent-id>
 bun run gojo run list
 ```
 
-Expect the run to move through Preparing → Running → Validating → Integrating → Succeeded. With `commit-only`, changes land on a `gojo/...` branch in the worktree/repo history without merging to `main`.
+`gojo agent run` enqueues the run and **blocks** until it reaches a terminal state (the UI "Run now" button returns immediately). Expect the run to move through Preparing → Running → Validating → Integrating → Succeeded. With `commit-only`, changes land on a `gojo/...` branch in the worktree/repo history without merging to `main`.
 
 ## 4. What "success" means here
 
