@@ -5,6 +5,7 @@ import { FolderOpen, Plus } from "lucide-react";
 
 import { ActionMenu, type ActionMenuItem } from "@/ui/ActionMenu";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { DirectoryPicker } from "@/contexts/operations/components/DirectoryPicker";
@@ -301,9 +302,9 @@ export function ProjectsView() {
       />
 
       {error || table.error ? (
-        <div className="alert alert-error">{error || table.error}</div>
+        <AppSectionMessage appearance="error">{error || table.error}</AppSectionMessage>
       ) : null}
-      {notice ? <div className="alert alert-success">{notice}</div> : null}
+      {notice ? <AppSectionMessage appearance="success">{notice}</AppSectionMessage> : null}
 
       <div className="inline-form mb-7 task-filters">
         <div className="field flex-2">

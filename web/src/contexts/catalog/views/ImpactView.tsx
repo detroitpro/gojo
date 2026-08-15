@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AppSelect as Select } from "@/ui/AppSelect";
 
 import { listImpactItems, listProjects, useCatalogStore } from "@/contexts/catalog/contract";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { SortableTh } from "@/ui/SortableTh";
 import { TablePager } from "@/ui/TablePager";
@@ -121,7 +122,7 @@ export function ImpactView() {
         subtitle="Individual impact items behind dashboard category totals"
       />
 
-      {table.error ? <div className="alert alert-error">{table.error}</div> : null}
+      {table.error ? <AppSectionMessage appearance="error">{table.error}</AppSectionMessage> : null}
 
       <div className="filter-bar mb-7">
         <div style={{ minWidth: 200 }}>

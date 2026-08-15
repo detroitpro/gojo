@@ -5,6 +5,7 @@ import { FlaskConical, RefreshCw } from "lucide-react";
 
 import { listAdapters, testAdapter } from "@/contexts/catalog/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { SortableTh } from "@/ui/SortableTh";
 import { TablePager } from "@/ui/TablePager";
@@ -116,7 +117,7 @@ export function AdaptersView() {
         }
       />
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
 
       <div className="inline-form mb-7 task-filters">
         <div className="field">

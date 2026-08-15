@@ -12,6 +12,7 @@ import {
   useCatalogStore,
 } from "@/contexts/catalog/contract";
 import { ActionMenu, type ActionMenuItem } from "@/ui/ActionMenu";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { EnabledBadge } from "@/ui/status/EnabledBadge";
@@ -183,7 +184,7 @@ export function AgentsView() {
       />
 
       {pageError || table.error ? (
-        <div className="alert alert-error">{pageError || table.error}</div>
+        <AppSectionMessage appearance="error">{pageError || table.error}</AppSectionMessage>
       ) : null}
 
       <div className="inline-form mb-7 task-filters">

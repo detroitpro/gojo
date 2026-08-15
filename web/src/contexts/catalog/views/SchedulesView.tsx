@@ -13,6 +13,7 @@ import {
 } from "@/contexts/catalog/contract";
 import { listSchedulesUpcoming } from "@/contexts/scheduling/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { EnabledBadge } from "@/ui/status/EnabledBadge";
@@ -189,7 +190,7 @@ export function SchedulesView() {
       />
 
       {pageError || table.error ? (
-        <div className="alert alert-error">{pageError || table.error}</div>
+        <AppSectionMessage appearance="error">{pageError || table.error}</AppSectionMessage>
       ) : null}
 
       <section className="panel mb-7">
