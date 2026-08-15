@@ -4,7 +4,7 @@ import { createAppContext } from "@/platform/app-context";
 import { computeScheduleNextRun } from "@/platform/app-context";
 import { checkHealth, readPidFile, startServer, stopServerByPid } from "@/transports/http/server";
 import { listAdapters } from "@/infrastructure/agent-adapters";
-import { UserService } from "@/contexts/access/infrastructure/auth/users";
+import { UserService } from "@/contexts/access/contract";
 import { createBackup, restoreBackup, verifyBackup } from "@/contexts/operations/infrastructure/backup/backup";
 import { defaultBackupDest } from "@/contexts/operations/infrastructure/backup/list";
 import {

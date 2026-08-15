@@ -1,4 +1,4 @@
-import { UserService } from "@/contexts/access/infrastructure/auth/users";
+import { UserService } from "@/contexts/access/contract";
 import type { AppContext } from "@/platform/app-context";
 
 import {
