@@ -13,6 +13,7 @@ import {
   useCatalogStore,
 } from "@/contexts/catalog/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { SortableTh } from "@/ui/SortableTh";
 import { StateBadge } from "@/ui/StateBadge";
@@ -265,7 +266,7 @@ export function RunsView() {
       />
 
       {pageError || table.error ? (
-        <div className="alert alert-error">{pageError || table.error}</div>
+        <AppSectionMessage appearance="error">{pageError || table.error}</AppSectionMessage>
       ) : null}
 
       <div className="inline-form mb-7 task-filters">
