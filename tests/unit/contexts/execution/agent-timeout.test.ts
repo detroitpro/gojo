@@ -52,3 +52,22 @@ test('resolveAgentTimeoutMs throws on malformed timeout', () => {
     ),
   ).toThrow(/Invalid timeout format/);
 });
+
+test('resolveAgentTimeoutMs uses default when profile configJson is not an object', () => {
+  expect(
+    resolveAgentTimeoutMs(
+      { profileId: 'prof' },
+      profiles({
+        prof: { configJson: 'not-json' },
+      }),
+    ),
+  ).toBe(DEFAULT_AGENT_TIMEOUT_MS);
+  expect(
+    resolveAgentTimeoutMs(
+      { profileId: 'prof' },
+      profiles({
+        prof: { configJson: '[]' },
+      }),
+    ),
+  ).toBe(DEFAULT_AGENT_TIMEOUT_MS);
+});
