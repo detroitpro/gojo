@@ -8,6 +8,7 @@ import {
 } from "@/contexts/delivery/contract";
 import { getWorkDiff } from "@/contexts/work/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { TablePager } from "@/ui/TablePager";
@@ -100,7 +101,7 @@ export function ApprovalsView() {
       />
 
       {table.error || actionError ? (
-        <p className="error">{actionError || table.error}</p>
+        <AppSectionMessage appearance="error">{actionError || table.error}</AppSectionMessage>
       ) : !table.loading && table.items.length === 0 ? (
         <p className="empty-state">No approvals match this view.</p>
       ) : null}
@@ -161,7 +162,7 @@ export function ApprovalsView() {
                 </p>
               ) : null}
               {approval.lastError ? (
-                <p className="error">{approval.lastError}</p>
+                <AppSectionMessage appearance="error">{approval.lastError}</AppSectionMessage>
               ) : null}
               {openDiffId === approval.id ? (
                 <pre className="approval-diff">{diffText}</pre>
