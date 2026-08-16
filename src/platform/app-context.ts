@@ -9,14 +9,29 @@ import {
   saveInstanceConfig,
 } from "@/platform/config/instance";
 import { ensureLayout, resolvePaths, type GojoPaths } from "@/platform/config/paths";
-import { UserService } from "@/contexts/access/infrastructure/auth/users";
+import { SecretStore, UserService } from "@/contexts/access/contract";
+import {
+  ApprovalService,
+  CommentIntentService,
+  IntegrationStatusReconciler,
+  MergeService,
+  createApprovalRepository,
+  createControlIntentRepository,
+  fixRoundEscalateReason,
+  formatChecksSummary,
+  isRetryableFixRoundStall,
+  resolveApprovalForIntegration,
+  resolveFixRoundSubject,
+} from "@/contexts/delivery/contract";
+import {
+  RunCoordinator,
+  RunDispatcher,
+  RunEventBus,
+  RunEventHistory,
+} from "@/contexts/execution/contract";
 import { NotificationDispatcher } from "@/contexts/notifications/infrastructure/dispatcher";
 import { wireNotificationHooks } from "@/contexts/notifications/subscribers/run-lifecycle";
-import { IntegrationStatusReconciler } from "@/contexts/delivery/application/status-reconciler";
 import { PlatformChangeFeed } from "@/platform/events/platform-change-feed";
-import { RunCoordinator } from "@/contexts/execution/infrastructure/coordinator";
-import { RunDispatcher } from "@/contexts/execution/application/dispatcher";
-import { RunEventBus, RunEventHistory } from "@/contexts/execution/infrastructure/events";
 import { isTerminal, RunState } from "@shared/run-states";
 import { AgentTriggerSchema } from "@shared/manifest";
 import type { Approval } from "@shared/approvals";
@@ -24,16 +39,7 @@ import {
   extractHandoffSubjectActions,
   recoverAgentHandoffReport,
 } from "@shared/handoff";
-import {
-  fixRoundEscalateReason,
-  formatChecksSummary,
-  isRetryableFixRoundStall,
-  resolveApprovalForIntegration,
-  resolveFixRoundSubject,
-} from "@/contexts/delivery/domain/fix-rounds";
-import { Scheduler } from "@/contexts/scheduling/infrastructure/scheduler-loop";
-import { nextOccurrence } from "@/contexts/scheduling/domain/cron";
-import { SecretStore } from "@/contexts/access/infrastructure/secrets/store";
+import { nextOccurrence, Scheduler } from "@/contexts/scheduling/contract";
 import { createRepositories } from "@/platform/create-repositories";
 import {
   Database,
@@ -52,13 +58,6 @@ import {
 } from "@/contexts/work/contract";
 import { WorkspaceManager } from "@/contexts/execution/infrastructure/workspace/manager";
 import { WorkTriggerService } from "@/contexts/work/application/triggers/service";
-import { ApprovalService } from "@/contexts/delivery/application/approval-service";
-import {
-  createApprovalRepository,
-  createControlIntentRepository,
-} from "@/contexts/delivery/contract";
-import { MergeService } from "@/contexts/delivery/application/merge-service";
-import { CommentIntentService } from "@/contexts/delivery/application/comment-intents";
 import { createApprovalChangeHandler } from "@/contexts/delivery/subscribers/approval-change";
 import { configureTelemetry } from "@/platform/telemetry/otel";
 
