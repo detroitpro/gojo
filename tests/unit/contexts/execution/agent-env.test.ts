@@ -32,6 +32,8 @@ describe('runs/agent-env', () => {
     expect(parseAgentEnvironmentConfig('{}')).toBeNull();
     expect(parseAgentEnvironmentConfig('')).toBeNull();
     expect(parseAgentEnvironmentConfig('not-json')).toBeNull();
+    expect(parseAgentEnvironmentConfig('[]')).toBeNull();
+    expect(parseAgentEnvironmentConfig(' { } ')).toBeNull();
   });
 
   test('parseAgentEnvironmentConfig accepts valid config', () => {
@@ -64,6 +66,17 @@ describe('runs/agent-env', () => {
     symlinkSync(outsideFile, join(tempDir!, 'linked.env'));
 
     expect(() => resolveRepoEnvFilePath(tempDir!, 'linked.env')).toThrow(/escapes/);
+  });
+
+  test('resolveRepoEnvFilePath rejects directories and symlinks to non-files', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'gojo-env-dir-'));
+    mkdirSync(join(tempDir, 'config'), { recursive: true });
+    expect(() => resolveRepoEnvFilePath(tempDir!, 'config')).toThrow(/not a regular file/);
+
+    symlinkSync(join(tempDir, 'config'), join(tempDir, 'linked-dir.env'));
+    expect(() => resolveRepoEnvFilePath(tempDir!, 'linked-dir.env')).toThrow(
+      /not a regular file/,
+    );
   });
 
   test('loadAgentEnvironment selects allowlisted keys from primary checkout', () => {

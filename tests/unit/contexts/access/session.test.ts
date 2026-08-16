@@ -57,5 +57,6 @@ describe("auth/session", () => {
 
     const expiresAt = Date.now() + 60_000;
     expect(verifySessionToken(`v1.user-1.${expiresAt}.tampered-signature`, SECRET)).toBeNull();
+    expect(verifySessionToken(`v1..${expiresAt}.tampered-signature`, SECRET)).toBeNull();
   });
 });
