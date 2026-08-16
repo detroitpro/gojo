@@ -76,7 +76,7 @@ echo "hello from gojo" > NOTES.md
 mkdir -p .gojo
 cat > .gojo/handoff.json <<'JSON'
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "runId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "status": "completed",
   "summary": "Created NOTES.md",

@@ -104,10 +104,10 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 | Command | Purpose |
 | --- | --- |
 | `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` returns the full unpaged set — all projects or one `--project`; `logs` dumps stored event history; for live tail use the Runs UI; `artifacts` returns handoff, validation, and failure JSON) |
-| `gojo integration list [--all\|--open\|--merged\|--committed] [--project <id>]` | List gojo-tracked integrations (default: open+merged) |
+| `gojo integration list [--all\|--open\|--merged\|--committed] [--project <id>]` | List gojo-tracked integrations (default: open+merged; **first page only**, 25 items — use the HTTP API with `limit`/`offset` for more) |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |
-| `gojo approval list [--state <state>] [--project <id>]\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`) |
+| `gojo approval list [--state <state>] [--project <id>]\|show\|approve\|reject\|hold\|set-autonomy` | Inspect and decide platform-owned PR approvals (`set-autonomy` sets `manual\|reviewer\|auto`; `list` is **first page only**, 25 items) |
 | `gojo work claim <workItemId> --agent <name-or-id>` | Explicitly enqueue an issue against an eligible issue-triggered agent |
 
 Failed runs may enqueue a project **self-heal** agent when the manifest declares `selfHeal` — see [Self-healing](/self-healing).

@@ -336,7 +336,9 @@ export const AgentFailurePolicySchema = z
       .int()
       .positive()
       .optional()
-      .describe('Disable the agent after this many consecutive failed runs.'),
+      .describe(
+        'Copy threshold to linked schedules on sync; auto-disable the schedule after this many consecutive failed runs.',
+      ),
     backoff: z
       .enum(['exponential', 'linear', 'none'])
       .optional()

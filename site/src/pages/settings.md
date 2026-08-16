@@ -167,8 +167,8 @@ In the web UI, **Schedules** shows cron schedules with relative next fire and an
 | **Enabled** | Pause without deleting history |
 | **Overlap policy** | `skip` / `queue` / `cancel_replace` / `allow_parallel` — per schedule row in SQLite (defaults to `skip`); controls enqueue-on-overlap; **not** in `gojo.yaml` today |
 | **Missed-run policy** | `skip` / `run_once` / `run_all` / `run_latest` after downtime — same storage as overlap (defaults to `skip` at create; scheduler falls back to `run_latest` only when the stored value is invalid) |
-| **Retries / backoff** | Distinguish infra blips from real agent failure |
-| **Disable after N failures** | Auto-stop noisy schedules and notify |
+| **Retries / backoff** | Agent `failurePolicy.maxAttemptsPerRun` and `backoff` — applied per run in the coordinator (not on the schedule row; `schedules.retry_json` is stored but unused) |
+| **Disable after N failures** | From agent `failurePolicy.disableAfterConsecutiveFailedRuns` on sync; auto-disables the **schedule** (not the agent) after consecutive failed runs |
 
 Default bias: queue carefully, disable after a few consecutive failures, require explicit re-enable.
 
