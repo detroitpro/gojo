@@ -473,7 +473,7 @@
                   "disableAfterConsecutiveFailedRuns": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "description": "Disable the agent after this many consecutive failed runs."
+                    "description": "Copy threshold to linked schedules on sync; auto-disable the schedule after this many consecutive failed runs."
                   },
                   "backoff": {
                     "type": "string",

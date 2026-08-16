@@ -89,7 +89,7 @@ Without a limit, a weekly "improve tests" or "update deps" run will try to boil 
 
 When the adapter hits the limit with a green tree, it should stop and put the remainder in `recommendedNextActions` — not stretch the run.
 
-Platform knobs (timeouts, `projectLimit`, `maxAttemptsPerRun`) are **not** a substitute for prompt limits. Timeouts stop the process; limits keep the *diff* reviewable.
+Platform knobs (timeouts, `maxAttemptsPerRun`, run admission) are **not** a substitute for prompt limits. Manifest `concurrency` is synced for intent only — overlap and starts are enforced by per-schedule overlap policy and instance run admission. Timeouts stop the process; limits keep the *diff* reviewable.
 
 ## Prompt shape that works
 
@@ -195,8 +195,9 @@ Review agents return a single `verdict`: `pass`, `changes-requested`, or `reject
 | Diff size / reviewability | Files, tests, packages, themes | — |
 | Shared defaults | — | `instructions.files` / `scheduledRunNotice` |
 | Runtime | "Stop at limit" | Profile `timeout` |
-| Overlap | One theme / one root cause | `concurrency.projectLimit: 1`, `overlapPolicy: skip` |
-| Bad weeks | Deferred list in handoff | `failurePolicy` + optional `selfHeal` |
+| Overlap | One theme / one root cause | Per-schedule `overlapPolicy` (Schedules UI/API) + instance run admission (Settings → Run admission) |
+| Bad weeks / auto-disable | Deferred list in handoff | Agent `failurePolicy.disableAfterConsecutiveFailedRuns` (copied to schedule on sync) |
+| Self-heal on failure | Deferred list in handoff | Agent-level `selfHeal` (sibling of `failurePolicy`, not nested under it) |
 | Integration | Who may push/merge | `integration.mode` |
 
 See [Advanced usage](/advanced-usage) for concurrency, approvals, and [Self-healing](/self-healing) for healers (healers need the same one-root-cause limit).
