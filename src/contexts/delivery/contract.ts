@@ -54,7 +54,10 @@ export { MergeService } from "./application/merge-service";
 export { CommentIntentService } from "./application/comment-intents";
 export {
   agentConfiguredAutonomy,
+  fixRoundEscalateReason,
   formatChecksSummary,
+  isRetryableFixRoundStall,
+  resolveApprovalForIntegration,
   resolveFixRoundSubject,
 } from "./domain/fix-rounds";
 

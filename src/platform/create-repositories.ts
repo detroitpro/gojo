@@ -1,11 +1,11 @@
 /** Composition root for SQLite repository bag (transitional). */
 import type { Database } from "@/infrastructure/persistence/db";
 import type { Repositories } from "@/infrastructure/persistence/repositories";
-import { createCatalogRepositories } from "@/contexts/catalog/infrastructure/catalog-repositories";
-import { createRunRepositories } from "@/contexts/execution/infrastructure/run-repositories";
-import { createRunIntegrationRepository } from "@/contexts/delivery/infrastructure/integration-repositories";
-import { createSecretRepository } from "@/contexts/access/infrastructure/secret-repositories";
-import { createAuditRepository } from "@/contexts/operations/infrastructure/audit-repositories";
+import { createSecretRepository } from "@/contexts/access/contract";
+import { createCatalogRepositories } from "@/contexts/catalog/contract";
+import { createRunIntegrationRepository } from "@/contexts/delivery/contract";
+import { createRunRepositories } from "@/contexts/execution/contract";
+import { createAuditRepository } from "@/contexts/operations/contract";
 
 export type { Repositories } from "@/infrastructure/persistence/repositories";
 
