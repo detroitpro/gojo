@@ -59,4 +59,16 @@ describe("auth/session", () => {
     expect(verifySessionToken(`v1.user-1.${expiresAt}.tampered-signature`, SECRET)).toBeNull();
     expect(verifySessionToken(`v1..${expiresAt}.tampered-signature`, SECRET)).toBeNull();
   });
+
+  test("verifySessionToken rejects wrong version prefixes in v2 and legacy v1 tokens", () => {
+    const expiresAt = Date.now() + 60_000;
+    const issuedAt = Date.now();
+    const v2Data = `vx.user-1.${expiresAt}.${issuedAt}`;
+    const v2Signature = createHmac("sha256", SECRET).update(v2Data).digest("base64url");
+    expect(verifySessionToken(`${v2Data}.${v2Signature}`, SECRET)).toBeNull();
+
+    const v1Data = `v0.user-1.${expiresAt}`;
+    const v1Signature = createHmac("sha256", SECRET).update(v1Data).digest("base64url");
+    expect(verifySessionToken(`${v1Data}.${v1Signature}`, SECRET)).toBeNull();
+  });
 });

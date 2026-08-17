@@ -284,6 +284,36 @@ describe("runs/dispatcher", () => {
     expect(executed).toEqual([]);
   });
 
+  test("tick survives executeRun failures without throwing", async () => {
+    const { repos, projectA, taskA } = setup();
+    const run = repos.runs.create({
+      projectId: projectA.id,
+      agentId: taskA.id,
+      idempotencyKey: "failing-run",
+      trigger: "manual",
+      state: RunState.Queued,
+      priority: 10,
+      notBeforeAt: "2026-07-26T00:00:00.000Z",
+    });
+
+    const coordinator = {
+      executeRun: mock(async () => {
+        throw new Error("adapter exploded");
+      }),
+    } as unknown as RunCoordinatorPort;
+
+    const dispatcher = new RunDispatcher({
+      db: db!,
+      coordinator,
+      loadPerCpu: () => 0,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+
+    const result = await dispatcher.tick();
+    expect(result.admitted).toEqual([run.id]);
+    expect(repos.runs.findById(run.id)?.admittedAt).toBe("2026-07-26T12:00:00.000Z");
+  });
+
   test("admitted Scheduled run transitions to Queued", async () => {
     const { repos, projectA, taskA } = setup();
     const scheduled = repos.runs.create({

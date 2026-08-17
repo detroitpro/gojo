@@ -33,6 +33,15 @@ describe("api/network", () => {
     expect(ipInList("10.0.0.5", ["10.0.0.0/8", "127.0.0.1"])).toBe(true);
   });
 
+  test("ipMatches IPv6 exact, CIDR, and bracket notation", () => {
+    expect(ipMatches("2001:db8::1", "2001:db8::1")).toBe(true);
+    expect(ipMatches("2001:db8::1", "2001:db8::/32")).toBe(true);
+    expect(ipMatches("2001:db9::1", "2001:db8::/32")).toBe(false);
+    expect(ipMatches("[2001:db8::1]", "2001:db8::/32")).toBe(true);
+    expect(ipMatches("::1", "::1")).toBe(true);
+    expect(ipMatches("::ffff:127.0.0.1", "127.0.0.1")).toBe(false);
+  });
+
   test("resolveClient ignores forwarded headers unless peer is trusted", () => {
     const request = new Request("http://localhost/api/v1/health", {
       headers: {
@@ -120,6 +129,11 @@ describe("api/network", () => {
 
     const missing = new Request("http://localhost/");
     expect(browserOriginFromRequest(missing)).toBeNull();
+
+    const badReferer = new Request("http://localhost/", {
+      headers: { Referer: "not-a-valid-url" },
+    });
+    expect(browserOriginFromRequest(badReferer)).toBeNull();
   });
 
   test("resolveBrowserOriginForSession falls back on loopback without publicBaseUrl", () => {
