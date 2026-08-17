@@ -12,6 +12,7 @@ import {
 
 import { ActionMenu, type ActionMenuItem } from "@/ui/ActionMenu";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { PageHeader } from "@/ui/PageHeader";
 import { ProjectSubnav, type ProjectSubnavItem } from "@/ui/ProjectSubnav";
@@ -305,8 +306,8 @@ export function ProjectShellView() {
         }
       />
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      {notice ? <div className="alert alert-success">{notice}</div> : null}
+      {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
+      {notice ? <AppSectionMessage appearance="success">{notice}</AppSectionMessage> : null}
 
       {soft.loading && !project ? (
         <div className="empty">Loading…</div>

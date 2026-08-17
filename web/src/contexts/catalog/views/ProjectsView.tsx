@@ -474,7 +474,9 @@ export function ProjectsView() {
         }
       >
         <form id="add-project-form" onSubmit={addProject}>
-          {formError ? <div className="alert alert-error">{formError}</div> : null}
+          {formError ? (
+            <AppSectionMessage appearance="error">{formError}</AppSectionMessage>
+          ) : null}
           <div className="field">
             <label htmlFor="project-name">Name</label>
             <Textfield

@@ -11,6 +11,7 @@ import {
   useCatalogStore,
 } from "@/contexts/catalog/contract";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { PageHeader } from "@/ui/PageHeader";
 import { EnabledBadge } from "@/ui/status/EnabledBadge";
 import { RunHistoryStrip } from "@/ui/RunHistoryStrip";
@@ -127,7 +128,7 @@ export function AgentDetailView() {
         }
       />
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <AppSectionMessage appearance="error">{error}</AppSectionMessage> : null}
 
       {soft.loading && !agent ? (
         <div className="empty">Loading…</div>

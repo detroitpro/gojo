@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Agent, Project, ProjectSyncResult } from "@/contexts/catalog/types";
 import { parseManifestView } from "@/kernel/project-manifest";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 
 export function ProjectConfigurationPanel({
   project,
@@ -55,7 +56,9 @@ export function ProjectConfigurationPanel({
               <span className="mono">gojo.yaml</span>.
             </div>
           ) : !manifest.ok ? (
-            <div className="alert alert-error">Could not parse manifest: {manifest.error}</div>
+            <AppSectionMessage appearance="error">
+              Could not parse manifest: {manifest.error}
+            </AppSectionMessage>
           ) : (
             <>
               {Object.keys(manifest.repository).length ? (

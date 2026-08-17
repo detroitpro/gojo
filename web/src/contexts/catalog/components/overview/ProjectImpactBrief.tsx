@@ -12,6 +12,7 @@ import type { AvailableWorkInventory } from "@/kernel/project-overview";
 import { forgeWorkListUrl } from "@/kernel/project-overview";
 import { compareLabel } from "@/kernel/stat-metrics";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { StatTile } from "@/ui/StatTile";
 
 type ImpactRange = "30d" | "90d" | "all";
@@ -232,7 +233,7 @@ export function ProjectImpactBrief({
         {soft.loading && !impact ? (
           <div className="muted text-sm">Loading impact…</div>
         ) : error && !impact ? (
-          <div className="alert alert-error">{error}</div>
+          <AppSectionMessage appearance="error">{error}</AppSectionMessage>
         ) : !hasAnySignal ? (
           <div className="muted text-sm">
             Impact data will appear after the project has completed enough runs to establish a
