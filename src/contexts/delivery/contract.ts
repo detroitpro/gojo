@@ -77,3 +77,8 @@ export type {
   IntegrationListRow,
   ListIntegrationsPageInput,
 } from "./infrastructure/integration-paged-lists";
+
+export {
+  createApprovalChangeHandler,
+  type ApprovalChangeDeps,
+} from "./subscribers/approval-change";

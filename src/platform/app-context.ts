@@ -15,6 +15,7 @@ import {
   CommentIntentService,
   IntegrationStatusReconciler,
   MergeService,
+  createApprovalChangeHandler,
   createApprovalRepository,
   createControlIntentRepository,
   fixRoundEscalateReason,
@@ -28,9 +29,12 @@ import {
   RunDispatcher,
   RunEventBus,
   RunEventHistory,
+  WorkspaceManager,
 } from "@/contexts/execution/contract";
-import { NotificationDispatcher } from "@/contexts/notifications/infrastructure/dispatcher";
-import { wireNotificationHooks } from "@/contexts/notifications/subscribers/run-lifecycle";
+import {
+  NotificationDispatcher,
+  wireNotificationHooks,
+} from "@/contexts/notifications/contract";
 import { PlatformChangeFeed } from "@/platform/events/platform-change-feed";
 import { isTerminal, RunState } from "@shared/run-states";
 import { AgentTriggerSchema } from "@shared/manifest";
@@ -55,10 +59,8 @@ import {
   GenericWebhookIngestor,
   SourceAdapterRegistry,
   SourceSyncService,
+  WorkTriggerService,
 } from "@/contexts/work/contract";
-import { WorkspaceManager } from "@/contexts/execution/infrastructure/workspace/manager";
-import { WorkTriggerService } from "@/contexts/work/application/triggers/service";
-import { createApprovalChangeHandler } from "@/contexts/delivery/subscribers/approval-change";
 import { configureTelemetry } from "@/platform/telemetry/otel";
 
 import { isInstancePaused, setInstancePaused } from "@/infrastructure/persistence/instance-settings";

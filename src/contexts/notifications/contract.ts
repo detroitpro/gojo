@@ -13,3 +13,6 @@ export type { SetChannelsDeps } from "./application/set-channels";
 export { setNotificationChannelsCommand } from "./application/set-channels";
 export type { TestChannelDeps } from "./application/test-channel";
 export { testNotificationChannelCommand } from "./application/test-channel";
+
+export { NotificationDispatcher } from "./infrastructure/dispatcher";
+export { wireNotificationHooks } from "./subscribers/run-lifecycle";
