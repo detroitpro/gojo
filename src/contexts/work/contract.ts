@@ -124,3 +124,4 @@ export type {
 export type { WorkRepositories } from "./infrastructure/work-repositories";
 export { createWorkStatusRollup } from "./infrastructure/work-status-rollup";
 export type { WorkStatusRollup } from "./infrastructure/work-status-rollup";
+export { WorkTriggerService } from "./application/triggers/service";

@@ -92,3 +92,4 @@ export {
 export { createRunRepositories } from "./infrastructure/run-repositories";
 export { listRunsPage } from "./infrastructure/run-paged-lists";
 export type { ListRunsPageInput, RunListRow } from "./infrastructure/run-paged-lists";
+export { WorkspaceManager } from "./infrastructure/workspace/manager";
