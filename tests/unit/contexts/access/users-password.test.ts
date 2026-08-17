@@ -61,6 +61,23 @@ describe("UserService password change", () => {
     });
   });
 
+  test("getSessionSecret returns existing secret or persists a new one", async () => {
+    await withUsers(async (users) => {
+      const store: Record<string, string> = {};
+      const getSecret = (name: string) => store[name] ?? null;
+      const setSecret = (name: string, value: string) => {
+        store[name] = value;
+      };
+
+      const first = users.getSessionSecret(getSecret, setSecret);
+      expect(first.length).toBeGreaterThan(20);
+      expect(store["__gojo_session_secret__"]).toBe(first);
+
+      const second = users.getSessionSecret(getSecret, setSecret);
+      expect(second).toBe(first);
+    });
+  });
+
   test("session issued before password change is rejected", async () => {
     await withUsers(async (users) => {
       const admin = await users.createUser("admin", "password-here", "admin");
