@@ -63,7 +63,7 @@ Exit codes: `0` ok · `1` usage · `2` not found · `3` conflict (e.g. setup alr
 | --- | --- |
 | `gojo project add <name> <repoPath> [--branch] [--remote <url>]` | Register a repo (`--remote` stores the git remote URL; omit to infer from `git remote get-url origin`) |
 | `gojo project list\|inspect\|sync\|enable\|disable\|doctor\|remove` | Manage projects (`enable`/`disable` are runtime gates; Sync reapplies YAML) |
-| `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …] [--history]` | Paged work ledger (first page; filters match API enums; `--history` includes completed/verified-terminal items) |
+| `gojo project work <id> [--kind …] [--provenance …] [--delivery …] [--attention …] [--history]` | Paged work ledger (**first page only**, 25 items; filters match API enums; `--history` includes completed/verified-terminal items; use the HTTP API with `limit`/`offset` for more) |
 | `gojo project status <id>` | Canonical work counts (verified open, stale, attention, …) |
 | `gojo project sources <id>` | Connected sources and sync health |
 | `gojo project refresh-source <id> <sourceId>` | Reconcile one source immediately |
@@ -95,15 +95,15 @@ See [Project visibility and sources](/project-visibility) and [Issue-driven agen
 
 | Command | Purpose |
 | --- | --- |
-| `gojo agent list --project <id>\|inspect\|run\|enable\|disable` | Inspect, run, and enable/disable (`list` requires `--project`; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced; `run` enqueues then **blocks** until the run reaches a terminal state) |
+| `gojo agent list --project <id>\|inspect\|run\|enable\|disable` | Inspect, run, and enable/disable (`list` requires `--project` and returns the full unpaged set for that project; `GET /api/v1/agents` is paged; `inspect` returns read-only prompt/policy plus manifest `source` paths when synced; `run` enqueues then **blocks** until the run reaches a terminal state) |
 | `gojo agent cancel\|retry <runId>` | Cancel or re-enqueue a run by **run** id (not agent id); `retry` also blocks until terminal |
-| `gojo schedule list\|enable\|disable\|pause\|next` | Timers |
+| `gojo schedule list\|enable\|disable\|pause\|next` | Timers (`list` returns the full unpaged set; `GET /api/v1/schedules` is paged) |
 
 ## Runs
 
 | Command | Purpose |
 | --- | --- |
-| `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` returns the full unpaged set — all projects or one `--project`; `logs` dumps stored event history; for live tail use the Runs UI; `artifacts` returns handoff, validation, and failure JSON) |
+| `gojo run list [--project <id>]\|inspect\|logs\|diff\|artifacts` | Observe (`list` returns the full unpaged set — all projects or one `--project`; `GET /api/v1/runs` is paged with `limit`/`offset`; `logs` dumps stored event history; for live tail use the Runs UI; `artifacts` returns handoff, validation, and failure JSON) |
 | `gojo integration list [--all\|--open\|--merged\|--committed] [--project <id>]` | List gojo-tracked integrations (default: open+merged; **first page only**, 25 items — use the HTTP API with `limit`/`offset` for more) |
 | `gojo run approve <id>` | Approve an `await-approval` run so integration continues with `postApprovalMode` |
 | `gojo run reject <id> [--reason <text>]` | Reject an `await-approval` run (optional reason is stored on the run) |

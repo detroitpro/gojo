@@ -17,9 +17,9 @@ See PRD §19.4–19.5 and §25.14.
 |-------|---------|
 | `bindHost` / `bindPort` | Listen address (default `127.0.0.1:7430`) |
 | `publicBaseUrl` | Canonical URL for UI and CSRF/CORS default origin. Agent `GOJO_API_URL` is `resolveApiBaseUrl` → `${publicBaseUrl}/api/v1` (loopback binds fall back to `http://127.0.0.1:${bindPort}/api/v1`). **Required when bind is non-loopback.** |
-| `trustedProxies` | CIDRs/IPs (or token `cloudflare`) allowed to set `X-Forwarded-For` / `X-Forwarded-Proto` |
+| `trustedProxies` | CIDRs/IPs (IPv4 and IPv6, including bracket notation) or token `cloudflare` — peers in this set may set `X-Forwarded-For` / `X-Forwarded-Proto` |
 | `allowedOrigins` | CORS + CSRF Origin allowlist (empty = origin of `publicBaseUrl`) |
-| `ipAllowlist` | Optional client IP allowlist after proxy resolution (empty = any) |
+| `ipAllowlist` | Optional client IP allowlist after proxy resolution (IPv4/IPv6 exact or CIDR; empty = any) |
 | `cookieSecure` | `auto` (default) / `always` / `never` |
 
 There are **no** in-process TLS / cert fields.

@@ -25,6 +25,14 @@ JSON Schema does **not** encode Zod `.superRefine` cross-field rules (for
 example `prAutoMerge` only with `integration.mode: pull-request`). Sync remains
 authoritative.
 
+Some manifest fields are accepted and validated but not yet wired at runtime.
+Today `repository.submodules` and `repository.gitLfs` are stored on sync but
+workspace prep does not initialize submodules or pull LFS objects (see
+[Settings → Projects & repository manifest](../../site/src/pages/settings.md)
+and PRD §25.16). Generated schema descriptions may still describe intended
+behavior — treat Sync + module docs as the operator source of truth until the
+platform implements the field.
+
 ## Hosted URL (Option 2)
 
 Canonical public URL (always available from `main`):
