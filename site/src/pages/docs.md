@@ -41,7 +41,7 @@ After `gojo server start` (or `gojo service start`), open [http://127.0.0.1:7430
 
 ![gojo agents](/images/ui-agents.png)
 
-**Agents** — list synced agents with success rate and last run. Filter All / Enabled / Disabled (and by project) before opening a row. Open an agent for read-only inspect: last-synced prompt, policy JSON (validation, integration, failure, concurrency), linked schedules, manifest source paths, and a recent-runs strip. Run now, enable/disable, and jump to filtered Runs or Schedules. Edit config in `gojo.yaml` + `promptFile`, then **Project Sync** — the detail page is ops inspect, not an editor.
+**Agents** — list synced agents with success rate and last run (default sort is by name; click **Success** for ascending success rate so failing agents surface first). Filter All / Enabled / Disabled (and by project) before opening a row. Open an agent for read-only inspect: last-synced prompt, policy JSON (validation, integration, failure, concurrency), linked schedules, manifest source paths, and a recent-runs strip. Run now, enable/disable, and jump to filtered Runs or Schedules. Edit config in `gojo.yaml` + `promptFile`, then **Project Sync** — the detail page is ops inspect, not an editor.
 
 ![gojo adapters](/images/ui-adapters.png)
 
