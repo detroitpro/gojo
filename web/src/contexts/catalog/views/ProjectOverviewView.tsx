@@ -35,6 +35,7 @@ import { attentionPrimaryAction } from "@/kernel/work-attention";
 import { useBindStoreRefresh } from "@/platform/bind-store-refresh";
 import { useSoftLoading } from "@/platform/useSoftLoading";
 import { AppButton } from "@/ui/AppButton";
+import { AppSectionMessage } from "@/ui/AppSectionMessage";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 export function ProjectOverviewView() {
@@ -307,9 +308,9 @@ export function ProjectOverviewView() {
   return (
     <>
       {project.enabled === false ? (
-        <div className="alert alert-error mb-5" role="status">
+        <AppSectionMessage appearance="warning">
           Project disabled — new scheduled, work, and API runs are blocked until Enable or Sync.
-        </div>
+        </AppSectionMessage>
       ) : null}
 
       <div id="attention">
@@ -341,7 +342,9 @@ export function ProjectOverviewView() {
         </div>
       ) : null}
 
-      {activeError ? <div className="alert alert-error mb-5">{activeError}</div> : null}
+      {activeError ? (
+        <AppSectionMessage appearance="error">{activeError}</AppSectionMessage>
+      ) : null}
 
       <div className="overview-layout">
         <div className="overview-layout__main">
