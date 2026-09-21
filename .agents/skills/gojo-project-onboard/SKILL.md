@@ -46,7 +46,7 @@ builds commit/PR titles at run time.
 - **`agents:`** — the work-unit definitions. Each agent picks a profile and points at a `promptFile`.
 - **`.gojo/agents/`** — prompt files for the work units.
 - **CLI:** `gojo agent …` for work units; `gojo adapter …` for detecting installed coding-agent CLIs.
-- **Enable** — project/agent/schedule `enabled` (manifest or `gojo project|agent|schedule enable <id>`). Sync reapplies YAML `enabled` flags.
+- **Enable** — project/agent/schedule `enabled` (platform gate; YAML `false` can still disable on Sync; true/omitted does not re-enable). Use `gojo project|agent|schedule enable <id>` or `gojo project sync-enabled`.
 
 ## Preconditions
 
