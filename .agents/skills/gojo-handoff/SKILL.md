@@ -46,7 +46,7 @@ Schema source: [`packages/contracts/src/handoff.ts`](../../../packages/contracts
 
 | Field | Values |
 |-------|--------|
-| `verdict` | `pass` · `changes-requested` · `reject` |
+| `verdict` | `pass` · `changes-requested` · `reject` · `hold` |
 | `addLabels` / `removeLabels` | non-empty strings |
 | `comment` | review or triage note |
 

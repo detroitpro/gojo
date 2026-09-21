@@ -243,7 +243,7 @@ gojo schedule list --project <id>
 gojo project doctor <id>
 ```
 
-Manifest sync upserts by name and soft-disables missing keys. Schedules are created via sync, not REST create. Optional YAML `enabled` on `project` / `agents.*` / `schedules.*` is reapplied on Sync (YAML wins over prior ops toggles).
+Manifest sync upserts by name and soft-disables missing keys. Schedules are created via sync, not REST create. Optional YAML `enabled` on `project` / `agents.*` / `schedules.*` seeds creates; on update, YAML `false` disables but true/omitted never re-enables a platform disable. Ops toggles and `gojo project sync-enabled` write `enabled` keys back into the checkout.
 
 ## Adapters
 
